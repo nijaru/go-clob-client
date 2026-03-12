@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"strconv"
 
@@ -136,7 +135,7 @@ func (c *Client) CreateAndPostOrder(
 	orderType OrderType,
 	deferExec bool,
 	postOnly bool,
-) (json.RawMessage, error) {
+) (*PostOrderResponse, error) {
 	order, err := c.CreateOrder(ctx, userOrder, options)
 	if err != nil {
 		return nil, err
@@ -156,7 +155,7 @@ func (c *Client) CreateAndPostMarketOrder(
 	options *CreateOrderOptions,
 	orderType OrderType,
 	deferExec bool,
-) (json.RawMessage, error) {
+) (*PostOrderResponse, error) {
 	if orderType == "" {
 		orderType = userOrder.OrderType
 	}

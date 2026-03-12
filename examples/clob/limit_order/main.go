@@ -32,5 +32,5 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Printf("order response: %s", response)
+	log.Printf("order response: %+v", response)
 }

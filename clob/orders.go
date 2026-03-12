@@ -2,7 +2,6 @@ package clob
 
 import (
 	"context"
-	"encoding/json"
 	"net/url"
 
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
@@ -61,7 +60,7 @@ func (c *Client) GetClosedOnly(ctx context.Context) (*BanStatus, error) {
 func (c *Client) GetOpenOrders(
 	ctx context.Context,
 	params OpenOrderParams,
-) (json.RawMessage, error) {
+) ([]OpenOrder, error) {
 	query := url.Values{}
 	if params.ID != "" {
 		query.Set("id", params.ID)
@@ -73,18 +72,18 @@ func (c *Client) GetOpenOrders(
 		query.Set("asset_id", params.AssetID)
 	}
 
-	var out json.RawMessage
+	var out []OpenOrder
 	err := c.getJSON(ctx, openOrdersEndpoint, query, polyhttp.AuthL2, &out)
 	return out, err
 }
 
-func (c *Client) GetOrder(ctx context.Context, orderID string) (json.RawMessage, error) {
-	var out json.RawMessage
+func (c *Client) GetOrder(ctx context.Context, orderID string) (*OpenOrder, error) {
+	var out OpenOrder
 	err := c.getJSON(ctx, orderEndpoint+orderID, nil, polyhttp.AuthL2, &out)
-	return out, err
+	return &out, err
 }
 
-func (c *Client) GetTrades(ctx context.Context, params TradeParams) (json.RawMessage, error) {
+func (c *Client) GetTrades(ctx context.Context, params TradeParams) ([]Trade, error) {
 	query := url.Values{}
 	if params.ID != "" {
 		query.Set("id", params.ID)
@@ -105,28 +104,31 @@ func (c *Client) GetTrades(ctx context.Context, params TradeParams) (json.RawMes
 		query.Set("after", params.After)
 	}
 
-	var out json.RawMessage
+	var out []Trade
 	err := c.getJSON(ctx, tradesEndpoint, query, polyhttp.AuthL2, &out)
 	return out, err
 }
 
-func (c *Client) PostOrder(ctx context.Context, request PostOrderRequest) (json.RawMessage, error) {
-	var out json.RawMessage
+func (c *Client) PostOrder(
+	ctx context.Context,
+	request PostOrderRequest,
+) (*PostOrderResponse, error) {
+	var out PostOrderResponse
 	err := c.postJSON(ctx, postOrderEndpoint, request, polyhttp.AuthL2, &out)
-	return out, err
+	return &out, err
 }
 
 func (c *Client) PostOrders(
 	ctx context.Context,
 	requests []PostOrderRequest,
-) (json.RawMessage, error) {
-	var out json.RawMessage
+) ([]PostOrderResponse, error) {
+	var out []PostOrderResponse
 	err := c.postJSON(ctx, postOrdersEndpoint, requests, polyhttp.AuthL2, &out)
 	return out, err
 }
 
-func (c *Client) CancelOrder(ctx context.Context, orderID string) (json.RawMessage, error) {
-	var out json.RawMessage
+func (c *Client) CancelOrder(ctx context.Context, orderID string) (*CancelOrdersResponse, error) {
+	var out CancelOrdersResponse
 	err := c.deleteJSON(
 		ctx,
 		cancelOrderEndpoint,
@@ -134,17 +136,20 @@ func (c *Client) CancelOrder(ctx context.Context, orderID string) (json.RawMessa
 		polyhttp.AuthL2,
 		&out,
 	)
-	return out, err
+	return &out, err
 }
 
-func (c *Client) CancelOrders(ctx context.Context, orderIDs []string) (json.RawMessage, error) {
-	var out json.RawMessage
+func (c *Client) CancelOrders(
+	ctx context.Context,
+	orderIDs []string,
+) (*CancelOrdersResponse, error) {
+	var out CancelOrdersResponse
 	err := c.deleteJSON(ctx, cancelOrdersEndpoint, orderIDs, polyhttp.AuthL2, &out)
-	return out, err
+	return &out, err
 }
 
-func (c *Client) CancelAll(ctx context.Context) (json.RawMessage, error) {
-	var out json.RawMessage
+func (c *Client) CancelAll(ctx context.Context) (*CancelOrdersResponse, error) {
+	var out CancelOrdersResponse
 	err := c.deleteJSON(ctx, cancelAllEndpoint, nil, polyhttp.AuthL2, &out)
-	return out, err
+	return &out, err
 }
