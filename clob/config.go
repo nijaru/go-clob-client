@@ -28,6 +28,7 @@ type Config struct {
 	ChainID       int64
 	PrivateKey    string
 	Credentials   *Credentials
+	BuilderAuth   BuilderAuth
 	SignatureType SignatureType
 	FunderAddress string
 	HTTPClient    *http.Client

@@ -3,10 +3,16 @@ package clob
 const (
 	timeEndpoint = "/time"
 
+	initialCursor = "MA=="
+	endCursor     = "LTE="
+
 	createAPIKeyEndpoint           = "/auth/api-key"
 	getAPIKeysEndpoint             = "/auth/api-keys"
 	deleteAPIKeyEndpoint           = "/auth/api-key"
 	deriveAPIKeyEndpoint           = "/auth/derive-api-key"
+	createBuilderAPIKeyEndpoint    = "/auth/builder-api-key"
+	getBuilderAPIKeysEndpoint      = "/auth/builder-api-key"
+	revokeBuilderAPIKeyEndpoint    = "/auth/builder-api-key"
 	closedOnlyEndpoint             = "/auth/ban-status/closed-only"
 	createReadonlyAPIKeyEndpoint   = "/auth/readonly-api-key"
 	getReadonlyAPIKeysEndpoint     = "/auth/readonly-api-keys"
@@ -43,6 +49,8 @@ const (
 	cancelMarketOrdersEndpoint     = "/cancel-market-orders"
 	openOrdersEndpoint             = "/data/orders"
 	tradesEndpoint                 = "/data/trades"
+	builderTradesEndpoint          = "/builder/trades"
+	heartbeatEndpoint              = "/v1/heartbeats"
 	notificationsEndpoint          = "/notifications"
 	balanceAllowanceEndpoint       = "/balance-allowance"
 	updateBalanceAllowanceEndpoint = "/balance-allowance/update"

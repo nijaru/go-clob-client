@@ -12,6 +12,12 @@ type Credentials struct {
 	Passphrase string `json:"passphrase"`
 }
 
+type BuilderAPIKey struct {
+	Key       string `json:"key"`
+	CreatedAt string `json:"createdAt,omitempty"`
+	RevokedAt string `json:"revokedAt,omitempty"`
+}
+
 type apiKeyRaw struct {
 	APIKey     string `json:"apiKey"`
 	Secret     string `json:"secret"`
@@ -185,6 +191,38 @@ type Trade struct {
 	TransactionHash string       `json:"transaction_hash"`
 	TraderSide      string       `json:"trader_side"`
 	ErrorMsg        string       `json:"error_msg,omitempty"`
+}
+
+type BuilderTrade struct {
+	ID              string `json:"id"`
+	TradeType       string `json:"tradeType"`
+	TakerOrderHash  string `json:"takerOrderHash"`
+	Builder         string `json:"builder"`
+	Market          string `json:"market"`
+	AssetID         string `json:"assetId"`
+	Side            string `json:"side"`
+	Size            string `json:"size"`
+	SizeUSDC        string `json:"sizeUsdc"`
+	Price           string `json:"price"`
+	Status          string `json:"status"`
+	Outcome         string `json:"outcome"`
+	OutcomeIndex    int64  `json:"outcomeIndex"`
+	RequestID       string `json:"requestId"`
+	Error           string `json:"error,omitempty"`
+	Owner           string `json:"owner,omitempty"`
+	Maker           string `json:"maker,omitempty"`
+	TransactionHash string `json:"transactionHash,omitempty"`
+	MatchTime       string `json:"matchTime,omitempty"`
+	BucketIndex     int64  `json:"bucketIndex,omitempty"`
+	Fee             string `json:"fee,omitempty"`
+	FeeUSDC         string `json:"feeUsdc,omitempty"`
+	CreatedAt       string `json:"createdAt,omitempty"`
+	UpdatedAt       string `json:"updatedAt,omitempty"`
+}
+
+type HeartbeatResponse struct {
+	HeartbeatID string `json:"heartbeat_id"`
+	Error       string `json:"error,omitempty"`
 }
 
 type OrderArgs struct {

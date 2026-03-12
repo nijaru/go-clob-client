@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/nijaru/go-clob-client/internal/polyauth"
@@ -17,6 +18,7 @@ type Client struct {
 	http          *polyhttp.Client
 	signer        *polyauth.Signer
 	creds         *Credentials
+	builderAuth   BuilderAuth
 	signatureType SignatureType
 	funderAddress string
 	saltGenerator func() uint64
@@ -30,6 +32,7 @@ func New(config Config) (*Client, error) {
 		chainID:       config.ChainID,
 		useServerTime: config.UseServerTime,
 		creds:         config.Credentials,
+		builderAuth:   config.BuilderAuth,
 		signatureType: config.SignatureType,
 		saltGenerator: generateSalt,
 	}
@@ -114,7 +117,7 @@ func (c *Client) addAuthHeaders(
 		if err != nil {
 			return nil, err
 		}
-		return polyauth.L2Headers(
+		headers, err := polyauth.L2Headers(
 			c.signer,
 			c.creds.Key,
 			c.creds.Secret,
@@ -124,6 +127,21 @@ func (c *Client) addAuthHeaders(
 			path,
 			body,
 		)
+		if err != nil {
+			return nil, err
+		}
+		if !c.shouldInjectBuilderHeaders(path) || c.builderAuth == nil {
+			return headers, nil
+		}
+
+		builderHeaders, err := c.builderHeaders(ctx, method, path, body, timestamp)
+		if err != nil {
+			return nil, err
+		}
+		for key, value := range builderHeaders {
+			headers[key] = value
+		}
+		return headers, nil
 	default:
 		return nil, fmt.Errorf("unknown auth level %d", level)
 	}
@@ -202,4 +220,63 @@ func (c *Client) postJSONWithNonce(
 	out any,
 ) error {
 	return c.http.PostJSONWithNonce(ctx, path, body, auth, nonce, out)
+}
+
+func (c *Client) doJSON(
+	ctx context.Context,
+	method, path string,
+	query url.Values,
+	body any,
+	auth polyhttp.AuthLevel,
+	out any,
+	extraHeaders map[string]string,
+) error {
+	return c.http.DoJSON(ctx, method, path, query, body, auth, nil, extraHeaders, out)
+}
+
+func (c *Client) builderHeaders(
+	ctx context.Context,
+	method, path string,
+	body []byte,
+	timestamp int64,
+) (map[string]string, error) {
+	if c.builderAuth == nil {
+		return nil, fmt.Errorf("builder auth requires Config.BuilderAuth")
+	}
+
+	return c.builderAuth.Headers(ctx, BuilderHeaderRequest{
+		Method:    method,
+		Path:      path,
+		Body:      body,
+		Timestamp: timestamp,
+	})
+}
+
+func (c *Client) builderOnlyHeaders(
+	ctx context.Context,
+	method, path string,
+	body []byte,
+) (map[string]string, error) {
+	timestamp, err := c.timestamp(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return c.builderHeaders(ctx, method, path, body, timestamp)
+}
+
+func (c *Client) shouldInjectBuilderHeaders(path string) bool {
+	if c.builderAuth == nil {
+		return false
+	}
+
+	switch path {
+	case openOrdersEndpoint,
+		tradesEndpoint,
+		postOrderEndpoint,
+		postOrdersEndpoint,
+		cancelAllEndpoint:
+		return true
+	default:
+		return strings.HasPrefix(path, orderEndpoint)
+	}
 }
