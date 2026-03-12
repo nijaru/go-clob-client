@@ -78,6 +78,17 @@ func (c *Client) DeleteJSON(
 	return c.doJSON(ctx, http.MethodDelete, path, nil, body, auth, nil, out)
 }
 
+func (c *Client) DeleteJSONQuery(
+	ctx context.Context,
+	path string,
+	query url.Values,
+	body any,
+	auth AuthLevel,
+	out any,
+) error {
+	return c.doJSON(ctx, http.MethodDelete, path, query, body, auth, nil, out)
+}
+
 func (c *Client) GetJSONWithNonce(
 	ctx context.Context,
 	path string,
@@ -161,12 +172,27 @@ func (c *Client) doJSON(
 		return nil
 	}
 
+	if value, ok := out.(*json.RawMessage); ok {
+		*value = append((*value)[:0], payload...)
+		return nil
+	}
+
 	if value, ok := out.(*int64); ok {
 		parsed, err := strconv.ParseInt(strings.TrimSpace(string(payload)), 10, 64)
 		if err != nil {
 			return fmt.Errorf("decode integer response: %w", err)
 		}
 		*value = parsed
+		return nil
+	}
+
+	if value, ok := out.(*string); ok {
+		var decoded string
+		if err := json.Unmarshal(payload, &decoded); err == nil {
+			*value = decoded
+			return nil
+		}
+		*value = strings.TrimSpace(string(payload))
 		return nil
 	}
 

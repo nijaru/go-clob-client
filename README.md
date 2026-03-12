@@ -7,10 +7,10 @@ Go SDK for the Polymarket CLOB.
 
 ## Status
 
-- Read-only market and orderbook queries work.
-- API key bootstrap and authenticated REST calls work.
-- Typed limit and market order construction/signing work.
-- Full parity, RFQ, streaming, and non-CLOB packages are still in progress.
+- Read-only health, market, orderbook, price history, and live-activity queries work.
+- API key bootstrap, readonly API key management, and authenticated REST calls work.
+- Typed limit and market order construction/signing now have deterministic fixture coverage.
+- Full parity, builder flows, RFQ, streaming, and non-CLOB packages are still in progress.
 
 If you need complete Polymarket SDK coverage today, use an official SDK. If you want a Go-native client that is actively moving toward parity, this repo is meant for that.
 
@@ -98,16 +98,16 @@ func main() {
 
 Available now:
 
-- read-only market data and orderbook queries
-- API key bootstrap and authenticated REST calls
+- read-only health, market data, orderbook, price history, and live activity queries
+- API key bootstrap plus readonly API key management
 - typed limit and market order construction/signing
-- order posting and cancellation helpers
+- order posting, cancel flows, balance/allowance, notifications, scoring, and rewards queries
 
 Still incomplete:
 
-- several authenticated responses still use `json.RawMessage`
+- some older raw market helpers remain alongside newer typed equivalents for compatibility
 - parity coverage is still behind the official SDKs
-- streaming, RFQ, and non-CLOB packages are not implemented yet
+- builder flows, streaming, RFQ, and non-CLOB packages are not implemented yet
 
 ## Trading Notes
 
@@ -117,13 +117,15 @@ In practice:
 
 - creating and signing orders works
 - bootstrapping auth and posting signed orders works
-- edge-case coverage and broader endpoint coverage are still in progress
+- market-order and proxy/funder behavior now has deterministic fixture coverage
+- broader endpoint parity is still in progress
 
 ## Examples
 
 - `examples/clob/read_only/main.go`
 - `examples/clob/auth_bootstrap/main.go`
 - `examples/clob/limit_order/main.go`
+- `examples/clob/market_order/main.go`
 
 ## Versioning and Parity Goals
 
@@ -133,7 +135,7 @@ The goal of this repo is to track the official SDKs over time while keeping the 
 - not copying TypeScript/Python class structure directly
 - growing coverage in milestones instead of claiming full parity early
 
-The next major milestone is the trading core hardening pass: typed response coverage for authenticated endpoints, stronger signing fixtures, and more end-to-end examples.
+The next major milestone is the remaining parity sweep across the CLOB HTTP surface, especially builder-adjacent flows, broader rewards coverage, and eventually streaming.
 
 ## Project Structure
 
