@@ -4,12 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"net/url"
+	"strconv"
 
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
 )
 
 func (c *Client) GetOK(ctx context.Context) (json.RawMessage, error) {
 	var out json.RawMessage
+	err := c.getJSON(ctx, "/", nil, polyhttp.AuthNone, &out)
+	return out, err
+}
+
+func (c *Client) HealthCheck(ctx context.Context) (string, error) {
+	var out string
 	err := c.getJSON(ctx, "/", nil, polyhttp.AuthNone, &out)
 	return out, err
 }
@@ -27,22 +34,53 @@ func (c *Client) GetSamplingSimplifiedMarkets(
 	return c.getPage(ctx, samplingSimplifiedMarketsEndpoint, nextCursor)
 }
 
+func (c *Client) GetSamplingSimplifiedMarketsPage(
+	ctx context.Context,
+	nextCursor string,
+) (*Page[SimplifiedMarket], error) {
+	return getTypedPage[SimplifiedMarket](ctx, c, samplingSimplifiedMarketsEndpoint, nextCursor)
+}
+
 func (c *Client) GetSamplingMarkets(ctx context.Context, nextCursor string) (*CursorPage, error) {
 	return c.getPage(ctx, samplingMarketsEndpoint, nextCursor)
+}
+
+func (c *Client) GetSamplingMarketsPage(
+	ctx context.Context,
+	nextCursor string,
+) (*Page[Market], error) {
+	return getTypedPage[Market](ctx, c, samplingMarketsEndpoint, nextCursor)
 }
 
 func (c *Client) GetSimplifiedMarkets(ctx context.Context, nextCursor string) (*CursorPage, error) {
 	return c.getPage(ctx, simplifiedMarketsEndpoint, nextCursor)
 }
 
+func (c *Client) GetSimplifiedMarketsPage(
+	ctx context.Context,
+	nextCursor string,
+) (*Page[SimplifiedMarket], error) {
+	return getTypedPage[SimplifiedMarket](ctx, c, simplifiedMarketsEndpoint, nextCursor)
+}
+
 func (c *Client) GetMarkets(ctx context.Context, nextCursor string) (*CursorPage, error) {
 	return c.getPage(ctx, marketsEndpoint, nextCursor)
+}
+
+func (c *Client) GetMarketsPage(ctx context.Context, nextCursor string) (*Page[Market], error) {
+	return getTypedPage[Market](ctx, c, marketsEndpoint, nextCursor)
 }
 
 func (c *Client) GetMarket(ctx context.Context, conditionID string) (json.RawMessage, error) {
 	var out json.RawMessage
 	err := c.getJSON(ctx, marketEndpoint+conditionID, nil, polyhttp.AuthNone, &out)
 	return out, err
+}
+
+func (c *Client) GetMarketInfo(ctx context.Context, conditionID string) (*Market, error) {
+	var out Market
+	err := c.getJSON(ctx, marketEndpoint+conditionID, nil, polyhttp.AuthNone, &out)
+	return &out, err
 }
 
 func (c *Client) GetOrderBook(ctx context.Context, tokenID string) (*OrderBookSummary, error) {
@@ -146,6 +184,47 @@ func (c *Client) GetFeeRateBps(ctx context.Context, tokenID string) (int64, erro
 	return response.BaseFee, nil
 }
 
+func (c *Client) GetPriceHistory(
+	ctx context.Context,
+	params PriceHistoryFilterParams,
+) ([]MarketPrice, error) {
+	query := url.Values{}
+	if params.Market != "" {
+		query.Set("market", params.Market)
+	}
+	if params.StartTs != 0 {
+		query.Set("startTs", strconv.FormatInt(params.StartTs, 10))
+	}
+	if params.EndTs != 0 {
+		query.Set("endTs", strconv.FormatInt(params.EndTs, 10))
+	}
+	if params.Fidelity != 0 {
+		query.Set("fidelity", strconv.Itoa(params.Fidelity))
+	}
+	if params.Interval != "" {
+		query.Set("interval", string(params.Interval))
+	}
+
+	var out []MarketPrice
+	err := c.getJSON(ctx, priceHistoryEndpoint, query, polyhttp.AuthNone, &out)
+	return out, err
+}
+
+func (c *Client) GetMarketTradeEvents(
+	ctx context.Context,
+	conditionID string,
+) ([]MarketTradeEvent, error) {
+	var out []MarketTradeEvent
+	err := c.getJSON(
+		ctx,
+		marketTradesEventsEndpoint+conditionID,
+		nil,
+		polyhttp.AuthNone,
+		&out,
+	)
+	return out, err
+}
+
 func (c *Client) getPage(ctx context.Context, endpoint, nextCursor string) (*CursorPage, error) {
 	query := url.Values{}
 	if nextCursor != "" {
@@ -154,6 +233,21 @@ func (c *Client) getPage(ctx context.Context, endpoint, nextCursor string) (*Cur
 
 	var out CursorPage
 	err := c.getJSON(ctx, endpoint, query, polyhttp.AuthNone, &out)
+	return &out, err
+}
+
+func getTypedPage[T any](
+	ctx context.Context,
+	client *Client,
+	endpoint, nextCursor string,
+) (*Page[T], error) {
+	query := url.Values{}
+	if nextCursor != "" {
+		query.Set("next_cursor", nextCursor)
+	}
+
+	var out Page[T]
+	err := client.getJSON(ctx, endpoint, query, polyhttp.AuthNone, &out)
 	return &out, err
 }
 

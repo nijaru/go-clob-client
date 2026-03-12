@@ -70,12 +70,14 @@ type SpreadResponse struct {
 	Spread string `json:"spread"`
 }
 
-type CursorPage struct {
-	Limit      int               `json:"limit"`
-	Count      int               `json:"count"`
-	NextCursor string            `json:"next_cursor"`
-	Data       []json.RawMessage `json:"data"`
+type Page[T any] struct {
+	Limit      int    `json:"limit"`
+	Count      int    `json:"count"`
+	NextCursor string `json:"next_cursor"`
+	Data       []T    `json:"data"`
 }
+
+type CursorPage = Page[json.RawMessage]
 
 type OrderPayload struct {
 	OrderID string `json:"orderID"`
