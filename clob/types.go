@@ -81,6 +81,22 @@ type OrderPayload struct {
 	OrderID string `json:"orderID"`
 }
 
+type PostOrderResponse struct {
+	Success            bool     `json:"success"`
+	ErrorMsg           string   `json:"errorMsg"`
+	OrderID            string   `json:"orderID"`
+	TransactionsHashes []string `json:"transactionsHashes"`
+	Status             string   `json:"status"`
+	TakingAmount       string   `json:"takingAmount"`
+	MakingAmount       string   `json:"makingAmount"`
+	TradeIDs           []string `json:"trade_ids"`
+}
+
+type CancelOrdersResponse struct {
+	Canceled    []string
+	NotCanceled map[string]string
+}
+
 type Side string
 
 const (
@@ -115,6 +131,58 @@ type RoundConfig struct {
 type CreateOrderOptions struct {
 	TickSize TickSize
 	NegRisk  *bool
+}
+
+type OpenOrder struct {
+	ID              string   `json:"id"`
+	Status          string   `json:"status"`
+	Owner           string   `json:"owner"`
+	MakerAddress    string   `json:"maker_address"`
+	Market          string   `json:"market"`
+	AssetID         string   `json:"asset_id"`
+	Side            string   `json:"side"`
+	OriginalSize    string   `json:"original_size"`
+	SizeMatched     string   `json:"size_matched"`
+	Price           string   `json:"price"`
+	AssociateTrades []string `json:"associate_trades"`
+	Outcome         string   `json:"outcome"`
+	CreatedAt       int64    `json:"created_at"`
+	Expiration      string   `json:"expiration"`
+	OrderType       string   `json:"order_type"`
+}
+
+type MakerOrder struct {
+	OrderID       string `json:"order_id"`
+	Owner         string `json:"owner"`
+	MakerAddress  string `json:"maker_address"`
+	MatchedAmount string `json:"matched_amount"`
+	Price         string `json:"price"`
+	FeeRateBps    string `json:"fee_rate_bps"`
+	AssetID       string `json:"asset_id"`
+	Outcome       string `json:"outcome"`
+	Side          Side   `json:"side"`
+}
+
+type Trade struct {
+	ID              string       `json:"id"`
+	TakerOrderID    string       `json:"taker_order_id"`
+	Market          string       `json:"market"`
+	AssetID         string       `json:"asset_id"`
+	Side            Side         `json:"side"`
+	Size            string       `json:"size"`
+	FeeRateBps      string       `json:"fee_rate_bps"`
+	Price           string       `json:"price"`
+	Status          string       `json:"status"`
+	MatchTime       string       `json:"match_time"`
+	LastUpdate      string       `json:"last_update"`
+	Outcome         string       `json:"outcome"`
+	BucketIndex     int64        `json:"bucket_index"`
+	Owner           string       `json:"owner"`
+	MakerAddress    string       `json:"maker_address"`
+	MakerOrders     []MakerOrder `json:"maker_orders"`
+	TransactionHash string       `json:"transaction_hash"`
+	TraderSide      string       `json:"trader_side"`
+	ErrorMsg        string       `json:"error_msg,omitempty"`
 }
 
 type OrderArgs struct {
@@ -215,4 +283,29 @@ type TradeParams struct {
 	AssetID      string
 	Before       string
 	After        string
+}
+
+func (r *CancelOrdersResponse) UnmarshalJSON(data []byte) error {
+	type alias struct {
+		Canceled     []string          `json:"canceled"`
+		NotCanceled  map[string]string `json:"not_canceled"`
+		NotCanceled2 map[string]string `json:"notCanceled"`
+	}
+
+	var decoded alias
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+
+	r.Canceled = decoded.Canceled
+	if decoded.NotCanceled != nil {
+		r.NotCanceled = decoded.NotCanceled
+	} else {
+		r.NotCanceled = decoded.NotCanceled2
+	}
+	if r.NotCanceled == nil {
+		r.NotCanceled = map[string]string{}
+	}
+
+	return nil
 }
