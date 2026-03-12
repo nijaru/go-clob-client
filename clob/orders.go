@@ -2,6 +2,7 @@ package clob
 
 import (
 	"context"
+	"net/http"
 	"net/url"
 
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
@@ -61,20 +62,36 @@ func (c *Client) GetOpenOrders(
 	ctx context.Context,
 	params OpenOrderParams,
 ) ([]OpenOrder, error) {
-	query := url.Values{}
-	if params.ID != "" {
-		query.Set("id", params.ID)
-	}
-	if params.Market != "" {
-		query.Set("market", params.Market)
-	}
-	if params.AssetID != "" {
-		query.Set("asset_id", params.AssetID)
+	cursor := initialCursor
+	var orders []OpenOrder
+
+	for cursor != endCursor {
+		page, err := c.GetOpenOrdersPage(ctx, params, cursor)
+		if err != nil {
+			return nil, err
+		}
+		orders = append(orders, page.Data...)
+
+		nextCursor, done := nextPageCursor(cursor, page.NextCursor)
+		if done {
+			return orders, nil
+		}
+		cursor = nextCursor
 	}
 
-	var out []OpenOrder
+	return orders, nil
+}
+
+func (c *Client) GetOpenOrdersPage(
+	ctx context.Context,
+	params OpenOrderParams,
+	nextCursor string,
+) (*Page[OpenOrder], error) {
+	query := openOrdersQuery(params, normalizedCursor(nextCursor))
+
+	var out Page[OpenOrder]
 	err := c.getJSON(ctx, openOrdersEndpoint, query, polyhttp.AuthL2, &out)
-	return out, err
+	return &out, err
 }
 
 func (c *Client) GetOrder(ctx context.Context, orderID string) (*OpenOrder, error) {
@@ -84,29 +101,36 @@ func (c *Client) GetOrder(ctx context.Context, orderID string) (*OpenOrder, erro
 }
 
 func (c *Client) GetTrades(ctx context.Context, params TradeParams) ([]Trade, error) {
-	query := url.Values{}
-	if params.ID != "" {
-		query.Set("id", params.ID)
-	}
-	if params.MakerAddress != "" {
-		query.Set("maker_address", params.MakerAddress)
-	}
-	if params.Market != "" {
-		query.Set("market", params.Market)
-	}
-	if params.AssetID != "" {
-		query.Set("asset_id", params.AssetID)
-	}
-	if params.Before != "" {
-		query.Set("before", params.Before)
-	}
-	if params.After != "" {
-		query.Set("after", params.After)
+	cursor := initialCursor
+	var trades []Trade
+
+	for cursor != endCursor {
+		page, err := c.GetTradesPage(ctx, params, cursor)
+		if err != nil {
+			return nil, err
+		}
+		trades = append(trades, page.Data...)
+
+		nextCursor, done := nextPageCursor(cursor, page.NextCursor)
+		if done {
+			return trades, nil
+		}
+		cursor = nextCursor
 	}
 
-	var out []Trade
+	return trades, nil
+}
+
+func (c *Client) GetTradesPage(
+	ctx context.Context,
+	params TradeParams,
+	nextCursor string,
+) (*Page[Trade], error) {
+	query := tradesQuery(params, normalizedCursor(nextCursor))
+
+	var out Page[Trade]
 	err := c.getJSON(ctx, tradesEndpoint, query, polyhttp.AuthL2, &out)
-	return out, err
+	return &out, err
 }
 
 func (c *Client) PostOrder(
@@ -152,4 +176,168 @@ func (c *Client) CancelAll(ctx context.Context) (*CancelOrdersResponse, error) {
 	var out CancelOrdersResponse
 	err := c.deleteJSON(ctx, cancelAllEndpoint, nil, polyhttp.AuthL2, &out)
 	return &out, err
+}
+
+func (c *Client) CreateBuilderAPIKey(ctx context.Context) (*Credentials, error) {
+	var raw apiKeyRaw
+	err := c.postJSON(ctx, createBuilderAPIKeyEndpoint, nil, polyhttp.AuthL2, &raw)
+	if err != nil {
+		return nil, err
+	}
+	return &Credentials{
+		Key:        raw.APIKey,
+		Secret:     raw.Secret,
+		Passphrase: raw.Passphrase,
+	}, nil
+}
+
+func (c *Client) GetBuilderAPIKeys(ctx context.Context) ([]BuilderAPIKey, error) {
+	var out []BuilderAPIKey
+	err := c.getJSON(ctx, getBuilderAPIKeysEndpoint, nil, polyhttp.AuthL2, &out)
+	return out, err
+}
+
+func (c *Client) RevokeBuilderAPIKey(ctx context.Context) error {
+	headers, err := c.builderOnlyHeaders(ctx, http.MethodDelete, revokeBuilderAPIKeyEndpoint, nil)
+	if err != nil {
+		return err
+	}
+	return c.doJSON(
+		ctx,
+		http.MethodDelete,
+		revokeBuilderAPIKeyEndpoint,
+		nil,
+		nil,
+		polyhttp.AuthNone,
+		nil,
+		headers,
+	)
+}
+
+func (c *Client) GetBuilderTrades(
+	ctx context.Context,
+	params TradeParams,
+) ([]BuilderTrade, error) {
+	cursor := initialCursor
+	var trades []BuilderTrade
+
+	for cursor != endCursor {
+		page, err := c.GetBuilderTradesPage(ctx, params, cursor)
+		if err != nil {
+			return nil, err
+		}
+		trades = append(trades, page.Data...)
+
+		nextCursor, done := nextPageCursor(cursor, page.NextCursor)
+		if done {
+			return trades, nil
+		}
+		cursor = nextCursor
+	}
+
+	return trades, nil
+}
+
+func (c *Client) GetBuilderTradesPage(
+	ctx context.Context,
+	params TradeParams,
+	nextCursor string,
+) (*Page[BuilderTrade], error) {
+	headers, err := c.builderOnlyHeaders(ctx, http.MethodGet, builderTradesEndpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	query := tradesQuery(params, normalizedCursor(nextCursor))
+
+	var out Page[BuilderTrade]
+	err = c.doJSON(
+		ctx,
+		http.MethodGet,
+		builderTradesEndpoint,
+		query,
+		nil,
+		polyhttp.AuthNone,
+		&out,
+		headers,
+	)
+	return &out, err
+}
+
+func (c *Client) PostHeartbeat(
+	ctx context.Context,
+	heartbeatID *string,
+) (*HeartbeatResponse, error) {
+	request := struct {
+		HeartbeatID *string `json:"heartbeat_id"`
+	}{
+		HeartbeatID: heartbeatID,
+	}
+
+	var out HeartbeatResponse
+	err := c.postJSON(ctx, heartbeatEndpoint, request, polyhttp.AuthL2, &out)
+	return &out, err
+}
+
+func openOrdersQuery(params OpenOrderParams, nextCursor string) url.Values {
+	query := url.Values{}
+	if params.ID != "" {
+		query.Set("id", params.ID)
+	}
+	if params.Market != "" {
+		query.Set("market", params.Market)
+	}
+	if params.AssetID != "" {
+		query.Set("asset_id", params.AssetID)
+	}
+	if nextCursor != "" {
+		query.Set("next_cursor", nextCursor)
+	}
+	return query
+}
+
+func tradesQuery(params TradeParams, nextCursor string) url.Values {
+	query := url.Values{}
+	if params.ID != "" {
+		query.Set("id", params.ID)
+	}
+	if params.MakerAddress != "" {
+		query.Set("maker_address", params.MakerAddress)
+	}
+	if params.Market != "" {
+		query.Set("market", params.Market)
+	}
+	if params.AssetID != "" {
+		query.Set("asset_id", params.AssetID)
+	}
+	if params.Before != "" {
+		query.Set("before", params.Before)
+	}
+	if params.After != "" {
+		query.Set("after", params.After)
+	}
+	if nextCursor != "" {
+		query.Set("next_cursor", nextCursor)
+	}
+	return query
+}
+
+func normalizedCursor(nextCursor string) string {
+	if nextCursor == "" {
+		return initialCursor
+	}
+	return nextCursor
+}
+
+func nextPageCursor(currentCursor, nextCursor string) (string, bool) {
+	switch {
+	case nextCursor == "":
+		return "", true
+	case nextCursor == currentCursor:
+		return "", true
+	case nextCursor == endCursor:
+		return endCursor, false
+	default:
+		return nextCursor, false
+	}
 }

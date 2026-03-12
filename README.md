@@ -8,9 +8,10 @@ Go SDK for the Polymarket CLOB.
 ## Status
 
 - Read-only health, market, orderbook, price history, and live-activity queries work.
-- API key bootstrap, readonly API key management, and authenticated REST calls work.
+- API key bootstrap, readonly API key management, paginated authenticated orders/trades, and authenticated REST calls work.
 - Typed limit and market order construction/signing now have deterministic fixture coverage.
-- Full parity, builder flows, RFQ, streaming, and non-CLOB packages are still in progress.
+- Builder auth, builder API key management, builder trades, and heartbeats are supported.
+- Full parity, RFQ, streaming, and non-CLOB packages are still in progress.
 
 If you need complete Polymarket SDK coverage today, use an official SDK. If you want a Go-native client that is actively moving toward parity, this repo is meant for that.
 
@@ -94,20 +95,40 @@ func main() {
 }
 ```
 
+Optional builder auth:
+
+```go
+client, err := clob.New(clob.Config{
+	ChainID:    clob.PolygonChainID,
+	PrivateKey: os.Getenv("POLYMARKET_PRIVATE_KEY"),
+	Credentials: &clob.Credentials{
+		Key:        os.Getenv("POLYMARKET_API_KEY"),
+		Secret:     os.Getenv("POLYMARKET_API_SECRET"),
+		Passphrase: os.Getenv("POLYMARKET_API_PASSPHRASE"),
+	},
+	BuilderAuth: clob.NewLocalBuilderAuth(clob.Credentials{
+		Key:        os.Getenv("POLYMARKET_BUILDER_KEY"),
+		Secret:     os.Getenv("POLYMARKET_BUILDER_SECRET"),
+		Passphrase: os.Getenv("POLYMARKET_BUILDER_PASSPHRASE"),
+	}),
+})
+```
+
 ## Current Support
 
 Available now:
 
 - read-only health, market data, orderbook, price history, and live activity queries
 - API key bootstrap plus readonly API key management
+- paginated authenticated order and trade helpers plus flattened convenience methods
 - typed limit and market order construction/signing
-- order posting, cancel flows, balance/allowance, notifications, scoring, and rewards queries
+- order posting, cancel flows, balance/allowance, notifications, scoring, rewards, builder-key, builder-trade, and heartbeat flows
 
 Still incomplete:
 
 - some older raw market helpers remain alongside newer typed equivalents for compatibility
 - parity coverage is still behind the official SDKs
-- builder flows, streaming, RFQ, and non-CLOB packages are not implemented yet
+- streaming, RFQ, and non-CLOB packages are not implemented yet
 
 ## Trading Notes
 
@@ -117,6 +138,8 @@ In practice:
 
 - creating and signing orders works
 - bootstrapping auth and posting signed orders works
+- authenticated orders and trades now expose explicit page helpers and flattened convenience methods
+- builder auth can be layered onto the same client when you need builder headers or builder-only endpoints
 - market-order and proxy/funder behavior now has deterministic fixture coverage
 - broader endpoint parity is still in progress
 
@@ -135,7 +158,7 @@ The goal of this repo is to track the official SDKs over time while keeping the 
 - not copying TypeScript/Python class structure directly
 - growing coverage in milestones instead of claiming full parity early
 
-The next major milestone is the remaining parity sweep across the CLOB HTTP surface, especially builder-adjacent flows, broader rewards coverage, and eventually streaming.
+The next major milestone is the remaining parity sweep across the CLOB HTTP surface, especially the last builder-adjacent gaps, broader rewards/market compatibility coverage, and eventually streaming.
 
 ## Project Structure
 

@@ -55,7 +55,7 @@ func (c *Client) GetJSON(
 	auth AuthLevel,
 	out any,
 ) error {
-	return c.doJSON(ctx, http.MethodGet, path, query, nil, auth, nil, out)
+	return c.doJSON(ctx, http.MethodGet, path, query, nil, auth, nil, nil, out)
 }
 
 func (c *Client) PostJSON(
@@ -65,7 +65,7 @@ func (c *Client) PostJSON(
 	auth AuthLevel,
 	out any,
 ) error {
-	return c.doJSON(ctx, http.MethodPost, path, nil, body, auth, nil, out)
+	return c.doJSON(ctx, http.MethodPost, path, nil, body, auth, nil, nil, out)
 }
 
 func (c *Client) DeleteJSON(
@@ -75,7 +75,7 @@ func (c *Client) DeleteJSON(
 	auth AuthLevel,
 	out any,
 ) error {
-	return c.doJSON(ctx, http.MethodDelete, path, nil, body, auth, nil, out)
+	return c.doJSON(ctx, http.MethodDelete, path, nil, body, auth, nil, nil, out)
 }
 
 func (c *Client) DeleteJSONQuery(
@@ -86,7 +86,7 @@ func (c *Client) DeleteJSONQuery(
 	auth AuthLevel,
 	out any,
 ) error {
-	return c.doJSON(ctx, http.MethodDelete, path, query, body, auth, nil, out)
+	return c.doJSON(ctx, http.MethodDelete, path, query, body, auth, nil, nil, out)
 }
 
 func (c *Client) GetJSONWithNonce(
@@ -97,7 +97,7 @@ func (c *Client) GetJSONWithNonce(
 	nonce int64,
 	out any,
 ) error {
-	return c.doJSON(ctx, http.MethodGet, path, query, nil, auth, &nonce, out)
+	return c.doJSON(ctx, http.MethodGet, path, query, nil, auth, &nonce, nil, out)
 }
 
 func (c *Client) PostJSONWithNonce(
@@ -108,7 +108,20 @@ func (c *Client) PostJSONWithNonce(
 	nonce int64,
 	out any,
 ) error {
-	return c.doJSON(ctx, http.MethodPost, path, nil, body, auth, &nonce, out)
+	return c.doJSON(ctx, http.MethodPost, path, nil, body, auth, &nonce, nil, out)
+}
+
+func (c *Client) DoJSON(
+	ctx context.Context,
+	method, path string,
+	query url.Values,
+	body any,
+	auth AuthLevel,
+	nonce *int64,
+	extraHeaders map[string]string,
+	out any,
+) error {
+	return c.doJSON(ctx, method, path, query, body, auth, nonce, extraHeaders, out)
 }
 
 func (c *Client) doJSON(
@@ -118,6 +131,7 @@ func (c *Client) doJSON(
 	body any,
 	auth AuthLevel,
 	nonce *int64,
+	extraHeaders map[string]string,
 	out any,
 ) error {
 	requestBody, err := marshalBody(body)
@@ -151,6 +165,10 @@ func (c *Client) doJSON(
 		for key, value := range headers {
 			req.Header.Set(key, value)
 		}
+	}
+
+	for key, value := range extraHeaders {
+		req.Header.Set(key, value)
 	}
 
 	resp, err := c.HTTPClient.Do(req)

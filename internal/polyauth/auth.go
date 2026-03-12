@@ -1,12 +1,17 @@
 package polyauth
 
 import (
+	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -86,6 +91,97 @@ func L2Headers(
 		"POLY_TIMESTAMP":  fmt.Sprintf("%d", timestamp),
 		"POLY_API_KEY":    key,
 		"POLY_PASSPHRASE": passphrase,
+	}, nil
+}
+
+func BuilderHeaders(
+	key, secret, passphrase string,
+	timestamp int64,
+	method, path string,
+	body []byte,
+) (map[string]string, error) {
+	signature, err := buildHMACSignature(secret, timestamp, method, path, body)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]string{
+		"POLY_BUILDER_API_KEY":    key,
+		"POLY_BUILDER_SIGNATURE":  signature,
+		"POLY_BUILDER_TIMESTAMP":  fmt.Sprintf("%d", timestamp),
+		"POLY_BUILDER_PASSPHRASE": passphrase,
+	}, nil
+}
+
+type RemoteBuilderHeaderRequest struct {
+	Method    string `json:"method"`
+	Path      string `json:"path"`
+	Body      string `json:"body"`
+	Timestamp int64  `json:"timestamp"`
+}
+
+type RemoteBuilderHeaderResponse struct {
+	APIKey     string `json:"poly_builder_api_key"`
+	Timestamp  string `json:"poly_builder_timestamp"`
+	Passphrase string `json:"poly_builder_passphrase"`
+	Signature  string `json:"poly_builder_signature"`
+}
+
+func FetchRemoteBuilderHeaders(
+	ctx context.Context,
+	client *http.Client,
+	endpoint string,
+	bearerToken string,
+	request RemoteBuilderHeaderRequest,
+) (map[string]string, error) {
+	payload, err := json.Marshal(request)
+	if err != nil {
+		return nil, fmt.Errorf("marshal remote builder request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		endpoint,
+		bytes.NewReader(payload),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create remote builder request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	if bearerToken != "" {
+		req.Header.Set("Authorization", "Bearer "+bearerToken)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("perform remote builder request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read remote builder response: %w", err)
+	}
+	if resp.StatusCode >= http.StatusBadRequest {
+		return nil, fmt.Errorf(
+			"remote builder signer returned status %d: %s",
+			resp.StatusCode,
+			strings.TrimSpace(string(body)),
+		)
+	}
+
+	var decoded RemoteBuilderHeaderResponse
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		return nil, fmt.Errorf("decode remote builder response: %w", err)
+	}
+
+	return map[string]string{
+		"POLY_BUILDER_API_KEY":    decoded.APIKey,
+		"POLY_BUILDER_SIGNATURE":  decoded.Signature,
+		"POLY_BUILDER_TIMESTAMP":  decoded.Timestamp,
+		"POLY_BUILDER_PASSPHRASE": decoded.Passphrase,
 	}, nil
 }
 
