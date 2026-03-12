@@ -3,27 +3,11 @@ package clob
 import (
 	"context"
 	"net/http"
+	neturl "net/url"
 	"time"
 
 	"github.com/nijaru/go-clob-client/internal/polyauth"
 )
-
-type BuilderHeaderRequest struct {
-	Method    string
-	Path      string
-	Body      []byte
-	Timestamp int64
-}
-
-type BuilderAuth interface {
-	Headers(ctx context.Context, req BuilderHeaderRequest) (map[string]string, error)
-}
-
-type RemoteBuilderAuthConfig struct {
-	URL         string
-	BearerToken string
-	HTTPClient  *http.Client
-}
 
 type localBuilderAuth struct {
 	creds Credentials
@@ -35,21 +19,31 @@ type remoteBuilderAuth struct {
 	httpClient  *http.Client
 }
 
+// NewLocalBuilderAuth creates a builder auth provider that signs headers locally.
 func NewLocalBuilderAuth(creds Credentials) BuilderAuth {
 	return &localBuilderAuth{creds: creds}
 }
 
-func NewRemoteBuilderAuth(cfg RemoteBuilderAuthConfig) BuilderAuth {
+// NewRemoteBuilderAuth creates a builder auth provider backed by a remote signing service.
+func NewRemoteBuilderAuth(cfg RemoteBuilderAuthConfig) (BuilderAuth, error) {
+	if cfg.URL == "" {
+		return nil, errRemoteBuilderURLRequired
+	}
+	parsedURL, err := neturl.ParseRequestURI(cfg.URL)
+	if err != nil {
+		return nil, err
+	}
+
 	httpClient := cfg.HTTPClient
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 15 * time.Second}
 	}
 
 	return &remoteBuilderAuth{
-		url:         cfg.URL,
+		url:         parsedURL.String(),
 		bearerToken: cfg.BearerToken,
 		httpClient:  httpClient,
-	}
+	}, nil
 }
 
 func (a *localBuilderAuth) Headers(

@@ -335,21 +335,26 @@ func TestTypedAuthenticatedSurfaces(t *testing.T) {
 				"asset_rate": "0.5"
 			}]`))
 		case http.MethodGet + " " + rewardsUserMarketsEndpoint:
-			_, _ = w.Write([]byte(`[{
-				"condition_id": "cond-1",
-				"question": "Will this ship?",
-				"market_slug": "ship-it",
-				"event_slug": "ship-it",
-				"image": "image.png",
-				"rewards_max_spread": "0.02",
-				"rewards_min_size": "10",
-				"market_competitiveness": "0.5",
-				"tokens": [],
-				"rewards_config": [],
-				"maker_address": "0xdef",
-				"earning_percentage": "0.25",
-				"earnings": []
-			}]`))
+			_, _ = w.Write([]byte(`{
+				"limit": 1,
+				"count": 1,
+				"next_cursor": "LTE=",
+				"data": [{
+					"condition_id": "cond-1",
+					"question": "Will this ship?",
+					"market_slug": "ship-it",
+					"event_slug": "ship-it",
+					"image": "image.png",
+					"rewards_max_spread": "0.02",
+					"rewards_min_size": "10",
+					"market_competitiveness": "0.5",
+					"tokens": [],
+					"rewards_config": [],
+					"maker_address": "0xdef",
+					"earning_percentage": "0.25",
+					"earnings": []
+				}]
+			}`))
 		default:
 			t.Fatalf("unexpected endpoint: %s %s", r.Method, r.URL.Path)
 		}
@@ -436,18 +441,33 @@ func TestTypedAuthenticatedSurfaces(t *testing.T) {
 		t.Fatalf("get reward percentages: %+v %v", percentages, err)
 	}
 
-	currentRewards, err := client.GetCurrentRewards(context.Background(), "")
-	if err != nil || len(currentRewards.Data) != 1 {
+	currentRewardsPage, err := client.GetCurrentRewardsPage(context.Background(), "")
+	if err != nil || len(currentRewardsPage.Data) != 1 {
+		t.Fatalf("get current rewards page: %+v %v", currentRewardsPage, err)
+	}
+
+	currentRewards, err := client.GetCurrentRewards(context.Background())
+	if err != nil || len(currentRewards) != 1 {
 		t.Fatalf("get current rewards: %+v %v", currentRewards, err)
 	}
 
-	marketRewards, err := client.GetRewardsForMarket(context.Background(), "cond-1", "")
-	if err != nil || len(marketRewards.Data) != 1 {
+	marketRewardsPage, err := client.GetRewardsForMarketPage(context.Background(), "cond-1", "")
+	if err != nil || len(marketRewardsPage.Data) != 1 {
+		t.Fatalf("get rewards for market page: %+v %v", marketRewardsPage, err)
+	}
+
+	marketRewards, err := client.GetRewardsForMarket(context.Background(), "cond-1")
+	if err != nil || len(marketRewards) != 1 {
 		t.Fatalf("get rewards for market: %+v %v", marketRewards, err)
 	}
 
-	earnings, err := client.GetEarningsForUserForDay(context.Background(), "2026-03-12", "")
-	if err != nil || len(earnings.Data) != 1 {
+	earningsPage, err := client.GetEarningsForUserForDayPage(context.Background(), "2026-03-12", "")
+	if err != nil || len(earningsPage.Data) != 1 {
+		t.Fatalf("get earnings for user page: %+v %v", earningsPage, err)
+	}
+
+	earnings, err := client.GetEarningsForUserForDay(context.Background(), "2026-03-12")
+	if err != nil || len(earnings) != 1 {
 		t.Fatalf("get earnings for user: %+v %v", earnings, err)
 	}
 
@@ -456,13 +476,24 @@ func TestTypedAuthenticatedSurfaces(t *testing.T) {
 		t.Fatalf("get total earnings for user: %+v %v", totalEarnings, err)
 	}
 
-	userRewards, err := client.GetUserRewardsAndMarketsConfig(
+	userRewardsPage, err := client.GetUserRewardsAndMarketsConfigPage(
 		context.Background(),
 		UserRewardsFilterParams{
 			Date:          "2026-03-12",
 			NoCompetition: true,
 		},
 		"",
+	)
+	if err != nil || len(userRewardsPage.Data) != 1 {
+		t.Fatalf("get user rewards and markets config page: %+v %v", userRewardsPage, err)
+	}
+
+	userRewards, err := client.GetUserRewardsAndMarketsConfig(
+		context.Background(),
+		UserRewardsFilterParams{
+			Date:          "2026-03-12",
+			NoCompetition: true,
+		},
 	)
 	if err != nil || len(userRewards) != 1 {
 		t.Fatalf("get user rewards and markets config: %+v %v", userRewards, err)

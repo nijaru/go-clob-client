@@ -26,10 +26,12 @@ var roundingConfig = map[TickSize]RoundConfig{
 	TickSizeTenThousand: {Price: 4, Size: 2, Amount: 6},
 }
 
+// Bool returns a pointer to the provided bool.
 func Bool(value bool) *bool {
 	return &value
 }
 
+// CreateOrder builds and signs a limit order.
 func (c *Client) CreateOrder(
 	ctx context.Context,
 	userOrder OrderArgs,
@@ -68,6 +70,7 @@ func (c *Client) CreateOrder(
 	})
 }
 
+// CreateMarketOrder builds and signs a market order.
 func (c *Client) CreateMarketOrder(
 	ctx context.Context,
 	userOrder MarketOrderArgs,
@@ -127,6 +130,7 @@ func (c *Client) CreateMarketOrder(
 	})
 }
 
+// CreateAndPostOrder builds, signs, and posts a limit order in one step.
 func (c *Client) CreateAndPostOrder(
 	ctx context.Context,
 	userOrder OrderArgs,
@@ -148,6 +152,7 @@ func (c *Client) CreateAndPostOrder(
 	return c.PostOrder(ctx, request)
 }
 
+// CreateAndPostMarketOrder builds, signs, and posts a market order in one step.
 func (c *Client) CreateAndPostMarketOrder(
 	ctx context.Context,
 	userOrder MarketOrderArgs,
@@ -178,6 +183,7 @@ func (c *Client) CreateAndPostMarketOrder(
 	return c.PostOrder(ctx, request)
 }
 
+// BuildPostOrderRequest wraps a signed order in the authenticated post-order payload.
 func (c *Client) BuildPostOrderRequest(
 	order SignedOrder,
 	orderType OrderType,
@@ -208,6 +214,7 @@ func (c *Client) BuildPostOrderRequest(
 	}, nil
 }
 
+// CalculateMarketPrice derives a marketable price from the current order book.
 func (c *Client) CalculateMarketPrice(
 	ctx context.Context,
 	tokenID string,
@@ -415,7 +422,6 @@ func (c *Client) signOrder(input orderBuildInput) (*SignedOrder, error) {
 	}
 
 	order := SignedOrder{
-		Salt:          strconv.FormatUint(c.saltGenerator(), 10),
 		Maker:         maker,
 		Signer:        signerAddress,
 		Taker:         input.Taker,
@@ -428,6 +434,12 @@ func (c *Client) signOrder(input orderBuildInput) (*SignedOrder, error) {
 		Side:          input.Side,
 		SignatureType: input.SignatureType,
 	}
+
+	salt, err := c.saltGenerator()
+	if err != nil {
+		return nil, fmt.Errorf("generate order salt: %w", err)
+	}
+	order.Salt = strconv.FormatUint(salt, 10)
 
 	signature, err := polyauth.SignTypedData(
 		c.signer,
@@ -633,12 +645,12 @@ func parseTickSize(value TickSize) (decimal.Decimal, error) {
 	return parsed, nil
 }
 
-func generateSalt() uint64 {
+func generateSalt() (uint64, error) {
 	var raw [8]byte
 	if _, err := rand.Read(raw[:]); err != nil {
-		panic(err)
+		return 0, err
 	}
-	return binary.BigEndian.Uint64(raw[:]) & ((1 << 53) - 1)
+	return binary.BigEndian.Uint64(raw[:]) & ((1 << 53) - 1), nil
 }
 
 func derefBool(value *bool) bool {

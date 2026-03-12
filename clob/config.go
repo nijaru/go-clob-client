@@ -7,11 +7,14 @@ import (
 )
 
 const (
-	DefaultHost    = "https://clob.polymarket.com"
+	// DefaultHost is the production Polymarket CLOB base URL.
+	DefaultHost = "https://clob.polymarket.com"
+	// PolygonChainID is the Polygon mainnet chain ID used by Polymarket.
 	PolygonChainID = int64(137)
 	defaultUA      = "go-clob-client/clob"
 )
 
+// SignatureType controls which signer/funder model Polymarket should expect for the account.
 type SignatureType int
 
 const (
@@ -23,6 +26,7 @@ const (
 	SignatureTypeBrowserProxy = SignatureTypePolyGnosisSafe
 )
 
+// Config configures a Polymarket CLOB client.
 type Config struct {
 	Host          string
 	ChainID       int64

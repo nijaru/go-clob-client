@@ -9,24 +9,28 @@ import (
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
 )
 
+// GetOK returns the raw health-check payload for compatibility with the official SDKs.
 func (c *Client) GetOK(ctx context.Context) (json.RawMessage, error) {
 	var out json.RawMessage
 	err := c.getJSON(ctx, "/", nil, polyhttp.AuthNone, &out)
 	return out, err
 }
 
+// HealthCheck returns the typed health-check response body.
 func (c *Client) HealthCheck(ctx context.Context) (string, error) {
 	var out string
 	err := c.getJSON(ctx, "/", nil, polyhttp.AuthNone, &out)
 	return out, err
 }
 
+// GetServerTime returns the server time reported by the CLOB API.
 func (c *Client) GetServerTime(ctx context.Context) (int64, error) {
 	var out int64
 	err := c.getJSON(ctx, timeEndpoint, nil, polyhttp.AuthNone, &out)
 	return out, err
 }
 
+// GetSamplingSimplifiedMarkets returns the raw compatibility sampling-simplified markets page.
 func (c *Client) GetSamplingSimplifiedMarkets(
 	ctx context.Context,
 	nextCursor string,
@@ -34,6 +38,7 @@ func (c *Client) GetSamplingSimplifiedMarkets(
 	return c.getPage(ctx, samplingSimplifiedMarketsEndpoint, nextCursor)
 }
 
+// GetSamplingSimplifiedMarketsPage returns a typed sampling-simplified markets page.
 func (c *Client) GetSamplingSimplifiedMarketsPage(
 	ctx context.Context,
 	nextCursor string,
@@ -41,10 +46,12 @@ func (c *Client) GetSamplingSimplifiedMarketsPage(
 	return getTypedPage[SimplifiedMarket](ctx, c, samplingSimplifiedMarketsEndpoint, nextCursor)
 }
 
+// GetSamplingMarkets returns the raw compatibility sampling markets page.
 func (c *Client) GetSamplingMarkets(ctx context.Context, nextCursor string) (*CursorPage, error) {
 	return c.getPage(ctx, samplingMarketsEndpoint, nextCursor)
 }
 
+// GetSamplingMarketsPage returns a typed sampling markets page.
 func (c *Client) GetSamplingMarketsPage(
 	ctx context.Context,
 	nextCursor string,
@@ -52,10 +59,12 @@ func (c *Client) GetSamplingMarketsPage(
 	return getTypedPage[Market](ctx, c, samplingMarketsEndpoint, nextCursor)
 }
 
+// GetSimplifiedMarkets returns the raw compatibility simplified markets page.
 func (c *Client) GetSimplifiedMarkets(ctx context.Context, nextCursor string) (*CursorPage, error) {
 	return c.getPage(ctx, simplifiedMarketsEndpoint, nextCursor)
 }
 
+// GetSimplifiedMarketsPage returns a typed simplified markets page.
 func (c *Client) GetSimplifiedMarketsPage(
 	ctx context.Context,
 	nextCursor string,
@@ -63,26 +72,31 @@ func (c *Client) GetSimplifiedMarketsPage(
 	return getTypedPage[SimplifiedMarket](ctx, c, simplifiedMarketsEndpoint, nextCursor)
 }
 
+// GetMarkets returns the raw compatibility markets page.
 func (c *Client) GetMarkets(ctx context.Context, nextCursor string) (*CursorPage, error) {
 	return c.getPage(ctx, marketsEndpoint, nextCursor)
 }
 
+// GetMarketsPage returns a typed markets page.
 func (c *Client) GetMarketsPage(ctx context.Context, nextCursor string) (*Page[Market], error) {
 	return getTypedPage[Market](ctx, c, marketsEndpoint, nextCursor)
 }
 
+// GetMarket returns the raw compatibility market payload for a condition ID.
 func (c *Client) GetMarket(ctx context.Context, conditionID string) (json.RawMessage, error) {
 	var out json.RawMessage
 	err := c.getJSON(ctx, marketEndpoint+conditionID, nil, polyhttp.AuthNone, &out)
 	return out, err
 }
 
+// GetMarketInfo returns a typed market record for a condition ID.
 func (c *Client) GetMarketInfo(ctx context.Context, conditionID string) (*Market, error) {
 	var out Market
 	err := c.getJSON(ctx, marketEndpoint+conditionID, nil, polyhttp.AuthNone, &out)
 	return &out, err
 }
 
+// GetOrderBook returns the typed order book for a token.
 func (c *Client) GetOrderBook(ctx context.Context, tokenID string) (*OrderBookSummary, error) {
 	query := url.Values{}
 	query.Set("token_id", tokenID)
@@ -92,6 +106,7 @@ func (c *Client) GetOrderBook(ctx context.Context, tokenID string) (*OrderBookSu
 	return &out, err
 }
 
+// GetOrderBooks returns the typed order books for multiple tokens.
 func (c *Client) GetOrderBooks(
 	ctx context.Context,
 	books []BookParams,
@@ -101,14 +116,17 @@ func (c *Client) GetOrderBooks(
 	return out, err
 }
 
+// GetMidpoint returns the current midpoint price for a token.
 func (c *Client) GetMidpoint(ctx context.Context, tokenID string) (*PriceResponse, error) {
 	return c.getPriceLike(ctx, midpointEndpoint, tokenID)
 }
 
+// GetMidpoints returns midpoint prices for multiple tokens.
 func (c *Client) GetMidpoints(ctx context.Context, books []BookParams) ([]PriceResponse, error) {
 	return c.postPriceLike(ctx, midpointsEndpoint, books)
 }
 
+// GetPrice returns the best price for a token and side.
 func (c *Client) GetPrice(ctx context.Context, tokenID, side string) (*PriceResponse, error) {
 	query := url.Values{}
 	query.Set("token_id", tokenID)
@@ -119,10 +137,12 @@ func (c *Client) GetPrice(ctx context.Context, tokenID, side string) (*PriceResp
 	return &out, err
 }
 
+// GetPrices returns prices for multiple tokens.
 func (c *Client) GetPrices(ctx context.Context, books []BookParams) ([]PriceResponse, error) {
 	return c.postPriceLike(ctx, pricesEndpoint, books)
 }
 
+// GetSpread returns the current spread for a token.
 func (c *Client) GetSpread(ctx context.Context, tokenID string) (*SpreadResponse, error) {
 	query := url.Values{}
 	query.Set("token_id", tokenID)
@@ -132,16 +152,19 @@ func (c *Client) GetSpread(ctx context.Context, tokenID string) (*SpreadResponse
 	return &out, err
 }
 
+// GetSpreads returns spreads for multiple tokens.
 func (c *Client) GetSpreads(ctx context.Context, books []BookParams) ([]SpreadResponse, error) {
 	var out []SpreadResponse
 	err := c.postJSON(ctx, spreadsEndpoint, books, polyhttp.AuthNone, &out)
 	return out, err
 }
 
+// GetLastTradePrice returns the last trade price for a token.
 func (c *Client) GetLastTradePrice(ctx context.Context, tokenID string) (*PriceResponse, error) {
 	return c.getPriceLike(ctx, lastTradePriceEndpoint, tokenID)
 }
 
+// GetLastTradesPrices returns the last trade prices for multiple tokens.
 func (c *Client) GetLastTradesPrices(
 	ctx context.Context,
 	books []BookParams,
@@ -149,6 +172,7 @@ func (c *Client) GetLastTradesPrices(
 	return c.postPriceLike(ctx, lastTradesPricesEndpoint, books)
 }
 
+// GetTickSize returns the minimum tick size for a token.
 func (c *Client) GetTickSize(ctx context.Context, tokenID string) (*TickSizeResponse, error) {
 	query := url.Values{}
 	query.Set("token_id", tokenID)
@@ -158,6 +182,7 @@ func (c *Client) GetTickSize(ctx context.Context, tokenID string) (*TickSizeResp
 	return &out, err
 }
 
+// GetNegRisk returns whether a token is part of a neg-risk market.
 func (c *Client) GetNegRisk(ctx context.Context, tokenID string) (*NegRiskResponse, error) {
 	query := url.Values{}
 	query.Set("token_id", tokenID)
@@ -167,6 +192,7 @@ func (c *Client) GetNegRisk(ctx context.Context, tokenID string) (*NegRiskRespon
 	return &out, err
 }
 
+// GetFeeRate returns the fee-rate response for a token.
 func (c *Client) GetFeeRate(ctx context.Context, tokenID string) (*FeeRateResponse, error) {
 	query := url.Values{}
 	query.Set("token_id", tokenID)
@@ -176,6 +202,7 @@ func (c *Client) GetFeeRate(ctx context.Context, tokenID string) (*FeeRateRespon
 	return &out, err
 }
 
+// GetFeeRateBps returns the fee rate in basis points for a token.
 func (c *Client) GetFeeRateBps(ctx context.Context, tokenID string) (int64, error) {
 	response, err := c.GetFeeRate(ctx, tokenID)
 	if err != nil {
@@ -184,6 +211,7 @@ func (c *Client) GetFeeRateBps(ctx context.Context, tokenID string) (int64, erro
 	return response.BaseFee, nil
 }
 
+// GetPriceHistory returns the typed price-history series for the supplied filter.
 func (c *Client) GetPriceHistory(
 	ctx context.Context,
 	params PriceHistoryFilterParams,
@@ -210,6 +238,7 @@ func (c *Client) GetPriceHistory(
 	return out, err
 }
 
+// GetMarketTradeEvents returns live market activity events for a condition ID.
 func (c *Client) GetMarketTradeEvents(
 	ctx context.Context,
 	conditionID string,

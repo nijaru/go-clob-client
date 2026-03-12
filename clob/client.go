@@ -11,6 +11,7 @@ import (
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
 )
 
+// Client is the public Polymarket CLOB HTTP client.
 type Client struct {
 	host          string
 	chainID       int64
@@ -21,9 +22,10 @@ type Client struct {
 	builderAuth   BuilderAuth
 	signatureType SignatureType
 	funderAddress string
-	saltGenerator func() uint64
+	saltGenerator func() (uint64, error)
 }
 
+// New constructs a new Polymarket CLOB client from the provided config.
 func New(config Config) (*Client, error) {
 	config = config.normalized()
 
@@ -72,10 +74,12 @@ func (c *Client) Host() string {
 	return c.host
 }
 
+// SetCredentials updates the API credentials used for authenticated requests.
 func (c *Client) SetCredentials(creds Credentials) {
 	c.creds = &creds
 }
 
+// Address returns the signer address backing the client, if configured.
 func (c *Client) Address() string {
 	if c.signer == nil {
 		return ""
