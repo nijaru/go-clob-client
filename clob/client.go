@@ -17,6 +17,9 @@ type Client struct {
 	http          *polyhttp.Client
 	signer        *polyauth.Signer
 	creds         *Credentials
+	signatureType SignatureType
+	funderAddress string
+	saltGenerator func() uint64
 }
 
 func New(config Config) (*Client, error) {
@@ -27,6 +30,9 @@ func New(config Config) (*Client, error) {
 		chainID:       config.ChainID,
 		useServerTime: config.UseServerTime,
 		creds:         config.Credentials,
+		signatureType: config.SignatureType,
+		funderAddress: config.FunderAddress,
+		saltGenerator: generateSalt,
 	}
 
 	if config.PrivateKey != "" {

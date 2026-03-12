@@ -39,6 +39,21 @@ func (s *Signer) Address() common.Address {
 	return s.address
 }
 
+func SignTypedData(signer *Signer, typedData apitypes.TypedData) (string, error) {
+	digest, _, err := apitypes.TypedDataAndHash(typedData)
+	if err != nil {
+		return "", fmt.Errorf("build typed data digest: %w", err)
+	}
+
+	signature, err := crypto.Sign(digest, signer.key)
+	if err != nil {
+		return "", fmt.Errorf("sign typed data: %w", err)
+	}
+	signature[64] += 27
+
+	return "0x" + hex.EncodeToString(signature), nil
+}
+
 func L1Headers(signer *Signer, chainID, timestamp, nonce int64) (map[string]string, error) {
 	signature, err := signer.signClobAuth(chainID, timestamp, nonce)
 	if err != nil {
@@ -103,18 +118,7 @@ func (s *Signer) signClobAuth(chainID, timestamp, nonce int64) (string, error) {
 		},
 	}
 
-	digest, _, err := apitypes.TypedDataAndHash(typedData)
-	if err != nil {
-		return "", fmt.Errorf("build auth typed data: %w", err)
-	}
-
-	signature, err := crypto.Sign(digest, s.key)
-	if err != nil {
-		return "", fmt.Errorf("sign auth typed data: %w", err)
-	}
-	signature[64] += 27
-
-	return "0x" + hex.EncodeToString(signature), nil
+	return SignTypedData(s, typedData)
 }
 
 func buildHMACSignature(

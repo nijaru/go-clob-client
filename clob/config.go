@@ -16,8 +16,11 @@ type SignatureType int
 
 const (
 	SignatureTypeEOA SignatureType = iota
-	SignatureTypeMagic
-	SignatureTypeBrowserProxy
+	SignatureTypePolyProxy
+	SignatureTypePolyGnosisSafe
+
+	SignatureTypeMagic        = SignatureTypePolyProxy
+	SignatureTypeBrowserProxy = SignatureTypePolyGnosisSafe
 )
 
 type Config struct {
@@ -25,6 +28,8 @@ type Config struct {
 	ChainID       int64
 	PrivateKey    string
 	Credentials   *Credentials
+	SignatureType SignatureType
+	FunderAddress string
 	HTTPClient    *http.Client
 	UserAgent     string
 	UseServerTime bool
