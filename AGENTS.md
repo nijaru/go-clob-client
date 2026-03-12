@@ -91,8 +91,9 @@ Commands that should pass before shipping:
 1. Compare behavior against the TypeScript, Python, and Rust clients.
 2. Record design decisions in local `ai/` files before broadening the surface.
 3. Implement one coherent API slice at a time with tests and an example.
-4. Run `go test ./...` and `go build ./...`.
-5. Update local `ai/STATUS.md` and task logs with what changed.
+4. Keep `README.md` up to date as public capabilities, examples, status, or limitations change.
+5. Run `go test ./...` and `go build ./...`.
+6. Update local `ai/STATUS.md` and task logs with what changed.
 
 ## Current Focus
 
