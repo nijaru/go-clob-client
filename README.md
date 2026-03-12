@@ -128,6 +128,7 @@ Still incomplete:
 
 - some older raw market helpers remain alongside newer typed equivalents for compatibility
 - parity coverage is still behind the official SDKs
+- Go doc coverage is still sparse, so the README and examples are the best entry points today
 - streaming, RFQ, and non-CLOB packages are not implemented yet
 
 ## Trading Notes
@@ -158,7 +159,7 @@ The goal of this repo is to track the official SDKs over time while keeping the 
 - not copying TypeScript/Python class structure directly
 - growing coverage in milestones instead of claiming full parity early
 
-The next major milestone is the remaining parity sweep across the CLOB HTTP surface, especially the last builder-adjacent gaps, broader rewards/market compatibility coverage, and eventually streaming.
+The next major milestone is the remaining parity sweep across the CLOB HTTP surface, plus public API polish for Go users, and eventually streaming.
 
 ## Project Structure
 
