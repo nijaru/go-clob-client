@@ -1,19 +1,18 @@
 # go-clob-client
 
-Go SDK for the Polymarket CLOB.
+> [!WARNING]
+> In development. This SDK is usable for core CLOB flows, but it is not yet feature-complete or at parity with the official TypeScript, Python, or Rust SDKs.
 
-This project is active, usable for core read-only and authenticated REST flows, and still incomplete. It is not at feature parity with the official TypeScript, Python, or Rust SDKs yet.
+Go SDK for the Polymarket CLOB.
 
 ## Status
 
-Current status:
+- Read-only market and orderbook queries work.
+- API key bootstrap and authenticated REST calls work.
+- Typed limit and market order construction/signing work.
+- Full parity, RFQ, streaming, and non-CLOB packages are still in progress.
 
-- usable for read-only CLOB queries
-- usable for API key bootstrap and authenticated REST calls
-- usable for typed limit and market order construction/signing
-- still incomplete for broader parity, streaming, RFQ, and non-CLOB APIs
-
-If you need full Polymarket SDK coverage today, use an official SDK. If you want a Go-native client that is actively moving toward parity, this repo is meant for that.
+If you need complete Polymarket SDK coverage today, use an official SDK. If you want a Go-native client that is actively moving toward parity, this repo is meant for that.
 
 ## Install
 
@@ -99,85 +98,26 @@ func main() {
 
 Available now:
 
-- read-only market and orderbook endpoints
-- L1 auth headers for API key creation and derivation
-- L2 auth headers for authenticated REST calls
-- typed limit order creation and signing
-- typed market order creation and signing
+- read-only market data and orderbook queries
+- API key bootstrap and authenticated REST calls
+- typed limit and market order construction/signing
 - order posting and cancellation helpers
 
-Partial or manual only:
+Still incomplete:
 
-- order submission is practical, but the SDK is still early and not yet feature-complete
-- some authenticated responses still return `json.RawMessage` instead of stable typed structs
-- examples are present, but broader workflow coverage is still growing
-- parity testing against official SDK outputs is started, not finished
-
-Not implemented yet:
-
-- websocket and streaming support
-- RFQ support
-- broader CLOB endpoint parity sweep
-- Gamma, data, bridge, and CTF packages
+- several authenticated responses still use `json.RawMessage`
+- parity coverage is still behind the official SDKs
+- streaming, RFQ, and non-CLOB packages are not implemented yet
 
 ## Trading Notes
 
-This repo now includes typed order construction and signing, but it is still not a complete trading SDK in the “official SDK parity” sense.
+This repo now includes a usable trading core, but it is still not a complete “official SDK parity” trading SDK.
 
-What that means in practice:
+In practice:
 
-- core order creation flows exist
-- auth bootstrap exists
-- posting signed orders exists
-- edge-case coverage, wider endpoint support, and streaming support are still in progress
-
-## API Surface
-
-Read-only:
-
-- `GetOK`
-- `GetServerTime`
-- `GetSamplingSimplifiedMarkets`
-- `GetSamplingMarkets`
-- `GetSimplifiedMarkets`
-- `GetMarkets`
-- `GetMarket`
-- `GetOrderBook`
-- `GetOrderBooks`
-- `GetMidpoint`
-- `GetMidpoints`
-- `GetPrice`
-- `GetPrices`
-- `GetSpread`
-- `GetSpreads`
-- `GetLastTradePrice`
-- `GetLastTradesPrices`
-- `GetTickSize`
-- `GetNegRisk`
-- `GetFeeRate`
-- `GetFeeRateBps`
-
-Trading/auth:
-
-- `CreateAPIKey`
-- `DeriveAPIKey`
-- `CreateOrDeriveAPIKey`
-- `CreateOrder`
-- `CreateMarketOrder`
-- `CreateAndPostOrder`
-- `CreateAndPostMarketOrder`
-- `BuildPostOrderRequest`
-- `GetAPIKeys`
-- `DeleteAPIKey`
-- `GetClosedOnly`
-- `GetOpenOrders`
-- `GetOrder`
-- `GetTrades`
-- `PostOrder`
-- `PostOrders`
-- `CancelOrder`
-- `CancelOrders`
-- `CancelAll`
+- creating and signing orders works
+- bootstrapping auth and posting signed orders works
+- edge-case coverage and broader endpoint coverage are still in progress
 
 ## Examples
 
