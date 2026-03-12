@@ -138,6 +138,14 @@ func (c *Client) GetFeeRate(ctx context.Context, tokenID string) (*FeeRateRespon
 	return &out, err
 }
 
+func (c *Client) GetFeeRateBps(ctx context.Context, tokenID string) (int64, error) {
+	response, err := c.GetFeeRate(ctx, tokenID)
+	if err != nil {
+		return 0, err
+	}
+	return response.BaseFee, nil
+}
+
 func (c *Client) getPage(ctx context.Context, endpoint, nextCursor string) (*CursorPage, error) {
 	query := url.Values{}
 	if nextCursor != "" {

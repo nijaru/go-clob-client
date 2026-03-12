@@ -1,6 +1,10 @@
 package clob
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+	"strconv"
+)
 
 type Credentials struct {
 	Key        string `json:"key"`
@@ -45,7 +49,7 @@ type OrderBookSummary struct {
 }
 
 type TickSizeResponse struct {
-	MinimumTickSize string `json:"minimum_tick_size"`
+	MinimumTickSize TickSize `json:"minimum_tick_size"`
 }
 
 type NegRiskResponse struct {
@@ -53,7 +57,7 @@ type NegRiskResponse struct {
 }
 
 type FeeRateResponse struct {
-	FeeRateBps int64 `json:"fee_rate_bps"`
+	BaseFee int64 `json:"base_fee"`
 }
 
 type PriceResponse struct {
@@ -93,6 +97,48 @@ const (
 	OrderTypeFAK OrderType = "FAK"
 )
 
+type TickSize string
+
+const (
+	TickSizeTenth       TickSize = "0.1"
+	TickSizeHundredth   TickSize = "0.01"
+	TickSizeThousandth  TickSize = "0.001"
+	TickSizeTenThousand TickSize = "0.0001"
+)
+
+type RoundConfig struct {
+	Price  int32
+	Size   int32
+	Amount int32
+}
+
+type CreateOrderOptions struct {
+	TickSize TickSize
+	NegRisk  *bool
+}
+
+type OrderArgs struct {
+	TokenID    string
+	Price      float64
+	Size       float64
+	Side       Side
+	FeeRateBps int64
+	Nonce      uint64
+	Expiration uint64
+	Taker      string
+}
+
+type MarketOrderArgs struct {
+	TokenID    string
+	Amount     float64
+	Side       Side
+	Price      float64
+	FeeRateBps int64
+	Nonce      uint64
+	Taker      string
+	OrderType  OrderType
+}
+
 type SignedOrder struct {
 	Salt          string        `json:"salt"`
 	Maker         string        `json:"maker"`
@@ -107,6 +153,45 @@ type SignedOrder struct {
 	Side          Side          `json:"side"`
 	SignatureType SignatureType `json:"signatureType"`
 	Signature     string        `json:"signature"`
+}
+
+func (o SignedOrder) MarshalJSON() ([]byte, error) {
+	salt, err := strconv.ParseUint(o.Salt, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("parse order salt: %w", err)
+	}
+
+	type wireSignedOrder struct {
+		Salt          uint64        `json:"salt"`
+		Maker         string        `json:"maker"`
+		Signer        string        `json:"signer"`
+		Taker         string        `json:"taker"`
+		TokenID       string        `json:"tokenId"`
+		MakerAmount   string        `json:"makerAmount"`
+		TakerAmount   string        `json:"takerAmount"`
+		Expiration    string        `json:"expiration"`
+		Nonce         string        `json:"nonce"`
+		FeeRateBps    string        `json:"feeRateBps"`
+		Side          Side          `json:"side"`
+		SignatureType SignatureType `json:"signatureType"`
+		Signature     string        `json:"signature"`
+	}
+
+	return json.Marshal(wireSignedOrder{
+		Salt:          salt,
+		Maker:         o.Maker,
+		Signer:        o.Signer,
+		Taker:         o.Taker,
+		TokenID:       o.TokenID,
+		MakerAmount:   o.MakerAmount,
+		TakerAmount:   o.TakerAmount,
+		Expiration:    o.Expiration,
+		Nonce:         o.Nonce,
+		FeeRateBps:    o.FeeRateBps,
+		Side:          o.Side,
+		SignatureType: o.SignatureType,
+		Signature:     o.Signature,
+	})
 }
 
 type PostOrderRequest struct {
