@@ -8,6 +8,7 @@ import (
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
 )
 
+// CreateAPIKey creates a new Polymarket API key using L1 authentication.
 func (c *Client) CreateAPIKey(ctx context.Context, nonce int64) (*Credentials, error) {
 	var raw apiKeyRaw
 	err := c.postJSONWithNonce(ctx, createAPIKeyEndpoint, nil, polyhttp.AuthL1, nonce, &raw)
@@ -21,6 +22,7 @@ func (c *Client) CreateAPIKey(ctx context.Context, nonce int64) (*Credentials, e
 	}, nil
 }
 
+// DeriveAPIKey derives the existing Polymarket API key for the signer using L1 authentication.
 func (c *Client) DeriveAPIKey(ctx context.Context, nonce int64) (*Credentials, error) {
 	var raw apiKeyRaw
 	err := c.getJSONWithNonce(ctx, deriveAPIKeyEndpoint, nil, polyhttp.AuthL1, nonce, &raw)
@@ -34,6 +36,7 @@ func (c *Client) DeriveAPIKey(ctx context.Context, nonce int64) (*Credentials, e
 	}, nil
 }
 
+// CreateOrDeriveAPIKey creates a new API key or falls back to deriving an existing one.
 func (c *Client) CreateOrDeriveAPIKey(ctx context.Context, nonce int64) (*Credentials, error) {
 	creds, err := c.CreateAPIKey(ctx, nonce)
 	if err == nil {
@@ -42,22 +45,26 @@ func (c *Client) CreateOrDeriveAPIKey(ctx context.Context, nonce int64) (*Creden
 	return c.DeriveAPIKey(ctx, nonce)
 }
 
+// GetAPIKeys lists the authenticated account's API keys.
 func (c *Client) GetAPIKeys(ctx context.Context) (*APIKeysResponse, error) {
 	var out APIKeysResponse
 	err := c.getJSON(ctx, getAPIKeysEndpoint, nil, polyhttp.AuthL2, &out)
 	return &out, err
 }
 
+// DeleteAPIKey deletes the currently authenticated API key.
 func (c *Client) DeleteAPIKey(ctx context.Context) error {
 	return c.deleteJSON(ctx, deleteAPIKeyEndpoint, nil, polyhttp.AuthL2, nil)
 }
 
+// GetClosedOnly returns whether the account is restricted to closed-only mode.
 func (c *Client) GetClosedOnly(ctx context.Context) (*BanStatus, error) {
 	var out BanStatus
 	err := c.getJSON(ctx, closedOnlyEndpoint, nil, polyhttp.AuthL2, &out)
 	return &out, err
 }
 
+// GetOpenOrders returns all paginated open orders that match the provided filters.
 func (c *Client) GetOpenOrders(
 	ctx context.Context,
 	params OpenOrderParams,
@@ -82,6 +89,7 @@ func (c *Client) GetOpenOrders(
 	return orders, nil
 }
 
+// GetOpenOrdersPage returns a single page of authenticated open orders.
 func (c *Client) GetOpenOrdersPage(
 	ctx context.Context,
 	params OpenOrderParams,
@@ -94,12 +102,14 @@ func (c *Client) GetOpenOrdersPage(
 	return &out, err
 }
 
+// GetOrder fetches a single authenticated open order by ID.
 func (c *Client) GetOrder(ctx context.Context, orderID string) (*OpenOrder, error) {
 	var out OpenOrder
 	err := c.getJSON(ctx, orderEndpoint+orderID, nil, polyhttp.AuthL2, &out)
 	return &out, err
 }
 
+// GetTrades returns all paginated authenticated trades that match the provided filters.
 func (c *Client) GetTrades(ctx context.Context, params TradeParams) ([]Trade, error) {
 	cursor := initialCursor
 	var trades []Trade
@@ -121,6 +131,7 @@ func (c *Client) GetTrades(ctx context.Context, params TradeParams) ([]Trade, er
 	return trades, nil
 }
 
+// GetTradesPage returns a single page of authenticated trades.
 func (c *Client) GetTradesPage(
 	ctx context.Context,
 	params TradeParams,
@@ -133,6 +144,7 @@ func (c *Client) GetTradesPage(
 	return &out, err
 }
 
+// PostOrder posts a single signed order.
 func (c *Client) PostOrder(
 	ctx context.Context,
 	request PostOrderRequest,
@@ -142,6 +154,7 @@ func (c *Client) PostOrder(
 	return &out, err
 }
 
+// PostOrders posts multiple signed orders in a batch.
 func (c *Client) PostOrders(
 	ctx context.Context,
 	requests []PostOrderRequest,
@@ -151,6 +164,7 @@ func (c *Client) PostOrders(
 	return out, err
 }
 
+// CancelOrder cancels a single order by ID.
 func (c *Client) CancelOrder(ctx context.Context, orderID string) (*CancelOrdersResponse, error) {
 	var out CancelOrdersResponse
 	err := c.deleteJSON(
@@ -163,6 +177,7 @@ func (c *Client) CancelOrder(ctx context.Context, orderID string) (*CancelOrders
 	return &out, err
 }
 
+// CancelOrders cancels multiple orders in a single request.
 func (c *Client) CancelOrders(
 	ctx context.Context,
 	orderIDs []string,
@@ -172,12 +187,14 @@ func (c *Client) CancelOrders(
 	return &out, err
 }
 
+// CancelAll cancels all open orders for the authenticated account.
 func (c *Client) CancelAll(ctx context.Context) (*CancelOrdersResponse, error) {
 	var out CancelOrdersResponse
 	err := c.deleteJSON(ctx, cancelAllEndpoint, nil, polyhttp.AuthL2, &out)
 	return &out, err
 }
 
+// CreateBuilderAPIKey creates a new builder API key using L2 authentication.
 func (c *Client) CreateBuilderAPIKey(ctx context.Context) (*Credentials, error) {
 	var raw apiKeyRaw
 	err := c.postJSON(ctx, createBuilderAPIKeyEndpoint, nil, polyhttp.AuthL2, &raw)
@@ -191,12 +208,14 @@ func (c *Client) CreateBuilderAPIKey(ctx context.Context) (*Credentials, error) 
 	}, nil
 }
 
+// GetBuilderAPIKeys lists builder API keys for the authenticated account.
 func (c *Client) GetBuilderAPIKeys(ctx context.Context) ([]BuilderAPIKey, error) {
 	var out []BuilderAPIKey
 	err := c.getJSON(ctx, getBuilderAPIKeysEndpoint, nil, polyhttp.AuthL2, &out)
 	return out, err
 }
 
+// RevokeBuilderAPIKey revokes the currently configured builder API key.
 func (c *Client) RevokeBuilderAPIKey(ctx context.Context) error {
 	headers, err := c.builderOnlyHeaders(ctx, http.MethodDelete, revokeBuilderAPIKeyEndpoint, nil)
 	if err != nil {
@@ -214,6 +233,7 @@ func (c *Client) RevokeBuilderAPIKey(ctx context.Context) error {
 	)
 }
 
+// GetBuilderTrades returns all paginated builder trades that match the provided filters.
 func (c *Client) GetBuilderTrades(
 	ctx context.Context,
 	params TradeParams,
@@ -238,6 +258,7 @@ func (c *Client) GetBuilderTrades(
 	return trades, nil
 }
 
+// GetBuilderTradesPage returns a single page of builder trades.
 func (c *Client) GetBuilderTradesPage(
 	ctx context.Context,
 	params TradeParams,
@@ -264,6 +285,7 @@ func (c *Client) GetBuilderTradesPage(
 	return &out, err
 }
 
+// PostHeartbeat posts a builder/session heartbeat for the authenticated account.
 func (c *Client) PostHeartbeat(
 	ctx context.Context,
 	heartbeatID *string,

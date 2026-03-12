@@ -114,6 +114,8 @@ client, err := clob.New(clob.Config{
 })
 ```
 
+For remote builder signing, use `clob.NewRemoteBuilderAuth(...)` and handle the returned error during setup.
+
 ## Current Support
 
 Available now:
@@ -127,6 +129,7 @@ Available now:
 Still incomplete:
 
 - some older raw market helpers remain alongside newer typed equivalents for compatibility
+- prefer typed helpers such as `HealthCheck`, `GetMarketInfo`, and `GetMarketsPage` over the raw compatibility methods
 - parity coverage is still behind the official SDKs
 - Go doc coverage is still sparse, so the README and examples are the best entry points today
 - streaming, RFQ, and non-CLOB packages are not implemented yet

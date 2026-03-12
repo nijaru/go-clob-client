@@ -3,6 +3,7 @@ package clob
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -22,7 +23,7 @@ func TestCreateOrderBuildsSignedLimitOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
-	client.saltGenerator = func() uint64 { return 42 }
+	client.saltGenerator = func() (uint64, error) { return 42, nil }
 
 	order, err := client.CreateOrder(context.Background(), OrderArgs{
 		TokenID: "100",
@@ -86,7 +87,7 @@ func TestCreateAndPostOrderSendsExpectedPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
-	client.saltGenerator = func() uint64 { return 42 }
+	client.saltGenerator = func() (uint64, error) { return 42, nil }
 
 	_, err = client.CreateAndPostOrder(context.Background(), OrderArgs{
 		TokenID: "100",
@@ -138,7 +139,7 @@ func TestCreateMarketOrderDerivesPriceFromBook(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
-	client.saltGenerator = func() uint64 { return 42 }
+	client.saltGenerator = func() (uint64, error) { return 42, nil }
 
 	order, err := client.CreateMarketOrder(context.Background(), MarketOrderArgs{
 		TokenID:   "100",
@@ -155,6 +156,32 @@ func TestCreateMarketOrderDerivesPriceFromBook(t *testing.T) {
 	}
 	if order.TakerAmount == "" {
 		t.Fatal("expected taker amount")
+	}
+}
+
+func TestCreateOrderReturnsSaltGenerationError(t *testing.T) {
+	t.Parallel()
+
+	server := newTradingTestServer(t, nil)
+	defer server.Close()
+
+	client, err := New(Config{
+		Host:       server.URL,
+		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	client.saltGenerator = func() (uint64, error) { return 0, errors.New("entropy unavailable") }
+
+	_, err = client.CreateOrder(context.Background(), OrderArgs{
+		TokenID: "100",
+		Price:   0.45,
+		Size:    10,
+		Side:    SideBuy,
+	}, nil)
+	if err == nil || err.Error() != "generate order salt: entropy unavailable" {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

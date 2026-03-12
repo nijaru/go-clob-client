@@ -6,89 +6,12 @@ import (
 	"strconv"
 )
 
-type Credentials struct {
-	Key        string `json:"key"`
-	Secret     string `json:"secret"`
-	Passphrase string `json:"passphrase"`
-}
-
-type BuilderAPIKey struct {
-	Key       string `json:"key"`
-	CreatedAt string `json:"createdAt,omitempty"`
-	RevokedAt string `json:"revokedAt,omitempty"`
-}
-
-type apiKeyRaw struct {
-	APIKey     string `json:"apiKey"`
-	Secret     string `json:"secret"`
-	Passphrase string `json:"passphrase"`
-}
-
-type APIKeysResponse struct {
-	APIKeys []Credentials `json:"apiKeys"`
-}
-
-type BanStatus struct {
-	ClosedOnly bool `json:"closed_only"`
-}
-
-type BookParams struct {
-	TokenID string `json:"token_id"`
-}
-
-type OrderSummary struct {
-	Price string `json:"price"`
-	Size  string `json:"size"`
-}
-
-type OrderBookSummary struct {
-	Market         string         `json:"market"`
-	AssetID        string         `json:"asset_id"`
-	Timestamp      string         `json:"timestamp"`
-	Bids           []OrderSummary `json:"bids"`
-	Asks           []OrderSummary `json:"asks"`
-	MinOrderSize   string         `json:"min_order_size"`
-	TickSize       string         `json:"tick_size"`
-	NegRisk        bool           `json:"neg_risk"`
-	LastTradePrice string         `json:"last_trade_price"`
-	Hash           string         `json:"hash"`
-}
-
-type TickSizeResponse struct {
-	MinimumTickSize TickSize `json:"minimum_tick_size"`
-}
-
-type NegRiskResponse struct {
-	NegRisk bool `json:"neg_risk"`
-}
-
-type FeeRateResponse struct {
-	BaseFee int64 `json:"base_fee"`
-}
-
-type PriceResponse struct {
-	Price   string `json:"price"`
-	Side    string `json:"side,omitempty"`
-	TokenID string `json:"token_id,omitempty"`
-}
-
-type SpreadResponse struct {
-	Spread string `json:"spread"`
-}
-
-type Page[T any] struct {
-	Limit      int    `json:"limit"`
-	Count      int    `json:"count"`
-	NextCursor string `json:"next_cursor"`
-	Data       []T    `json:"data"`
-}
-
-type CursorPage = Page[json.RawMessage]
-
+// OrderPayload identifies a single order in cancel and lookup requests.
 type OrderPayload struct {
 	OrderID string `json:"orderID"`
 }
 
+// PostOrderResponse is the response payload returned after posting an order.
 type PostOrderResponse struct {
 	Success            bool     `json:"success"`
 	ErrorMsg           string   `json:"errorMsg"`
@@ -100,47 +23,64 @@ type PostOrderResponse struct {
 	TradeIDs           []string `json:"trade_ids"`
 }
 
+// CancelOrdersResponse reports which orders were canceled successfully.
 type CancelOrdersResponse struct {
 	Canceled    []string
 	NotCanceled map[string]string
 }
 
+// Side is the taker or maker side for an order or trade.
 type Side string
 
 const (
-	SideBuy  Side = "BUY"
+	// SideBuy is the buy side.
+	SideBuy Side = "BUY"
+	// SideSell is the sell side.
 	SideSell Side = "SELL"
 )
 
+// OrderType controls how the exchange should handle the order.
 type OrderType string
 
 const (
+	// OrderTypeGTC keeps an order on the book until it is filled or canceled.
 	OrderTypeGTC OrderType = "GTC"
+	// OrderTypeFOK requires the entire order to fill immediately or fail.
 	OrderTypeFOK OrderType = "FOK"
+	// OrderTypeGTD keeps an order active until its expiration.
 	OrderTypeGTD OrderType = "GTD"
+	// OrderTypeFAK fills whatever can trade immediately and cancels the rest.
 	OrderTypeFAK OrderType = "FAK"
 )
 
+// TickSize identifies the minimum supported market tick size.
 type TickSize string
 
 const (
-	TickSizeTenth       TickSize = "0.1"
-	TickSizeHundredth   TickSize = "0.01"
-	TickSizeThousandth  TickSize = "0.001"
+	// TickSizeTenth rounds prices to one decimal place.
+	TickSizeTenth TickSize = "0.1"
+	// TickSizeHundredth rounds prices to two decimal places.
+	TickSizeHundredth TickSize = "0.01"
+	// TickSizeThousandth rounds prices to three decimal places.
+	TickSizeThousandth TickSize = "0.001"
+	// TickSizeTenThousand rounds prices to four decimal places.
 	TickSizeTenThousand TickSize = "0.0001"
 )
 
+// RoundConfig holds the decimal precision used when building order values.
 type RoundConfig struct {
 	Price  int32
 	Size   int32
 	Amount int32
 }
 
+// CreateOrderOptions overrides market-derived trading defaults.
 type CreateOrderOptions struct {
 	TickSize TickSize
 	NegRisk  *bool
 }
 
+// OpenOrder is an authenticated open-order record.
 type OpenOrder struct {
 	ID              string   `json:"id"`
 	Status          string   `json:"status"`
@@ -159,6 +99,7 @@ type OpenOrder struct {
 	OrderType       string   `json:"order_type"`
 }
 
+// MakerOrder is the maker-side component of a trade.
 type MakerOrder struct {
 	OrderID       string `json:"order_id"`
 	Owner         string `json:"owner"`
@@ -171,6 +112,7 @@ type MakerOrder struct {
 	Side          Side   `json:"side"`
 }
 
+// Trade is an authenticated user trade record.
 type Trade struct {
 	ID              string       `json:"id"`
 	TakerOrderID    string       `json:"taker_order_id"`
@@ -193,38 +135,7 @@ type Trade struct {
 	ErrorMsg        string       `json:"error_msg,omitempty"`
 }
 
-type BuilderTrade struct {
-	ID              string `json:"id"`
-	TradeType       string `json:"tradeType"`
-	TakerOrderHash  string `json:"takerOrderHash"`
-	Builder         string `json:"builder"`
-	Market          string `json:"market"`
-	AssetID         string `json:"assetId"`
-	Side            string `json:"side"`
-	Size            string `json:"size"`
-	SizeUSDC        string `json:"sizeUsdc"`
-	Price           string `json:"price"`
-	Status          string `json:"status"`
-	Outcome         string `json:"outcome"`
-	OutcomeIndex    int64  `json:"outcomeIndex"`
-	RequestID       string `json:"requestId"`
-	Error           string `json:"error,omitempty"`
-	Owner           string `json:"owner,omitempty"`
-	Maker           string `json:"maker,omitempty"`
-	TransactionHash string `json:"transactionHash,omitempty"`
-	MatchTime       string `json:"matchTime,omitempty"`
-	BucketIndex     int64  `json:"bucketIndex,omitempty"`
-	Fee             string `json:"fee,omitempty"`
-	FeeUSDC         string `json:"feeUsdc,omitempty"`
-	CreatedAt       string `json:"createdAt,omitempty"`
-	UpdatedAt       string `json:"updatedAt,omitempty"`
-}
-
-type HeartbeatResponse struct {
-	HeartbeatID string `json:"heartbeat_id"`
-	Error       string `json:"error,omitempty"`
-}
-
+// OrderArgs contains the inputs for building a limit order.
 type OrderArgs struct {
 	TokenID    string
 	Price      float64
@@ -236,6 +147,7 @@ type OrderArgs struct {
 	Taker      string
 }
 
+// MarketOrderArgs contains the inputs for building a market order.
 type MarketOrderArgs struct {
 	TokenID    string
 	Amount     float64
@@ -247,6 +159,7 @@ type MarketOrderArgs struct {
 	OrderType  OrderType
 }
 
+// SignedOrder is the Polymarket wire format for a signed order payload.
 type SignedOrder struct {
 	Salt          string        `json:"salt"`
 	Maker         string        `json:"maker"`
@@ -263,6 +176,7 @@ type SignedOrder struct {
 	Signature     string        `json:"signature"`
 }
 
+// MarshalJSON encodes the signed order with the salt as a JSON number.
 func (o SignedOrder) MarshalJSON() ([]byte, error) {
 	salt, err := strconv.ParseUint(o.Salt, 10, 64)
 	if err != nil {
@@ -302,6 +216,7 @@ func (o SignedOrder) MarshalJSON() ([]byte, error) {
 	})
 }
 
+// PostOrderRequest is the authenticated order-post payload.
 type PostOrderRequest struct {
 	Order     SignedOrder `json:"order"`
 	Owner     string      `json:"owner"`
@@ -310,12 +225,14 @@ type PostOrderRequest struct {
 	PostOnly  bool        `json:"postOnly,omitempty"`
 }
 
+// OpenOrderParams filters authenticated open-order queries.
 type OpenOrderParams struct {
 	ID      string
 	Market  string
 	AssetID string
 }
 
+// TradeParams filters authenticated trade queries.
 type TradeParams struct {
 	ID           string
 	MakerAddress string

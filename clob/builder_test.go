@@ -87,10 +87,13 @@ func TestRemoteBuilderAuthHeaders(t *testing.T) {
 	}))
 	defer server.Close()
 
-	auth := NewRemoteBuilderAuth(RemoteBuilderAuthConfig{
+	auth, err := NewRemoteBuilderAuth(RemoteBuilderAuthConfig{
 		URL:         server.URL,
 		BearerToken: "token-123",
 	})
+	if err != nil {
+		t.Fatalf("new remote builder auth: %v", err)
+	}
 
 	headers, err := auth.Headers(context.Background(), BuilderHeaderRequest{
 		Method:    http.MethodGet,
@@ -106,6 +109,30 @@ func TestRemoteBuilderAuthHeaders(t *testing.T) {
 	}
 	if headers["POLY_BUILDER_SIGNATURE"] != "remote-sig" {
 		t.Fatalf("unexpected remote builder signature: %q", headers["POLY_BUILDER_SIGNATURE"])
+	}
+}
+
+func TestNewRemoteBuilderAuthValidation(t *testing.T) {
+	t.Parallel()
+
+	if _, err := NewRemoteBuilderAuth(RemoteBuilderAuthConfig{}); err == nil {
+		t.Fatal("expected empty URL validation error")
+	}
+	if _, err := NewRemoteBuilderAuth(RemoteBuilderAuthConfig{URL: "://bad-url"}); err == nil {
+		t.Fatal("expected malformed URL validation error")
+	}
+
+	auth, err := NewRemoteBuilderAuth(RemoteBuilderAuthConfig{URL: "https://example.com/sign"})
+	if err != nil {
+		t.Fatalf("new remote builder auth: %v", err)
+	}
+
+	remote, ok := auth.(*remoteBuilderAuth)
+	if !ok {
+		t.Fatalf("expected remote builder auth implementation, got %T", auth)
+	}
+	if remote.httpClient == nil {
+		t.Fatal("expected default HTTP client")
 	}
 }
 

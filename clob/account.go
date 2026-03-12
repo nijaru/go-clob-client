@@ -9,18 +9,21 @@ import (
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
 )
 
+// CreateReadonlyAPIKey creates a readonly API key for the authenticated account.
 func (c *Client) CreateReadonlyAPIKey(ctx context.Context) (*ReadonlyAPIKeyResponse, error) {
 	var out ReadonlyAPIKeyResponse
 	err := c.postJSON(ctx, createReadonlyAPIKeyEndpoint, nil, polyhttp.AuthL2, &out)
 	return &out, err
 }
 
+// GetReadonlyAPIKeys lists readonly API keys for the authenticated account.
 func (c *Client) GetReadonlyAPIKeys(ctx context.Context) ([]string, error) {
 	var out []string
 	err := c.getJSON(ctx, getReadonlyAPIKeysEndpoint, nil, polyhttp.AuthL2, &out)
 	return out, err
 }
 
+// DeleteReadonlyAPIKey deletes a readonly API key by value.
 func (c *Client) DeleteReadonlyAPIKey(ctx context.Context, key string) (bool, error) {
 	var out bool
 	err := c.deleteJSON(
@@ -33,6 +36,7 @@ func (c *Client) DeleteReadonlyAPIKey(ctx context.Context, key string) (bool, er
 	return out, err
 }
 
+// ValidateReadonlyAPIKey validates a readonly API key for the given address.
 func (c *Client) ValidateReadonlyAPIKey(
 	ctx context.Context,
 	address string,
@@ -47,6 +51,7 @@ func (c *Client) ValidateReadonlyAPIKey(
 	return out, err
 }
 
+// GetNotifications returns all notifications for the authenticated account.
 func (c *Client) GetNotifications(ctx context.Context) ([]Notification, error) {
 	query := url.Values{}
 	query.Set("signature_type", signatureTypeString(c.signatureType))
@@ -56,6 +61,7 @@ func (c *Client) GetNotifications(ctx context.Context) ([]Notification, error) {
 	return out, err
 }
 
+// DeleteNotifications deletes notifications by ID when provided, or all notifications otherwise.
 func (c *Client) DeleteNotifications(
 	ctx context.Context,
 	params DeleteNotificationsParams,
@@ -68,6 +74,7 @@ func (c *Client) DeleteNotifications(
 	return c.deleteJSONQuery(ctx, notificationsEndpoint, query, nil, polyhttp.AuthL2, nil)
 }
 
+// GetBalanceAllowance returns the current balance and allowances for the requested asset.
 func (c *Client) GetBalanceAllowance(
 	ctx context.Context,
 	params BalanceAllowanceParams,
@@ -79,6 +86,7 @@ func (c *Client) GetBalanceAllowance(
 	return &out, err
 }
 
+// UpdateBalanceAllowance triggers a balance-allowance refresh for the requested asset.
 func (c *Client) UpdateBalanceAllowance(
 	ctx context.Context,
 	params BalanceAllowanceParams,
@@ -87,6 +95,7 @@ func (c *Client) UpdateBalanceAllowance(
 	return c.getJSON(ctx, updateBalanceAllowanceEndpoint, query, polyhttp.AuthL2, nil)
 }
 
+// IsOrderScoring returns whether a single order is scoring for rewards.
 func (c *Client) IsOrderScoring(
 	ctx context.Context,
 	params OrderScoringParams,
@@ -101,6 +110,7 @@ func (c *Client) IsOrderScoring(
 	return &out, err
 }
 
+// AreOrdersScoring returns the scoring state for a batch of orders.
 func (c *Client) AreOrdersScoring(
 	ctx context.Context,
 	params OrdersScoringParams,
@@ -110,6 +120,7 @@ func (c *Client) AreOrdersScoring(
 	return out, err
 }
 
+// CancelMarketOrders cancels orders scoped to a market and/or asset.
 func (c *Client) CancelMarketOrders(
 	ctx context.Context,
 	request CancelMarketOrdersRequest,

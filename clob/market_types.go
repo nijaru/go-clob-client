@@ -1,7 +1,6 @@
 package clob
 
-type HealthResponse string
-
+// Market is the typed response for a full market record.
 type Market struct {
 	EnableOrderBook      bool           `json:"enable_order_book"`
 	Active               bool           `json:"active"`
@@ -34,6 +33,7 @@ type Market struct {
 	Tags                 []string       `json:"tags"`
 }
 
+// SimplifiedMarket is a compact market representation used by sampling endpoints.
 type SimplifiedMarket struct {
 	ConditionID     *string        `json:"condition_id"`
 	Tokens          []OutcomeToken `json:"tokens"`
@@ -44,6 +44,7 @@ type SimplifiedMarket struct {
 	AcceptingOrders bool           `json:"accepting_orders"`
 }
 
+// OutcomeToken is a market token and its current outcome metadata.
 type OutcomeToken struct {
 	TokenID string `json:"token_id"`
 	Outcome string `json:"outcome"`
@@ -51,22 +52,78 @@ type OutcomeToken struct {
 	Winner  bool   `json:"winner"`
 }
 
+// RewardRate is a reward rate entry embedded in market responses.
 type RewardRate struct {
 	AssetAddress     string `json:"asset_address"`
 	RewardsDailyRate string `json:"rewards_daily_rate"`
 }
 
+// Rewards is the rewards summary embedded in market responses.
 type Rewards struct {
 	Rates     []RewardRate `json:"rates"`
 	MinSize   string       `json:"min_size"`
 	MaxSpread string       `json:"max_spread"`
 }
 
+// BookParams identifies a token whose order-book-derived values should be fetched.
+type BookParams struct {
+	TokenID string `json:"token_id"`
+}
+
+// OrderSummary is a single order book level.
+type OrderSummary struct {
+	Price string `json:"price"`
+	Size  string `json:"size"`
+}
+
+// OrderBookSummary is the typed response from the order book endpoint.
+type OrderBookSummary struct {
+	Market         string         `json:"market"`
+	AssetID        string         `json:"asset_id"`
+	Timestamp      string         `json:"timestamp"`
+	Bids           []OrderSummary `json:"bids"`
+	Asks           []OrderSummary `json:"asks"`
+	MinOrderSize   string         `json:"min_order_size"`
+	TickSize       string         `json:"tick_size"`
+	NegRisk        bool           `json:"neg_risk"`
+	LastTradePrice string         `json:"last_trade_price"`
+	Hash           string         `json:"hash"`
+}
+
+// TickSizeResponse reports the minimum supported market tick size.
+type TickSizeResponse struct {
+	MinimumTickSize TickSize `json:"minimum_tick_size"`
+}
+
+// NegRiskResponse reports whether a token trades on a neg-risk market.
+type NegRiskResponse struct {
+	NegRisk bool `json:"neg_risk"`
+}
+
+// FeeRateResponse reports the market fee rate in basis points.
+type FeeRateResponse struct {
+	BaseFee int64 `json:"base_fee"`
+}
+
+// PriceResponse is the typed price-like response used by midpoint, price, and last-trade endpoints.
+type PriceResponse struct {
+	Price   string `json:"price"`
+	Side    string `json:"side,omitempty"`
+	TokenID string `json:"token_id,omitempty"`
+}
+
+// SpreadResponse is the typed spread response for a token.
+type SpreadResponse struct {
+	Spread string `json:"spread"`
+}
+
+// MarketPrice is a single point in a market price-history response.
 type MarketPrice struct {
 	T int64   `json:"t"`
 	P float64 `json:"p"`
 }
 
+// PriceHistoryInterval controls the server-side time bucket for price-history queries.
 type PriceHistoryInterval string
 
 const (
@@ -77,6 +134,7 @@ const (
 	PriceHistoryIntervalOneHour  PriceHistoryInterval = "1h"
 )
 
+// PriceHistoryFilterParams filters price-history requests.
 type PriceHistoryFilterParams struct {
 	Market   string
 	StartTs  int64
@@ -85,6 +143,7 @@ type PriceHistoryFilterParams struct {
 	Interval PriceHistoryInterval
 }
 
+// MarketTradeEvent is a live market activity event.
 type MarketTradeEvent struct {
 	EventType       string                 `json:"event_type"`
 	Market          MarketTradeEventMarket `json:"market"`
@@ -99,6 +158,7 @@ type MarketTradeEvent struct {
 	Timestamp       string                 `json:"timestamp"`
 }
 
+// MarketTradeEventMarket is the market metadata embedded in a trade event.
 type MarketTradeEventMarket struct {
 	ConditionID string `json:"condition_id"`
 	AssetID     string `json:"asset_id"`
@@ -107,89 +167,11 @@ type MarketTradeEventMarket struct {
 	Slug        string `json:"slug"`
 }
 
+// MarketTradeEventUser is the user metadata embedded in a trade event.
 type MarketTradeEventUser struct {
 	Address                 string `json:"address"`
 	Username                string `json:"username"`
 	ProfilePicture          string `json:"profile_picture"`
 	OptimizedProfilePicture string `json:"optimized_profile_picture"`
 	Pseudonym               string `json:"pseudonym"`
-}
-
-type UserEarning struct {
-	Date         string `json:"date"`
-	ConditionID  string `json:"condition_id"`
-	AssetAddress string `json:"asset_address"`
-	MakerAddress string `json:"maker_address"`
-	Earnings     string `json:"earnings"`
-	AssetRate    string `json:"asset_rate"`
-}
-
-type TotalUserEarning struct {
-	Date         string `json:"date"`
-	AssetAddress string `json:"asset_address"`
-	MakerAddress string `json:"maker_address"`
-	Earnings     string `json:"earnings"`
-	AssetRate    string `json:"asset_rate"`
-}
-
-type RewardsPercentages map[string]string
-
-type RewardsConfig struct {
-	AssetAddress string `json:"asset_address"`
-	StartDate    string `json:"start_date"`
-	EndDate      string `json:"end_date"`
-	RatePerDay   string `json:"rate_per_day"`
-	TotalRewards string `json:"total_rewards"`
-}
-
-type MarketRewardsConfig struct {
-	ID           string `json:"id"`
-	AssetAddress string `json:"asset_address"`
-	StartDate    string `json:"start_date"`
-	EndDate      string `json:"end_date"`
-	RatePerDay   string `json:"rate_per_day"`
-	TotalRewards string `json:"total_rewards"`
-	TotalDays    string `json:"total_days"`
-}
-
-type Earning struct {
-	AssetAddress string `json:"asset_address"`
-	Earnings     string `json:"earnings"`
-	AssetRate    string `json:"asset_rate"`
-}
-
-type CurrentReward struct {
-	ConditionID      string          `json:"condition_id"`
-	RewardsConfig    []RewardsConfig `json:"rewards_config"`
-	RewardsMaxSpread string          `json:"rewards_max_spread"`
-	RewardsMinSize   string          `json:"rewards_min_size"`
-}
-
-type MarketReward struct {
-	ConditionID           string                `json:"condition_id"`
-	Question              string                `json:"question"`
-	MarketSlug            string                `json:"market_slug"`
-	EventSlug             string                `json:"event_slug"`
-	Image                 string                `json:"image"`
-	RewardsMaxSpread      string                `json:"rewards_max_spread"`
-	RewardsMinSize        string                `json:"rewards_min_size"`
-	MarketCompetitiveness string                `json:"market_competitiveness"`
-	Tokens                []OutcomeToken        `json:"tokens"`
-	RewardsConfig         []MarketRewardsConfig `json:"rewards_config"`
-}
-
-type UserRewardsEarning struct {
-	ConditionID           string          `json:"condition_id"`
-	Question              string          `json:"question"`
-	MarketSlug            string          `json:"market_slug"`
-	EventSlug             string          `json:"event_slug"`
-	Image                 string          `json:"image"`
-	RewardsMaxSpread      string          `json:"rewards_max_spread"`
-	RewardsMinSize        string          `json:"rewards_min_size"`
-	MarketCompetitiveness string          `json:"market_competitiveness"`
-	Tokens                []OutcomeToken  `json:"tokens"`
-	RewardsConfig         []RewardsConfig `json:"rewards_config"`
-	MakerAddress          string          `json:"maker_address"`
-	EarningPercentage     string          `json:"earning_percentage"`
-	Earnings              []Earning       `json:"earnings"`
 }
