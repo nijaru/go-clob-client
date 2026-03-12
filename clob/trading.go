@@ -38,6 +38,9 @@ func (c *Client) CreateOrder(
 	if c.signer == nil {
 		return nil, fmt.Errorf("create order requires a private key")
 	}
+	if err := validateLimitOrderArgs(userOrder); err != nil {
+		return nil, err
+	}
 
 	tickSize, err := c.resolveTickSize(ctx, userOrder.TokenID, options)
 	if err != nil {
@@ -50,13 +53,8 @@ func (c *Client) CreateOrder(
 	}
 	userOrder.FeeRateBps = feeRateBps
 
-	if !priceValid(userOrder.Price, tickSize) {
-		return nil, fmt.Errorf(
-			"invalid price (%v), min: %s - max: %s",
-			userOrder.Price,
-			tickSize,
-			decimal.NewFromInt(1).Sub(mustParseTickSize(tickSize)).String(),
-		)
+	if err := validatePrice(userOrder.Price, tickSize); err != nil {
+		return nil, err
 	}
 
 	negRisk, err := c.resolveNegRisk(ctx, userOrder.TokenID, options)
@@ -78,6 +76,9 @@ func (c *Client) CreateMarketOrder(
 	if c.signer == nil {
 		return nil, fmt.Errorf("create market order requires a private key")
 	}
+	if err := validateMarketOrderArgs(userOrder); err != nil {
+		return nil, err
+	}
 
 	tickSize, err := c.resolveTickSize(ctx, userOrder.TokenID, options)
 	if err != nil {
@@ -92,6 +93,9 @@ func (c *Client) CreateMarketOrder(
 
 	if userOrder.OrderType == "" {
 		userOrder.OrderType = OrderTypeFOK
+	}
+	if userOrder.OrderType != OrderTypeFOK && userOrder.OrderType != OrderTypeFAK {
+		return nil, fmt.Errorf("market orders only support FOK or FAK order types")
 	}
 
 	if userOrder.Price == 0 {
@@ -108,13 +112,8 @@ func (c *Client) CreateMarketOrder(
 		userOrder.Price = price
 	}
 
-	if !priceValid(userOrder.Price, tickSize) {
-		return nil, fmt.Errorf(
-			"invalid price (%v), min: %s - max: %s",
-			userOrder.Price,
-			tickSize,
-			decimal.NewFromInt(1).Sub(mustParseTickSize(tickSize)).String(),
-		)
+	if err := validatePrice(userOrder.Price, tickSize); err != nil {
+		return nil, err
 	}
 
 	negRisk, err := c.resolveNegRisk(ctx, userOrder.TokenID, options)
@@ -162,6 +161,9 @@ func (c *Client) CreateAndPostMarketOrder(
 	if orderType == "" {
 		orderType = OrderTypeFOK
 	}
+	if orderType != OrderTypeFOK && orderType != OrderTypeFAK {
+		return nil, fmt.Errorf("market orders only support FOK or FAK order types")
+	}
 
 	order, err := c.CreateMarketOrder(ctx, userOrder, options)
 	if err != nil {
@@ -188,6 +190,9 @@ func (c *Client) BuildPostOrderRequest(
 
 	if orderType == "" {
 		orderType = OrderTypeGTC
+	}
+	if order.Expiration != "0" && orderType != OrderTypeGTD {
+		return PostOrderRequest{}, fmt.Errorf("only GTD orders may have a non-zero expiration")
 	}
 
 	if postOnly && orderType != OrderTypeGTC && orderType != OrderTypeGTD {
@@ -488,11 +493,49 @@ func buildOrderTypedData(
 	}
 }
 
-func priceValid(price float64, tickSize TickSize) bool {
+func validateLimitOrderArgs(order OrderArgs) error {
+	if order.TokenID == "" {
+		return fmt.Errorf("token id is required")
+	}
+	if order.Size <= 0 {
+		return fmt.Errorf("size must be positive")
+	}
+	if order.Price <= 0 {
+		return fmt.Errorf("price must be positive")
+	}
+	if order.Side != SideBuy && order.Side != SideSell {
+		return fmt.Errorf("invalid side %q", order.Side)
+	}
+	return nil
+}
+
+func validateMarketOrderArgs(order MarketOrderArgs) error {
+	if order.TokenID == "" {
+		return fmt.Errorf("token id is required")
+	}
+	if order.Amount <= 0 {
+		return fmt.Errorf("amount must be positive")
+	}
+	if order.Price < 0 {
+		return fmt.Errorf("price cannot be negative")
+	}
+	if order.Side != SideBuy && order.Side != SideSell {
+		return fmt.Errorf("invalid side %q", order.Side)
+	}
+	return nil
+}
+
+func validatePrice(price float64, tickSize TickSize) error {
 	value := decimal.NewFromFloat(price)
-	minimum := mustParseTickSize(tickSize)
-	return value.GreaterThanOrEqual(minimum) &&
-		value.LessThanOrEqual(decimal.NewFromInt(1).Sub(minimum))
+	minimum, err := parseTickSize(tickSize)
+	if err != nil {
+		return err
+	}
+	maximum := decimal.NewFromInt(1).Sub(minimum)
+	if value.GreaterThanOrEqual(minimum) && value.LessThanOrEqual(maximum) {
+		return nil
+	}
+	return fmt.Errorf("invalid price (%v), min: %s - max: %s", price, minimum, maximum)
 }
 
 func sideValue(side Side) int {
@@ -582,12 +625,12 @@ func toTokenDecimals(value decimal.Decimal) decimal.Decimal {
 	return value.Shift(collateralTokenScale).Truncate(0)
 }
 
-func mustParseTickSize(value TickSize) decimal.Decimal {
+func parseTickSize(value TickSize) (decimal.Decimal, error) {
 	parsed, err := decimal.NewFromString(string(value))
 	if err != nil {
-		panic(err)
+		return decimal.Zero, fmt.Errorf("parse tick size %q: %w", value, err)
 	}
-	return parsed
+	return parsed, nil
 }
 
 func generateSalt() uint64 {

@@ -31,7 +31,6 @@ func New(config Config) (*Client, error) {
 		useServerTime: config.UseServerTime,
 		creds:         config.Credentials,
 		signatureType: config.SignatureType,
-		funderAddress: config.FunderAddress,
 		saltGenerator: generateSalt,
 	}
 
@@ -41,6 +40,19 @@ func New(config Config) (*Client, error) {
 			return nil, err
 		}
 		client.signer = signer
+
+		funderAddress, err := normalizeFunderAddress(
+			config.ChainID,
+			signer.Address().Hex(),
+			config.SignatureType,
+			config.FunderAddress,
+		)
+		if err != nil {
+			return nil, err
+		}
+		client.funderAddress = funderAddress
+	} else {
+		client.funderAddress = config.FunderAddress
 	}
 
 	client.http = &polyhttp.Client{
@@ -157,6 +169,17 @@ func (c *Client) deleteJSON(
 	out any,
 ) error {
 	return c.http.DeleteJSON(ctx, path, body, auth, out)
+}
+
+func (c *Client) deleteJSONQuery(
+	ctx context.Context,
+	path string,
+	query url.Values,
+	body any,
+	auth polyhttp.AuthLevel,
+	out any,
+) error {
+	return c.http.DeleteJSONQuery(ctx, path, query, body, auth, out)
 }
 
 func (c *Client) getJSONWithNonce(
