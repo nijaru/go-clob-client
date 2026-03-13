@@ -190,7 +190,8 @@ func (c *Client) BuildPostOrderRequest(
 	deferExec bool,
 	postOnly bool,
 ) (PostOrderRequest, error) {
-	if c.creds == nil {
+	creds := c.credentials()
+	if creds == nil {
 		return PostOrderRequest{}, fmt.Errorf("build post order request requires API credentials")
 	}
 
@@ -207,7 +208,7 @@ func (c *Client) BuildPostOrderRequest(
 
 	return PostOrderRequest{
 		Order:     order,
-		Owner:     c.creds.Key,
+		Owner:     creds.Key,
 		OrderType: orderType,
 		DeferExec: deferExec,
 		PostOnly:  postOnly,

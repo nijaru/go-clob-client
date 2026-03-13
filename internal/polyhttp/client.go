@@ -15,9 +15,10 @@ import (
 type AuthLevel int
 
 const (
-	AuthNone AuthLevel = iota
-	AuthL1
-	AuthL2
+	AuthNone      AuthLevel = iota
+	AuthL1                  // L1: Ethereum-signed timestamp header
+	AuthL2                  // L2: HMAC-signed API key headers
+	AuthL2Builder           // L2 + builder headers for supported endpoints
 )
 
 type HeaderFunc func(

@@ -132,8 +132,6 @@ Available now:
 
 Still incomplete:
 
-- some older raw market helpers remain alongside newer typed equivalents for compatibility
-- prefer typed helpers such as `HealthCheck`, `GetMarketInfo`, `GetMarketsPage`, and `GetAllPrices` over the raw compatibility methods
 - parity coverage is still behind the official SDKs
 - Go doc coverage is still sparse, so the README and examples are the best entry points today
 - streaming, RFQ, and non-CLOB packages are not implemented yet

@@ -2,21 +2,13 @@ package clob
 
 import (
 	"context"
-	"encoding/json"
 	"net/url"
 	"strconv"
 
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
 )
 
-// GetOK returns the raw health-check payload for compatibility with the official SDKs.
-func (c *Client) GetOK(ctx context.Context) (json.RawMessage, error) {
-	var out json.RawMessage
-	err := c.getJSON(ctx, "/", nil, polyhttp.AuthNone, &out)
-	return out, err
-}
-
-// HealthCheck returns the typed health-check response body.
+// HealthCheck returns the health-check response body.
 func (c *Client) HealthCheck(ctx context.Context) (string, error) {
 	var out string
 	err := c.getJSON(ctx, "/", nil, polyhttp.AuthNone, &out)
@@ -30,25 +22,12 @@ func (c *Client) GetServerTime(ctx context.Context) (int64, error) {
 	return out, err
 }
 
-// GetSamplingSimplifiedMarkets returns the raw compatibility sampling-simplified markets page.
-func (c *Client) GetSamplingSimplifiedMarkets(
-	ctx context.Context,
-	nextCursor string,
-) (*CursorPage, error) {
-	return c.getPage(ctx, samplingSimplifiedMarketsEndpoint, nextCursor)
-}
-
 // GetSamplingSimplifiedMarketsPage returns a typed sampling-simplified markets page.
 func (c *Client) GetSamplingSimplifiedMarketsPage(
 	ctx context.Context,
 	nextCursor string,
 ) (*Page[SimplifiedMarket], error) {
 	return getTypedPage[SimplifiedMarket](ctx, c, samplingSimplifiedMarketsEndpoint, nextCursor)
-}
-
-// GetSamplingMarkets returns the raw compatibility sampling markets page.
-func (c *Client) GetSamplingMarkets(ctx context.Context, nextCursor string) (*CursorPage, error) {
-	return c.getPage(ctx, samplingMarketsEndpoint, nextCursor)
 }
 
 // GetSamplingMarketsPage returns a typed sampling markets page.
@@ -59,11 +38,6 @@ func (c *Client) GetSamplingMarketsPage(
 	return getTypedPage[Market](ctx, c, samplingMarketsEndpoint, nextCursor)
 }
 
-// GetSimplifiedMarkets returns the raw compatibility simplified markets page.
-func (c *Client) GetSimplifiedMarkets(ctx context.Context, nextCursor string) (*CursorPage, error) {
-	return c.getPage(ctx, simplifiedMarketsEndpoint, nextCursor)
-}
-
 // GetSimplifiedMarketsPage returns a typed simplified markets page.
 func (c *Client) GetSimplifiedMarketsPage(
 	ctx context.Context,
@@ -72,21 +46,9 @@ func (c *Client) GetSimplifiedMarketsPage(
 	return getTypedPage[SimplifiedMarket](ctx, c, simplifiedMarketsEndpoint, nextCursor)
 }
 
-// GetMarkets returns the raw compatibility markets page.
-func (c *Client) GetMarkets(ctx context.Context, nextCursor string) (*CursorPage, error) {
-	return c.getPage(ctx, marketsEndpoint, nextCursor)
-}
-
 // GetMarketsPage returns a typed markets page.
 func (c *Client) GetMarketsPage(ctx context.Context, nextCursor string) (*Page[Market], error) {
 	return getTypedPage[Market](ctx, c, marketsEndpoint, nextCursor)
-}
-
-// GetMarket returns the raw compatibility market payload for a condition ID.
-func (c *Client) GetMarket(ctx context.Context, conditionID string) (json.RawMessage, error) {
-	var out json.RawMessage
-	err := c.getJSON(ctx, marketEndpoint+conditionID, nil, polyhttp.AuthNone, &out)
-	return out, err
 }
 
 // GetMarketInfo returns a typed market record for a condition ID.
@@ -285,17 +247,6 @@ func (c *Client) GetMarketTradeEvents(
 		&out,
 	)
 	return out, err
-}
-
-func (c *Client) getPage(ctx context.Context, endpoint, nextCursor string) (*CursorPage, error) {
-	query := url.Values{}
-	if nextCursor != "" {
-		query.Set("next_cursor", nextCursor)
-	}
-
-	var out CursorPage
-	err := c.getJSON(ctx, endpoint, query, polyhttp.AuthNone, &out)
-	return &out, err
 }
 
 func getTypedPage[T any](
