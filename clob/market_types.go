@@ -160,11 +160,16 @@ type MarketPrice struct {
 type PriceHistoryInterval string
 
 const (
-	PriceHistoryIntervalMax      PriceHistoryInterval = "max"
-	PriceHistoryIntervalOneWeek  PriceHistoryInterval = "1w"
-	PriceHistoryIntervalOneDay   PriceHistoryInterval = "1d"
+	// PriceHistoryIntervalMax represents the maximum available price history.
+	PriceHistoryIntervalMax PriceHistoryInterval = "max"
+	// PriceHistoryIntervalOneWeek represents a 1-week price history interval.
+	PriceHistoryIntervalOneWeek PriceHistoryInterval = "1w"
+	// PriceHistoryIntervalOneDay represents a 1-day price history interval.
+	PriceHistoryIntervalOneDay PriceHistoryInterval = "1d"
+	// PriceHistoryIntervalSixHours represents a 6-hour price history interval.
 	PriceHistoryIntervalSixHours PriceHistoryInterval = "6h"
-	PriceHistoryIntervalOneHour  PriceHistoryInterval = "1h"
+	// PriceHistoryIntervalOneHour represents a 1-hour price history interval.
+	PriceHistoryIntervalOneHour PriceHistoryInterval = "1h"
 )
 
 // PriceHistoryFilterParams filters price-history requests.
