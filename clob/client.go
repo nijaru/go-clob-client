@@ -12,6 +12,7 @@ import (
 )
 
 // Client is the public Polymarket CLOB HTTP client.
+// A Client is safe for concurrent use by multiple goroutines.
 type Client struct {
 	host          string
 	chainID       int64
