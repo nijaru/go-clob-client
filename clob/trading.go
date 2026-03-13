@@ -252,6 +252,10 @@ func (c *Client) CalculateMarketPrice(
 	}
 
 	sum := decimal.Zero
+	// The Polymarket API returns Bids sorted ascending (lowest to highest price)
+	// and Asks sorted descending (highest to lowest price). In both cases,
+	// the "top of the book" (best price) is at the end of the array. Therefore,
+	// iterating backwards always starts at the most competitive price.
 	for i := len(levels) - 1; i >= 0; i-- {
 		level := levels[i]
 		size, err := decimal.NewFromString(level.Size)

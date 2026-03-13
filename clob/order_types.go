@@ -241,6 +241,8 @@ type TradeParams struct {
 	After        string
 }
 
+// UnmarshalJSON implements the json.Unmarshaler interface to handle
+// the diverse key formats returned by the API for CancelOrdersResponse.
 func (r *CancelOrdersResponse) UnmarshalJSON(data []byte) error {
 	type alias struct {
 		Canceled     []string          `json:"canceled"`
