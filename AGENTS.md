@@ -1,6 +1,6 @@
 # go-clob-client
 
-Go SDK for the Polymarket CLOB, modeled after the official TypeScript, Python, and Rust clients.
+Go SDK for the Polymarket CLOB, modeled after the official TypeScript, Python, and Rust clients. Primarily use the TypeScript one as a reference.
 
 ## Project Structure
 
@@ -48,13 +48,13 @@ Go SDK for the Polymarket CLOB, modeled after the official TypeScript, Python, a
 
 ```bash
 # Format
-golines --base-formatter gofumpt -w .
+make fmt
 
 # Test
-go test ./...
+make test
 
-# Build example
-go build ./...
+# Build
+make build
 
 # Tidy module metadata
 go mod tidy
@@ -64,9 +64,9 @@ go mod tidy
 
 Commands that should pass before shipping:
 
-- Build: `go build ./...`
-- Tests: `go test ./...`
-- Format: `golines --base-formatter gofumpt -w .`
+- Build: `make build`
+- Tests: `make test`
+- Format: `make fmt`
 
 ## Code Standards
 
@@ -92,7 +92,7 @@ Commands that should pass before shipping:
 2. Record design decisions in local `ai/` files before broadening the surface.
 3. Implement one coherent API slice at a time with tests and an example.
 4. Keep `README.md` up to date as public capabilities, examples, status, or limitations change.
-5. Run `go test ./...` and `go build ./...`.
+5. Run `make fmt`, `make test`, and `make build`.
 6. Update local `ai/STATUS.md` and task logs with what changed.
 
 ## Current Focus
