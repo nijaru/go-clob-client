@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"strings"
+	"sync"
 	"time"
 
 	"github.com/nijaru/go-clob-client/internal/polyauth"
@@ -19,6 +19,7 @@ type Client struct {
 	http          *polyhttp.Client
 	geoblockHTTP  *polyhttp.Client
 	signer        *polyauth.Signer
+	credsMu       sync.RWMutex
 	creds         *Credentials
 	builderAuth   BuilderAuth
 	signatureType SignatureType
@@ -82,8 +83,11 @@ func (c *Client) Host() string {
 }
 
 // SetCredentials updates the API credentials used for authenticated requests.
+// Safe to call concurrently with in-flight requests.
 func (c *Client) SetCredentials(creds Credentials) {
+	c.credsMu.Lock()
 	c.creds = &creds
+	c.credsMu.Unlock()
 }
 
 // Address returns the signer address backing the client, if configured.
@@ -92,6 +96,14 @@ func (c *Client) Address() string {
 		return ""
 	}
 	return c.signer.Address().Hex()
+}
+
+// credentials returns the current credentials under a read lock.
+func (c *Client) credentials() *Credentials {
+	c.credsMu.RLock()
+	creds := c.creds
+	c.credsMu.RUnlock()
+	return creds
 }
 
 func (c *Client) addAuthHeaders(
@@ -118,10 +130,33 @@ func (c *Client) addAuthHeaders(
 		}
 		return polyauth.L1Headers(c.signer, c.chainID, timestamp, value)
 	case polyhttp.AuthL2:
+		creds := c.credentials()
 		if c.signer == nil {
 			return nil, fmt.Errorf("level 2 auth requires a private key")
 		}
-		if c.creds == nil {
+		if creds == nil {
+			return nil, fmt.Errorf("level 2 auth requires API credentials")
+		}
+		timestamp, err := c.timestamp(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return polyauth.L2Headers(
+			c.signer,
+			creds.Key,
+			creds.Secret,
+			creds.Passphrase,
+			timestamp,
+			method,
+			path,
+			body,
+		)
+	case polyhttp.AuthL2Builder:
+		creds := c.credentials()
+		if c.signer == nil {
+			return nil, fmt.Errorf("level 2 auth requires a private key")
+		}
+		if creds == nil {
 			return nil, fmt.Errorf("level 2 auth requires API credentials")
 		}
 		timestamp, err := c.timestamp(ctx)
@@ -130,9 +165,9 @@ func (c *Client) addAuthHeaders(
 		}
 		headers, err := polyauth.L2Headers(
 			c.signer,
-			c.creds.Key,
-			c.creds.Secret,
-			c.creds.Passphrase,
+			creds.Key,
+			creds.Secret,
+			creds.Passphrase,
 			timestamp,
 			method,
 			path,
@@ -141,10 +176,9 @@ func (c *Client) addAuthHeaders(
 		if err != nil {
 			return nil, err
 		}
-		if !c.shouldInjectBuilderHeaders(path) || c.builderAuth == nil {
+		if c.builderAuth == nil {
 			return headers, nil
 		}
-
 		builderHeaders, err := c.builderHeaders(ctx, method, path, body, timestamp)
 		if err != nil {
 			return nil, err
@@ -282,21 +316,4 @@ func (c *Client) builderOnlyHeaders(
 		return nil, err
 	}
 	return c.builderHeaders(ctx, method, path, body, timestamp)
-}
-
-func (c *Client) shouldInjectBuilderHeaders(path string) bool {
-	if c.builderAuth == nil {
-		return false
-	}
-
-	switch path {
-	case openOrdersEndpoint,
-		tradesEndpoint,
-		postOrderEndpoint,
-		postOrdersEndpoint,
-		cancelAllEndpoint:
-		return true
-	default:
-		return strings.HasPrefix(path, orderEndpoint)
-	}
 }

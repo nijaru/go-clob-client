@@ -2,6 +2,7 @@ package clob
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/url"
 
@@ -36,11 +37,17 @@ func (c *Client) DeriveAPIKey(ctx context.Context, nonce int64) (*Credentials, e
 	}, nil
 }
 
-// CreateOrDeriveAPIKey creates a new API key or falls back to deriving an existing one.
+// CreateOrDeriveAPIKey creates a new API key or derives the existing one when the server
+// rejects creation with an API error (e.g. key already exists).
+// Non-API errors (network failures, timeouts) are returned without falling back.
 func (c *Client) CreateOrDeriveAPIKey(ctx context.Context, nonce int64) (*Credentials, error) {
 	creds, err := c.CreateAPIKey(ctx, nonce)
 	if err == nil {
 		return creds, nil
+	}
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		return nil, err
 	}
 	return c.DeriveAPIKey(ctx, nonce)
 }
@@ -98,14 +105,14 @@ func (c *Client) GetOpenOrdersPage(
 	query := openOrdersQuery(params, normalizedCursor(nextCursor))
 
 	var out Page[OpenOrder]
-	err := c.getJSON(ctx, openOrdersEndpoint, query, polyhttp.AuthL2, &out)
+	err := c.getJSON(ctx, openOrdersEndpoint, query, polyhttp.AuthL2Builder, &out)
 	return &out, err
 }
 
 // GetOrder fetches a single authenticated open order by ID.
 func (c *Client) GetOrder(ctx context.Context, orderID string) (*OpenOrder, error) {
 	var out OpenOrder
-	err := c.getJSON(ctx, orderEndpoint+orderID, nil, polyhttp.AuthL2, &out)
+	err := c.getJSON(ctx, orderEndpoint+orderID, nil, polyhttp.AuthL2Builder, &out)
 	return &out, err
 }
 
@@ -140,7 +147,7 @@ func (c *Client) GetTradesPage(
 	query := tradesQuery(params, normalizedCursor(nextCursor))
 
 	var out Page[Trade]
-	err := c.getJSON(ctx, tradesEndpoint, query, polyhttp.AuthL2, &out)
+	err := c.getJSON(ctx, tradesEndpoint, query, polyhttp.AuthL2Builder, &out)
 	return &out, err
 }
 
@@ -150,7 +157,7 @@ func (c *Client) PostOrder(
 	request PostOrderRequest,
 ) (*PostOrderResponse, error) {
 	var out PostOrderResponse
-	err := c.postJSON(ctx, postOrderEndpoint, request, polyhttp.AuthL2, &out)
+	err := c.postJSON(ctx, postOrderEndpoint, request, polyhttp.AuthL2Builder, &out)
 	return &out, err
 }
 
@@ -160,7 +167,7 @@ func (c *Client) PostOrders(
 	requests []PostOrderRequest,
 ) ([]PostOrderResponse, error) {
 	var out []PostOrderResponse
-	err := c.postJSON(ctx, postOrdersEndpoint, requests, polyhttp.AuthL2, &out)
+	err := c.postJSON(ctx, postOrdersEndpoint, requests, polyhttp.AuthL2Builder, &out)
 	return out, err
 }
 
@@ -171,7 +178,7 @@ func (c *Client) CancelOrder(ctx context.Context, orderID string) (*CancelOrders
 		ctx,
 		cancelOrderEndpoint,
 		OrderPayload{OrderID: orderID},
-		polyhttp.AuthL2,
+		polyhttp.AuthL2Builder,
 		&out,
 	)
 	return &out, err
@@ -183,14 +190,14 @@ func (c *Client) CancelOrders(
 	orderIDs []string,
 ) (*CancelOrdersResponse, error) {
 	var out CancelOrdersResponse
-	err := c.deleteJSON(ctx, cancelOrdersEndpoint, orderIDs, polyhttp.AuthL2, &out)
+	err := c.deleteJSON(ctx, cancelOrdersEndpoint, orderIDs, polyhttp.AuthL2Builder, &out)
 	return &out, err
 }
 
 // CancelAll cancels all open orders for the authenticated account.
 func (c *Client) CancelAll(ctx context.Context) (*CancelOrdersResponse, error) {
 	var out CancelOrdersResponse
-	err := c.deleteJSON(ctx, cancelAllEndpoint, nil, polyhttp.AuthL2, &out)
+	err := c.deleteJSON(ctx, cancelAllEndpoint, nil, polyhttp.AuthL2Builder, &out)
 	return &out, err
 }
 
