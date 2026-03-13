@@ -177,7 +177,9 @@ Internal shared packages:
 - `internal/polyauth/` for Polymarket signing and auth-header logic
 - `internal/polyhttp/` for HTTP transport and JSON decoding
 
-Future Polymarket families such as `gamma/`, `data/`, `ws/`, `bridge/`, and `ctf/` are intended to live beside `clob/`.
+Future Polymarket families such as `gamma/`, `data/`, `bridge/`, and `ctf/` are intended to live beside `clob/`.
+
+CLOB websocket streaming is planned under `clob/ws/`, with any reusable socket internals kept private until another public package needs them.
 
 ## Development
 
