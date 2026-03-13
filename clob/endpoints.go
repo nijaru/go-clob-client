@@ -1,7 +1,8 @@
 package clob
 
 const (
-	timeEndpoint = "/time"
+	timeEndpoint     = "/time"
+	geoblockEndpoint = "/api/geoblock"
 
 	initialCursor = "MA=="
 	endCursor     = "LTE="

@@ -96,6 +96,13 @@ func (c *Client) GetMarketInfo(ctx context.Context, conditionID string) (*Market
 	return &out, err
 }
 
+// CheckGeoblock returns the Polymarket geoblock status for the current client IP.
+func (c *Client) CheckGeoblock(ctx context.Context) (*GeoblockResponse, error) {
+	var out GeoblockResponse
+	err := c.getGeoblockJSON(ctx, geoblockEndpoint, nil, &out)
+	return &out, err
+}
+
 // GetOrderBook returns the typed order book for a token.
 func (c *Client) GetOrderBook(ctx context.Context, tokenID string) (*OrderBookSummary, error) {
 	query := url.Values{}
@@ -117,13 +124,20 @@ func (c *Client) GetOrderBooks(
 }
 
 // GetMidpoint returns the current midpoint price for a token.
-func (c *Client) GetMidpoint(ctx context.Context, tokenID string) (*PriceResponse, error) {
-	return c.getPriceLike(ctx, midpointEndpoint, tokenID)
+func (c *Client) GetMidpoint(ctx context.Context, tokenID string) (*MidpointResponse, error) {
+	query := url.Values{}
+	query.Set("token_id", tokenID)
+
+	var out MidpointResponse
+	err := c.getJSON(ctx, midpointEndpoint, query, polyhttp.AuthNone, &out)
+	return &out, err
 }
 
-// GetMidpoints returns midpoint prices for multiple tokens.
-func (c *Client) GetMidpoints(ctx context.Context, books []BookParams) ([]PriceResponse, error) {
-	return c.postPriceLike(ctx, midpointsEndpoint, books)
+// GetMidpoints returns midpoint prices for multiple tokens, keyed by token ID.
+func (c *Client) GetMidpoints(ctx context.Context, books []BookParams) (MidpointsResponse, error) {
+	var out MidpointsResponse
+	err := c.postJSON(ctx, midpointsEndpoint, books, polyhttp.AuthNone, &out)
+	return out, err
 }
 
 // GetPrice returns the best price for a token and side.
@@ -137,9 +151,18 @@ func (c *Client) GetPrice(ctx context.Context, tokenID, side string) (*PriceResp
 	return &out, err
 }
 
-// GetPrices returns prices for multiple tokens.
-func (c *Client) GetPrices(ctx context.Context, books []BookParams) ([]PriceResponse, error) {
-	return c.postPriceLike(ctx, pricesEndpoint, books)
+// GetPrices returns prices for multiple tokens, keyed by token ID and side.
+func (c *Client) GetPrices(ctx context.Context, books []BookParams) (PricesResponse, error) {
+	var out PricesResponse
+	err := c.postJSON(ctx, pricesEndpoint, books, polyhttp.AuthNone, &out)
+	return out, err
+}
+
+// GetAllPrices returns prices for all available tokens, keyed by token ID and side.
+func (c *Client) GetAllPrices(ctx context.Context) (PricesResponse, error) {
+	var out PricesResponse
+	err := c.getJSON(ctx, pricesEndpoint, nil, polyhttp.AuthNone, &out)
+	return out, err
 }
 
 // GetSpread returns the current spread for a token.
@@ -152,24 +175,34 @@ func (c *Client) GetSpread(ctx context.Context, tokenID string) (*SpreadResponse
 	return &out, err
 }
 
-// GetSpreads returns spreads for multiple tokens.
-func (c *Client) GetSpreads(ctx context.Context, books []BookParams) ([]SpreadResponse, error) {
-	var out []SpreadResponse
+// GetSpreads returns spreads for multiple tokens, keyed by token ID.
+func (c *Client) GetSpreads(ctx context.Context, books []BookParams) (SpreadsResponse, error) {
+	var out SpreadsResponse
 	err := c.postJSON(ctx, spreadsEndpoint, books, polyhttp.AuthNone, &out)
 	return out, err
 }
 
 // GetLastTradePrice returns the last trade price for a token.
-func (c *Client) GetLastTradePrice(ctx context.Context, tokenID string) (*PriceResponse, error) {
-	return c.getPriceLike(ctx, lastTradePriceEndpoint, tokenID)
+func (c *Client) GetLastTradePrice(
+	ctx context.Context,
+	tokenID string,
+) (*LastTradePriceResponse, error) {
+	query := url.Values{}
+	query.Set("token_id", tokenID)
+
+	var out LastTradePriceResponse
+	err := c.getJSON(ctx, lastTradePriceEndpoint, query, polyhttp.AuthNone, &out)
+	return &out, err
 }
 
 // GetLastTradesPrices returns the last trade prices for multiple tokens.
 func (c *Client) GetLastTradesPrices(
 	ctx context.Context,
 	books []BookParams,
-) ([]PriceResponse, error) {
-	return c.postPriceLike(ctx, lastTradesPricesEndpoint, books)
+) ([]LastTradesPricesResponse, error) {
+	var out []LastTradesPricesResponse
+	err := c.postJSON(ctx, lastTradesPricesEndpoint, books, polyhttp.AuthNone, &out)
+	return out, err
 }
 
 // GetTickSize returns the minimum tick size for a token.
@@ -278,26 +311,4 @@ func getTypedPage[T any](
 	var out Page[T]
 	err := client.getJSON(ctx, endpoint, query, polyhttp.AuthNone, &out)
 	return &out, err
-}
-
-func (c *Client) getPriceLike(
-	ctx context.Context,
-	endpoint, tokenID string,
-) (*PriceResponse, error) {
-	query := url.Values{}
-	query.Set("token_id", tokenID)
-
-	var out PriceResponse
-	err := c.getJSON(ctx, endpoint, query, polyhttp.AuthNone, &out)
-	return &out, err
-}
-
-func (c *Client) postPriceLike(
-	ctx context.Context,
-	endpoint string,
-	books []BookParams,
-) ([]PriceResponse, error) {
-	var out []PriceResponse
-	err := c.postJSON(ctx, endpoint, books, polyhttp.AuthNone, &out)
-	return out, err
 }

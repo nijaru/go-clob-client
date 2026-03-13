@@ -7,12 +7,12 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-type WalletContractConfig struct {
+type walletContractConfig struct {
 	ProxyFactory string
 	SafeFactory  string
 }
 
-var walletConfigs = map[int64]WalletContractConfig{
+var walletConfigs = map[int64]walletContractConfig{
 	137: {
 		ProxyFactory: "0xaB45c5A4B0c941a2F231C04C3f49182e1A254052",
 		SafeFactory:  "0xaacFeEa03eb1561C4e67d661e40682Bd20E3541b",

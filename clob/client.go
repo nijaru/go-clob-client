@@ -17,6 +17,7 @@ type Client struct {
 	chainID       int64
 	useServerTime bool
 	http          *polyhttp.Client
+	geoblockHTTP  *polyhttp.Client
 	signer        *polyauth.Signer
 	creds         *Credentials
 	builderAuth   BuilderAuth
@@ -66,10 +67,16 @@ func New(config Config) (*Client, error) {
 		UserAgent:  config.UserAgent,
 		Headers:    client.addAuthHeaders,
 	}
+	client.geoblockHTTP = &polyhttp.Client{
+		BaseURL:    config.GeoblockHost,
+		HTTPClient: config.HTTPClient,
+		UserAgent:  config.UserAgent,
+	}
 
 	return client, nil
 }
 
+// Host returns the base CLOB API host for the client.
 func (c *Client) Host() string {
 	return c.host
 }
@@ -171,6 +178,15 @@ func (c *Client) getJSON(
 	out any,
 ) error {
 	return c.http.GetJSON(ctx, path, query, auth, out)
+}
+
+func (c *Client) getGeoblockJSON(
+	ctx context.Context,
+	path string,
+	query url.Values,
+	out any,
+) error {
+	return c.geoblockHTTP.GetJSON(ctx, path, query, polyhttp.AuthNone, out)
 }
 
 func (c *Client) postJSON(

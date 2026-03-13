@@ -8,6 +8,7 @@ Go SDK for the Polymarket CLOB.
 ## Status
 
 - Read-only health, market, orderbook, price history, and live-activity queries work.
+- Typed read-only pricing helpers now cover midpoint, price, spread, last-trade, all-prices, and geoblock checks.
 - API key bootstrap, readonly API key management, paginated authenticated orders/trades, and authenticated REST calls work.
 - Typed limit and market order construction/signing now have deterministic fixture coverage.
 - Builder auth, builder API key management, builder trades, and heartbeats are supported.
@@ -121,6 +122,7 @@ For remote builder signing, use `clob.NewRemoteBuilderAuth(...)` and handle the 
 Available now:
 
 - read-only health, market data, orderbook, price history, and live activity queries
+- typed midpoint, price, spread, last-trade, all-prices, and geoblock helpers
 - API key bootstrap plus readonly API key management
 - paginated authenticated order and trade helpers plus flattened convenience methods
 - typed limit and market order construction/signing
@@ -129,7 +131,7 @@ Available now:
 Still incomplete:
 
 - some older raw market helpers remain alongside newer typed equivalents for compatibility
-- prefer typed helpers such as `HealthCheck`, `GetMarketInfo`, and `GetMarketsPage` over the raw compatibility methods
+- prefer typed helpers such as `HealthCheck`, `GetMarketInfo`, `GetMarketsPage`, and `GetAllPrices` over the raw compatibility methods
 - parity coverage is still behind the official SDKs
 - Go doc coverage is still sparse, so the README and examples are the best entry points today
 - streaming, RFQ, and non-CLOB packages are not implemented yet
