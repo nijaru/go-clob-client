@@ -67,8 +67,7 @@ const (
 	TickSizeTenThousand TickSize = "0.0001"
 )
 
-// RoundConfig holds the decimal precision used when building order values.
-type RoundConfig struct {
+type roundConfig struct {
 	Price  int32
 	Size   int32
 	Amount int32
