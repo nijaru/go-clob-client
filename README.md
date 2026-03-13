@@ -194,4 +194,6 @@ The intended local smoke-check flow is:
 make fmt && make test && make build
 ```
 
-CI formatting and verification checks are planned, but not wired up yet.
+Local `make fmt` expects `golines` and `gofumpt` on your `PATH`.
+
+GitHub Actions now runs the same formatting, test, and build flow on pushes to `main` and pull requests targeting `main`.
