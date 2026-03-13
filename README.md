@@ -123,6 +123,7 @@ Available now:
 
 - read-only health, market data, orderbook, price history, and live activity queries
 - typed midpoint, price, spread, last-trade, all-prices, and geoblock helpers
+- typed orderbook helper coverage including local orderbook hash generation
 - chain-aware contract address helpers for collateral, conditional tokens, and exchange addresses
 - API key bootstrap plus readonly API key management
 - paginated authenticated order and trade helpers plus flattened convenience methods
