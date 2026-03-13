@@ -164,7 +164,11 @@ The goal of this repo is to track the official SDKs over time while keeping the 
 - not copying TypeScript/Python class structure directly
 - growing coverage in milestones instead of claiming full parity early
 
-The next major milestone is the remaining parity sweep across the CLOB HTTP surface, plus public API polish for Go users, CI checks, and eventually streaming.
+The next major milestones are:
+
+- `clob/ws` websocket streaming for CLOB market and user channels
+- RFQ coverage to match the official SDK surface more closely
+- a parity/polish sweep across caches, auth/transport semantics, godoc, and examples
 
 ## Project Structure
 
