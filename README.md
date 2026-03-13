@@ -123,6 +123,7 @@ Available now:
 
 - read-only health, market data, orderbook, price history, and live activity queries
 - typed midpoint, price, spread, last-trade, all-prices, and geoblock helpers
+- chain-aware contract address helpers for collateral, conditional tokens, and exchange addresses
 - API key bootstrap plus readonly API key management
 - paginated authenticated order and trade helpers plus flattened convenience methods
 - typed limit and market order construction/signing
@@ -164,7 +165,7 @@ The goal of this repo is to track the official SDKs over time while keeping the 
 - not copying TypeScript/Python class structure directly
 - growing coverage in milestones instead of claiming full parity early
 
-The next major milestone is the remaining parity sweep across the CLOB HTTP surface, plus public API polish for Go users, and eventually streaming.
+The next major milestone is the remaining parity sweep across the CLOB HTTP surface, plus public API polish for Go users, CI checks, and eventually streaming.
 
 ## Project Structure
 
@@ -182,6 +183,15 @@ Future Polymarket families such as `gamma/`, `data/`, `ws/`, `bridge/`, and `ctf
 ## Development
 
 ```bash
-go test ./...
-go build ./...
+make fmt
+make test
+make build
 ```
+
+The intended local smoke-check flow is:
+
+```bash
+make fmt && make test && make build
+```
+
+CI formatting and verification checks are planned, but not wired up yet.
