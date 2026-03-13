@@ -19,7 +19,7 @@ const (
 	collateralTokenScale = int32(6)
 )
 
-var roundingConfig = map[TickSize]RoundConfig{
+var roundingConfig = map[TickSize]roundConfig{
 	TickSizeTenth:       {Price: 1, Size: 2, Amount: 3},
 	TickSizeHundredth:   {Price: 2, Size: 2, Amount: 4},
 	TickSizeThousandth:  {Price: 3, Size: 2, Amount: 5},
