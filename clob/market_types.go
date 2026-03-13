@@ -105,16 +105,49 @@ type FeeRateResponse struct {
 	BaseFee int64 `json:"base_fee"`
 }
 
-// PriceResponse is the typed price-like response used by midpoint, price, and last-trade endpoints.
+// MidpointResponse reports the mid-market price for a token.
+type MidpointResponse struct {
+	Mid string `json:"mid"`
+}
+
+// PriceResponse reports the best available price for a token on a specific side.
 type PriceResponse struct {
-	Price   string `json:"price"`
-	Side    string `json:"side,omitempty"`
-	TokenID string `json:"token_id,omitempty"`
+	Price string `json:"price"`
 }
 
 // SpreadResponse is the typed spread response for a token.
 type SpreadResponse struct {
 	Spread string `json:"spread"`
+}
+
+// MidpointsResponse maps token IDs to midpoint prices.
+type MidpointsResponse map[string]string
+
+// PricesResponse maps token IDs to side-specific prices.
+type PricesResponse map[string]map[Side]string
+
+// SpreadsResponse maps token IDs to spreads.
+type SpreadsResponse map[string]string
+
+// LastTradePriceResponse reports the most recent trade price and side for a token.
+type LastTradePriceResponse struct {
+	Price string `json:"price"`
+	Side  Side   `json:"side"`
+}
+
+// LastTradesPricesResponse reports the most recent trade price for a token in a batch response.
+type LastTradesPricesResponse struct {
+	TokenID string `json:"token_id"`
+	Price   string `json:"price"`
+	Side    Side   `json:"side"`
+}
+
+// GeoblockResponse reports whether the current client IP is geographically blocked.
+type GeoblockResponse struct {
+	Blocked bool   `json:"blocked"`
+	IP      string `json:"ip"`
+	Country string `json:"country"`
+	Region  string `json:"region"`
 }
 
 // MarketPrice is a single point in a market price-history response.

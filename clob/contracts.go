@@ -4,7 +4,7 @@ import "fmt"
 
 const zeroAddress = "0x0000000000000000000000000000000000000000"
 
-type ContractConfig struct {
+type contractConfig struct {
 	Exchange        string
 	NegRiskExchange string
 	NegRiskAdapter  string
@@ -12,7 +12,7 @@ type ContractConfig struct {
 	Conditional     string
 }
 
-var contractConfigs = map[int64]ContractConfig{
+var contractConfigs = map[int64]contractConfig{
 	137: {
 		Exchange:        "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E",
 		NegRiskExchange: "0xC5d563A36AE78145C45a50134d48A1215220f80a",
@@ -29,10 +29,10 @@ var contractConfigs = map[int64]ContractConfig{
 	},
 }
 
-func getContractConfig(chainID int64) (ContractConfig, error) {
+func getContractConfig(chainID int64) (contractConfig, error) {
 	config, ok := contractConfigs[chainID]
 	if !ok {
-		return ContractConfig{}, fmt.Errorf("unsupported chain id %d", chainID)
+		return contractConfig{}, fmt.Errorf("unsupported chain id %d", chainID)
 	}
 	return config, nil
 }
