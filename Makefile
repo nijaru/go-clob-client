@@ -5,6 +5,7 @@ fmt:
 	if [ -z "$$files" ]; then \
 		echo "no tracked Go files to format"; \
 	else \
+		goimports -w $$files; \
 		golines --base-formatter gofumpt -w $$files; \
 	fi
 
