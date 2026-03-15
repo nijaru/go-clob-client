@@ -68,9 +68,9 @@ const (
 )
 
 type roundConfig struct {
-	Price  int32
-	Size   int32
-	Amount int32
+	Price  uint8
+	Size   uint8
+	Amount uint8
 }
 
 // CreateOrderOptions overrides market-derived trading defaults.
