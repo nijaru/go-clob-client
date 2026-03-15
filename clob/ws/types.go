@@ -18,7 +18,15 @@ const (
 	EventTypePriceChange    EventType = "price_change"
 	EventTypeTickSizeChange EventType = "tick_size_change"
 	EventTypeLastTradePrice EventType = "last_trade_price"
+	EventTypeOrder          EventType = "order"
+	EventTypeTrade          EventType = "trade"
 )
+
+// UserSubscription is the message sent to subscribe to user updates.
+type UserSubscription struct {
+	Type Channel     `json:"type"`
+	Auth clob.WSAuth `json:"auth"`
+}
 
 // MarketSubscription is the message sent to subscribe to market updates.
 type MarketSubscription struct {
@@ -76,3 +84,39 @@ type LastTradePriceEvent struct {
 	FeeRateBps string    `json:"fee_rate_bps"`
 	Timestamp  string    `json:"timestamp"`
 }
+
+// OrderEvent is emitted when a user's order status changes (placed, canceled).
+type OrderEvent struct {
+	BaseEvent
+	OrderID   string      `json:"order_id"`
+	AssetID   string      `json:"asset_id"`
+	Market    string      `json:"market"`
+	Price     string      `json:"price"`
+	Size      string      `json:"size"`
+	Side      clob.Side   `json:"side"`
+	Status    OrderStatus `json:"status"`
+	Reason    string      `json:"reason,omitempty"`
+	Timestamp string      `json:"timestamp"`
+}
+
+// TradeEvent is emitted when a user's order is filled (partially or fully).
+type TradeEvent struct {
+	BaseEvent
+	TradeID   string    `json:"trade_id"`
+	AssetID   string    `json:"asset_id"`
+	Market    string    `json:"market"`
+	Price     string    `json:"price"`
+	Size      string    `json:"size"`
+	Side      clob.Side `json:"side"`
+	Status    string    `json:"status"`
+	Timestamp string    `json:"timestamp"`
+}
+
+type OrderStatus string
+
+const (
+	OrderStatusOpen     OrderStatus = "OPEN"
+	OrderStatusCanceled OrderStatus = "CANCELED"
+	OrderStatusFilled   OrderStatus = "FILLED"
+	OrderStatusExpired  OrderStatus = "EXPIRED"
+)

@@ -80,7 +80,7 @@ func L2Headers(
 	method, path string,
 	body []byte,
 ) (map[string]string, error) {
-	signature, err := buildHMACSignature(secret, timestamp, method, path, body)
+	signature, err := HMACSignature(secret, timestamp, method, path, body)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +100,7 @@ func BuilderHeaders(
 	method, path string,
 	body []byte,
 ) (map[string]string, error) {
-	signature, err := buildHMACSignature(secret, timestamp, method, path, body)
+	signature, err := HMACSignature(secret, timestamp, method, path, body)
 	if err != nil {
 		return nil, err
 	}
@@ -217,7 +217,7 @@ func (s *Signer) signClobAuth(chainID, timestamp, nonce int64) (string, error) {
 	return SignTypedData(s, typedData)
 }
 
-func buildHMACSignature(
+func HMACSignature(
 	secret string,
 	timestamp int64,
 	method, requestPath string,
