@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/quagmt/udecimal"
 )
 
 func TestCreateOrderBuildsSignedLimitOrder(t *testing.T) {
@@ -27,8 +29,8 @@ func TestCreateOrderBuildsSignedLimitOrder(t *testing.T) {
 
 	order, err := client.CreateOrder(context.Background(), OrderArgs{
 		TokenID: "100",
-		Price:   0.45,
-		Size:    10,
+		Price:   udecimal.MustParse("0.45"),
+		Size:    udecimal.MustParse("10"),
 		Side:    SideBuy,
 	}, nil)
 	if err != nil {
@@ -91,8 +93,8 @@ func TestCreateAndPostOrderSendsExpectedPayload(t *testing.T) {
 
 	_, err = client.CreateAndPostOrder(context.Background(), OrderArgs{
 		TokenID: "100",
-		Price:   0.45,
-		Size:    10,
+		Price:   udecimal.MustParse("0.45"),
+		Size:    udecimal.MustParse("10"),
 		Side:    SideBuy,
 	}, nil, OrderTypeGTC, false, false)
 	if err != nil {
@@ -143,7 +145,7 @@ func TestCreateMarketOrderDerivesPriceFromBook(t *testing.T) {
 
 	order, err := client.CreateMarketOrder(context.Background(), MarketOrderArgs{
 		TokenID:   "100",
-		Amount:    2,
+		Amount:    udecimal.MustParse("2"),
 		Side:      SideBuy,
 		OrderType: OrderTypeFOK,
 	}, nil)
@@ -176,8 +178,8 @@ func TestCreateOrderReturnsSaltGenerationError(t *testing.T) {
 
 	_, err = client.CreateOrder(context.Background(), OrderArgs{
 		TokenID: "100",
-		Price:   0.45,
-		Size:    10,
+		Price:   udecimal.MustParse("0.45"),
+		Size:    udecimal.MustParse("10"),
 		Side:    SideBuy,
 	}, nil)
 	if err == nil || err.Error() != "generate order salt: entropy unavailable" {
