@@ -33,6 +33,8 @@ type Client struct {
 	tickSizeCache map[string]TickSize
 	negRiskMu     sync.RWMutex
 	negRiskCache  map[string]bool
+	feeRateMu     sync.RWMutex
+	feeRateCache  map[string]int64
 }
 
 // New constructs a new Polymarket CLOB client from the provided config.
@@ -84,6 +86,7 @@ func New(config Config) (*Client, error) {
 
 	client.tickSizeCache = make(map[string]TickSize)
 	client.negRiskCache = make(map[string]bool)
+	client.feeRateCache = make(map[string]int64)
 
 	return client, nil
 }
@@ -104,6 +107,13 @@ func (c *Client) ClearTickSizeCaches() {
 	c.negRiskMu.Lock()
 	c.negRiskCache = make(map[string]bool)
 	c.negRiskMu.Unlock()
+}
+
+// ClearFeeRateCache removes the cached fee rate for a specific token.
+func (c *Client) ClearFeeRateCache(tokenID string) {
+	c.feeRateMu.Lock()
+	delete(c.feeRateCache, tokenID)
+	c.feeRateMu.Unlock()
 }
 
 // Host returns the base CLOB API host for the client.

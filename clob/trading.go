@@ -633,9 +633,22 @@ func (c *Client) resolveFeeRateBps(
 	tokenID string,
 	userFeeRateBps int64,
 ) (int64, error) {
-	marketFeeRateBps, err := c.GetFeeRateBps(ctx, tokenID)
-	if err != nil {
-		return 0, err
+	c.feeRateMu.RLock()
+	cached, ok := c.feeRateCache[tokenID]
+	c.feeRateMu.RUnlock()
+
+	var marketFeeRateBps int64
+	if ok {
+		marketFeeRateBps = cached
+	} else {
+		bps, err := c.GetFeeRateBps(ctx, tokenID)
+		if err != nil {
+			return 0, err
+		}
+		c.feeRateMu.Lock()
+		c.feeRateCache[tokenID] = bps
+		c.feeRateMu.Unlock()
+		marketFeeRateBps = bps
 	}
 
 	if marketFeeRateBps > 0 && userFeeRateBps != 0 && userFeeRateBps != marketFeeRateBps {

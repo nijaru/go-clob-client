@@ -66,8 +66,10 @@ type Rewards struct {
 }
 
 // BookParams identifies a token whose order-book-derived values should be fetched.
+// Side is optional; when set it filters price results to the specified side.
 type BookParams struct {
 	TokenID string `json:"token_id"`
+	Side    Side   `json:"side,omitempty"`
 }
 
 // OrderSummary is a single order book level.

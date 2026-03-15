@@ -75,9 +75,10 @@ type RFQQuotesResponse []RFQQuote
 // RFQRequestFilterParams contains the filters for listing RFQ requests.
 type RFQRequestFilterParams struct {
 	Limit      int
-	Offset     string // base64 encoded integer
-	State      string // "active" or "inactive"
-	RequestIDs []string
+	Offset     string   // base64 encoded integer
+	State      string   // "active" or "inactive"
+	RequestIDs []string // repeatable RFQ request UUIDs
+	Markets    []string // repeatable market condition IDs
 }
 
 // RFQQuoteFilterParams contains the filters for listing RFQ quotes.

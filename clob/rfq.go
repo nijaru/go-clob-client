@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/url"
 	"strconv"
-	"strings"
 
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
 )
@@ -47,8 +46,11 @@ func (c *Client) GetRFQRequests(
 		if params.State != "" {
 			query.Set("state", params.State)
 		}
-		if len(params.RequestIDs) > 0 {
-			query.Set("requestIds", strings.Join(params.RequestIDs, ","))
+		for _, id := range params.RequestIDs {
+			query.Add("requestIds", id)
+		}
+		for _, m := range params.Markets {
+			query.Add("markets", m)
 		}
 	}
 
@@ -93,8 +95,8 @@ func (c *Client) GetRFQRequesterQuotes(
 		if params.Offset != "" {
 			query.Set("offset", params.Offset)
 		}
-		if len(params.RequestIDs) > 0 {
-			query.Set("requestIds", strings.Join(params.RequestIDs, ","))
+		for _, id := range params.RequestIDs {
+			query.Add("requestIds", id)
 		}
 	}
 
@@ -119,8 +121,8 @@ func (c *Client) GetRFQQuoterQuotes(
 		if params.Offset != "" {
 			query.Set("offset", params.Offset)
 		}
-		if len(params.RequestIDs) > 0 {
-			query.Set("requestIds", strings.Join(params.RequestIDs, ","))
+		for _, id := range params.RequestIDs {
+			query.Add("requestIds", id)
 		}
 	}
 
