@@ -229,7 +229,8 @@ func marshalBody(body any) ([]byte, error) {
 
 	switch typed := body.(type) {
 	case []byte:
-		return bytes.Clone(typed), nil
+		// Slice is only read downstream, no clone needed.
+		return typed, nil
 	case string:
 		return []byte(typed), nil
 	default:
