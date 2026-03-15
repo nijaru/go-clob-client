@@ -8,10 +8,12 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/nijaru/go-clob-client/clob"
 )
 
 const (
 	defaultMarketURL = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
+	defaultUserURL   = "wss://ws-subscriptions-clob.polymarket.com/ws/user"
 	pingInterval     = 10 * time.Second
 )
 
@@ -76,6 +78,15 @@ func (c *Client) SubscribeMarket(ctx context.Context, assetIDs []string, customF
 		Type:                 ChannelMarket,
 		AssetIDs:             assetIDs,
 		CustomFeatureEnabled: customFeature,
+	}
+	return c.sendJSON(ctx, sub)
+}
+
+// SubscribeUser sends a user subscription message.
+func (c *Client) SubscribeUser(ctx context.Context, auth clob.WSAuth) error {
+	sub := UserSubscription{
+		Type: ChannelUser,
+		Auth: auth,
 	}
 	return c.sendJSON(ctx, sub)
 }
@@ -167,6 +178,10 @@ func (c *Client) handleMessage(data []byte) {
 		event = &TickSizeChangeEvent{}
 	case EventTypeLastTradePrice:
 		event = &LastTradePriceEvent{}
+	case EventTypeOrder:
+		event = &OrderEvent{}
+	case EventTypeTrade:
+		event = &TradeEvent{}
 	default:
 		// Unknown event
 		return
