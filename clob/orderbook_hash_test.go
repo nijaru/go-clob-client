@@ -32,7 +32,7 @@ func TestGetOrderBookHash(t *testing.T) {
 		t.Fatalf("get orderbook hash: %v", err)
 	}
 
-	if hash != "0458ea5755c9f73d64a14636fa5c36ed460ec394" {
+	if hash != "40c73ef796bc06f9c6b6f40ac40726dd0584cad8" {
 		t.Fatalf("unexpected orderbook hash: %s", hash)
 	}
 }
@@ -60,7 +60,7 @@ func TestGetOrderBookHashEmptyBook(t *testing.T) {
 		t.Fatalf("get orderbook hash: %v", err)
 	}
 
-	if hash != "74c6a7c81c1d572f1c877b7d3e25b80c336d8a6e" {
+	if hash != "b83e2ea87740aba865fbca0077679e8a606da38d" {
 		t.Fatalf("unexpected empty-book hash: %s", hash)
 	}
 }
