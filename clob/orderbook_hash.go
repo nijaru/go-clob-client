@@ -10,13 +10,13 @@ type orderBookHashPayload struct {
 	Market         string         `json:"market"`
 	AssetID        string         `json:"asset_id"`
 	Timestamp      string         `json:"timestamp"`
-	Hash           string         `json:"hash"`
 	Bids           []OrderSummary `json:"bids"`
 	Asks           []OrderSummary `json:"asks"`
 	MinOrderSize   string         `json:"min_order_size"`
 	TickSize       string         `json:"tick_size"`
 	NegRisk        bool           `json:"neg_risk"`
 	LastTradePrice string         `json:"last_trade_price"`
+	Hash           string         `json:"hash"`
 }
 
 // GetOrderBookHash returns the server-compatible hash for the supplied orderbook summary.
