@@ -101,7 +101,7 @@ func (c *Client) CreateMarketOrder(
 		return nil, fmt.Errorf("market orders only support FOK or FAK order types")
 	}
 
-	if userOrder.Price == 0 {
+	if userOrder.Price.IsZero() {
 		price, err := c.CalculateMarketPrice(
 			ctx,
 			userOrder.TokenID,
@@ -220,24 +220,21 @@ func (c *Client) CalculateMarketPrice(
 	ctx context.Context,
 	tokenID string,
 	side Side,
-	amount float64,
+	amount udecimal.Decimal,
 	orderType OrderType,
-) (float64, error) {
+) (udecimal.Decimal, error) {
 	if orderType == "" {
 		orderType = OrderTypeFOK
 	}
 
 	book, err := c.GetOrderBook(ctx, tokenID)
 	if err != nil {
-		return 0, err
+		return udecimal.Zero, err
 	}
 
-	target, err := udecimal.NewFromFloat64(amount)
-	if err != nil {
-		return 0, fmt.Errorf("invalid amount: %w", err)
-	}
+	target := amount
 	if target.Cmp(udecimal.Zero) <= 0 {
-		return 0, fmt.Errorf("amount must be positive")
+		return udecimal.Zero, fmt.Errorf("amount must be positive")
 	}
 
 	var levels []OrderSummary
@@ -247,11 +244,11 @@ func (c *Client) CalculateMarketPrice(
 	case SideSell:
 		levels = book.Bids
 	default:
-		return 0, fmt.Errorf("invalid side %q", side)
+		return udecimal.Zero, fmt.Errorf("invalid side %q", side)
 	}
 
 	if len(levels) == 0 {
-		return 0, fmt.Errorf("no opposing orders for token %s", tokenID)
+		return udecimal.Zero, fmt.Errorf("no opposing orders for token %s", tokenID)
 	}
 
 	sum := udecimal.Zero
@@ -263,11 +260,11 @@ func (c *Client) CalculateMarketPrice(
 		level := levels[i]
 		size, err := udecimal.Parse(level.Size)
 		if err != nil {
-			return 0, fmt.Errorf("parse orderbook size: %w", err)
+			return udecimal.Zero, fmt.Errorf("parse orderbook size: %w", err)
 		}
 		price, err := udecimal.Parse(level.Price)
 		if err != nil {
-			return 0, fmt.Errorf("parse orderbook price: %w", err)
+			return udecimal.Zero, fmt.Errorf("parse orderbook price: %w", err)
 		}
 
 		if side == SideBuy {
@@ -277,19 +274,19 @@ func (c *Client) CalculateMarketPrice(
 		}
 
 		if sum.Cmp(target) >= 0 {
-			return price.InexactFloat64(), nil
+			return price, nil
 		}
 	}
 
 	if orderType == OrderTypeFOK {
-		return 0, fmt.Errorf("insufficient liquidity to fill amount %.6f", amount)
+		return udecimal.Zero, fmt.Errorf("insufficient liquidity to fill amount %s", amount)
 	}
 
 	firstPrice, err := udecimal.Parse(levels[0].Price)
 	if err != nil {
-		return 0, fmt.Errorf("parse fallback price: %w", err)
+		return udecimal.Zero, fmt.Errorf("parse fallback price: %w", err)
 	}
-	return firstPrice.InexactFloat64(), nil
+	return firstPrice, nil
 }
 
 func (c *Client) buildSignedLimitOrder(
@@ -301,14 +298,8 @@ func (c *Client) buildSignedLimitOrder(
 		return nil, fmt.Errorf("unsupported tick size %q", options.TickSize)
 	}
 
-	price, err := udecimal.NewFromFloat64(userOrder.Price)
-	if err != nil {
-		return nil, fmt.Errorf("invalid price: %w", err)
-	}
-	size, err := udecimal.NewFromFloat64(userOrder.Size)
-	if err != nil {
-		return nil, fmt.Errorf("invalid size: %w", err)
-	}
+	price := userOrder.Price
+	size := userOrder.Size
 	rawPrice := roundNormal(price, roundConfig.Price)
 
 	var rawMakerAmount udecimal.Decimal
@@ -360,17 +351,8 @@ func (c *Client) buildSignedMarketOrder(
 		return nil, fmt.Errorf("unsupported tick size %q", options.TickSize)
 	}
 
-	priceVal, err := udecimal.NewFromFloat64(userOrder.Price)
-	if err != nil {
-		return nil, fmt.Errorf("invalid price: %w", err)
-	}
-	price := roundDown(priceVal, roundConfig.Price)
-
-	amountVal, err := udecimal.NewFromFloat64(userOrder.Amount)
-	if err != nil {
-		return nil, fmt.Errorf("invalid amount: %w", err)
-	}
-	amount := amountVal
+	price := roundDown(userOrder.Price, roundConfig.Price)
+	amount := userOrder.Amount
 
 	var rawMakerAmount udecimal.Decimal
 	var rawTakerAmount udecimal.Decimal
@@ -378,10 +360,11 @@ func (c *Client) buildSignedMarketOrder(
 	switch userOrder.Side {
 	case SideBuy:
 		rawMakerAmount = roundDown(amount, roundConfig.Size)
-		rawTakerAmount, err = rawMakerAmount.Div(price)
+		val, err := rawMakerAmount.Div(price)
 		if err != nil {
 			return nil, fmt.Errorf("calculation error: %w", err)
 		}
+		rawTakerAmount = val
 		if decimalPlaces(rawTakerAmount) > roundConfig.Amount {
 			rawTakerAmount = roundUp(rawTakerAmount, roundConfig.Amount+4)
 			if decimalPlaces(rawTakerAmount) > roundConfig.Amount {
@@ -533,10 +516,10 @@ func validateLimitOrderArgs(order OrderArgs) error {
 	if order.TokenID == "" {
 		return fmt.Errorf("token id is required")
 	}
-	if order.Size <= 0 {
+	if order.Size.Cmp(udecimal.Zero) <= 0 {
 		return fmt.Errorf("size must be positive")
 	}
-	if order.Price <= 0 {
+	if order.Price.Cmp(udecimal.Zero) <= 0 {
 		return fmt.Errorf("price must be positive")
 	}
 	if order.Side != SideBuy && order.Side != SideSell {
@@ -549,10 +532,10 @@ func validateMarketOrderArgs(order MarketOrderArgs) error {
 	if order.TokenID == "" {
 		return fmt.Errorf("token id is required")
 	}
-	if order.Amount <= 0 {
+	if order.Amount.Cmp(udecimal.Zero) <= 0 {
 		return fmt.Errorf("amount must be positive")
 	}
-	if order.Price < 0 {
+	if order.Price.Cmp(udecimal.Zero) < 0 {
 		return fmt.Errorf("price cannot be negative")
 	}
 	if order.Side != SideBuy && order.Side != SideSell {
@@ -561,11 +544,8 @@ func validateMarketOrderArgs(order MarketOrderArgs) error {
 	return nil
 }
 
-func validatePrice(price float64, tickSize TickSize) error {
-	value, err := udecimal.NewFromFloat64(price)
-	if err != nil {
-		return fmt.Errorf("invalid price: %w", err)
-	}
+func validatePrice(price udecimal.Decimal, tickSize TickSize) error {
+	value := price
 	minimum, err := parseTickSize(tickSize)
 	if err != nil {
 		return err
@@ -574,7 +554,7 @@ func validatePrice(price float64, tickSize TickSize) error {
 	if value.Cmp(minimum) >= 0 && value.Cmp(maximum) <= 0 {
 		return nil
 	}
-	return fmt.Errorf("invalid price (%v), min: %s - max: %s", price, minimum, maximum)
+	return fmt.Errorf("invalid price (%s), min: %s - max: %s", price, minimum, maximum)
 }
 
 func sideValue(side Side) int {
@@ -600,10 +580,22 @@ func (c *Client) resolveTickSize(
 		return options.TickSize, nil
 	}
 
+	c.tickSizeMu.RLock()
+	cached, ok := c.tickSizeCache[tokenID]
+	c.tickSizeMu.RUnlock()
+	if ok {
+		return cached, nil
+	}
+
 	response, err := c.GetTickSize(ctx, tokenID)
 	if err != nil {
 		return "", err
 	}
+
+	c.tickSizeMu.Lock()
+	c.tickSizeCache[tokenID] = response.MinimumTickSize
+	c.tickSizeMu.Unlock()
+
 	return response.MinimumTickSize, nil
 }
 
@@ -616,10 +608,22 @@ func (c *Client) resolveNegRisk(
 		return *options.NegRisk, nil
 	}
 
+	c.negRiskMu.RLock()
+	cached, ok := c.negRiskCache[tokenID]
+	c.negRiskMu.RUnlock()
+	if ok {
+		return cached, nil
+	}
+
 	response, err := c.GetNegRisk(ctx, tokenID)
 	if err != nil {
 		return false, err
 	}
+
+	c.negRiskMu.Lock()
+	c.negRiskCache[tokenID] = response.NegRisk
+	c.negRiskMu.Unlock()
+
 	return response.NegRisk, nil
 }
 

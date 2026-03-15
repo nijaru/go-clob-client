@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/nijaru/go-clob-client/clob"
+	"github.com/quagmt/udecimal"
 )
 
 func ExampleNew_readOnly() {
@@ -73,8 +74,8 @@ func ExampleClient_CreateAndPostOrder() {
 	if false {
 		_, err := client.CreateAndPostOrder(context.Background(), clob.OrderArgs{
 			TokenID: "token-id",
-			Price:   0.45,
-			Size:    5,
+			Price:   udecimal.MustParse("0.45"),
+			Size:    udecimal.MustParse("5"),
 			Side:    clob.SideBuy,
 		}, nil, clob.OrderTypeGTC, false, false)
 		if err != nil {

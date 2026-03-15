@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+
+	"github.com/quagmt/udecimal"
 )
 
 // OrderPayload identifies a single order in cancel and lookup requests.
@@ -137,8 +139,8 @@ type Trade struct {
 // OrderArgs contains the inputs for building a limit order.
 type OrderArgs struct {
 	TokenID    string
-	Price      float64
-	Size       float64
+	Price      udecimal.Decimal
+	Size       udecimal.Decimal
 	Side       Side
 	FeeRateBps int64
 	Nonce      uint64
@@ -149,9 +151,9 @@ type OrderArgs struct {
 // MarketOrderArgs contains the inputs for building a market order.
 type MarketOrderArgs struct {
 	TokenID    string
-	Amount     float64
+	Amount     udecimal.Decimal
 	Side       Side
-	Price      float64
+	Price      udecimal.Decimal
 	FeeRateBps int64
 	Nonce      uint64
 	Taker      string

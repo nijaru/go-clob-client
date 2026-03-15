@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/quagmt/udecimal"
 )
 
 func TestNormalizeFunderAddressMatchesReferenceWalletDerivation(t *testing.T) {
@@ -128,8 +129,8 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 			build: func(client *Client) (*SignedOrder, error) {
 				return client.CreateOrder(context.Background(), OrderArgs{
 					TokenID: "123",
-					Price:   0.5,
-					Size:    100,
+					Price:   udecimal.MustParse("0.5"),
+					Size:    udecimal.MustParse("100"),
 					Side:    SideBuy,
 				}, &CreateOrderOptions{TickSize: TickSizeTenth, NegRisk: Bool(false)})
 			},
@@ -158,8 +159,8 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 			build: func(client *Client) (*SignedOrder, error) {
 				return client.CreateOrder(context.Background(), OrderArgs{
 					TokenID: "123",
-					Price:   0.5,
-					Size:    100,
+					Price:   udecimal.MustParse("0.5"),
+					Size:    udecimal.MustParse("100"),
 					Side:    SideSell,
 				}, &CreateOrderOptions{TickSize: TickSizeTenth, NegRisk: Bool(false)})
 			},
@@ -188,8 +189,8 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 			build: func(client *Client) (*SignedOrder, error) {
 				return client.CreateMarketOrder(context.Background(), MarketOrderArgs{
 					TokenID:   "123",
-					Price:     0.56,
-					Amount:    100,
+					Price:     udecimal.MustParse("0.56"),
+					Amount:    udecimal.MustParse("100"),
 					Side:      SideBuy,
 					OrderType: OrderTypeFOK,
 				}, &CreateOrderOptions{TickSize: TickSizeHundredth, NegRisk: Bool(false)})
@@ -219,8 +220,8 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 			build: func(client *Client) (*SignedOrder, error) {
 				return client.CreateMarketOrder(context.Background(), MarketOrderArgs{
 					TokenID:   "123",
-					Price:     0.56,
-					Amount:    100,
+					Price:     udecimal.MustParse("0.56"),
+					Amount:    udecimal.MustParse("100"),
 					Side:      SideSell,
 					OrderType: OrderTypeFOK,
 				}, &CreateOrderOptions{TickSize: TickSizeHundredth, NegRisk: Bool(false)})
@@ -253,8 +254,8 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 			build: func(client *Client) (*SignedOrder, error) {
 				return client.CreateOrder(context.Background(), OrderArgs{
 					TokenID: "123",
-					Price:   0.512,
-					Size:    100,
+					Price:   udecimal.MustParse("0.512"),
+					Size:    udecimal.MustParse("100"),
 					Side:    SideBuy,
 					Nonce:   2,
 					Taker:   "0xf7fB45986800e2D259BAa25B56466bd02dA37a44",

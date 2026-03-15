@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/nijaru/go-clob-client/clob"
+	"github.com/quagmt/udecimal"
 )
 
 func main() {
@@ -23,10 +24,9 @@ func main() {
 	}
 
 	response, err := client.CreateAndPostMarketOrder(context.Background(), clob.MarketOrderArgs{
-		TokenID:   os.Getenv("POLYMARKET_TOKEN_ID"),
-		Amount:    25,
-		Side:      clob.SideBuy,
-		OrderType: clob.OrderTypeFOK,
+		TokenID: os.Getenv("POLYMARKET_TOKEN_ID"),
+		Amount:  udecimal.MustParse("25"),
+		Side:    clob.SideSell,
 	}, nil, clob.OrderTypeFOK, false)
 	if err != nil {
 		log.Fatal(err)
