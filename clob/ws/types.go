@@ -30,9 +30,8 @@ type UserSubscription struct {
 
 // MarketSubscription is the message sent to subscribe to market updates.
 type MarketSubscription struct {
-	Type                 Channel  `json:"type"`
-	AssetIDs             []string `json:"assets_ids"`
-	CustomFeatureEnabled bool     `json:"custom_feature_enabled"`
+	Type     Channel  `json:"type"`
+	AssetIDs []string `json:"asset_ids"`
 }
 
 // BaseEvent contains fields common to all WebSocket events.

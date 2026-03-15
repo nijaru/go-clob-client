@@ -54,6 +54,18 @@ type AcceptRFQQuoteRequest struct {
 	QuoteID string `json:"quote_id"`
 }
 
+// AcceptRFQQuoteResponse is the response for accepting a quote.
+// It returns a signed order payload that the requester needs to sign and return.
+type AcceptRFQQuoteResponse struct {
+	Order SignedOrder `json:"order"`
+}
+
+// ApproveRFQOrderRequest is the payload for a quoter to approve an order.
+type ApproveRFQOrderRequest struct {
+	RequestID string      `json:"request_id"`
+	Order     SignedOrder `json:"order"`
+}
+
 // RFQRequestsResponse is the response for listing RFQ requests.
 type RFQRequestsResponse []RFQRequest
 

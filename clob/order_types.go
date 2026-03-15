@@ -217,6 +217,45 @@ func (o SignedOrder) MarshalJSON() ([]byte, error) {
 	})
 }
 
+// UnmarshalJSON handles the diverse salt format from the API.
+func (o *SignedOrder) UnmarshalJSON(data []byte) error {
+	type wireSignedOrder struct {
+		Salt          json.Number   `json:"salt"`
+		Maker         string        `json:"maker"`
+		Signer        string        `json:"signer"`
+		Taker         string        `json:"taker"`
+		TokenID       string        `json:"tokenId"`
+		MakerAmount   string        `json:"makerAmount"`
+		TakerAmount   string        `json:"takerAmount"`
+		Expiration    string        `json:"expiration"`
+		Nonce         string        `json:"nonce"`
+		FeeRateBps    string        `json:"feeRateBps"`
+		Side          Side          `json:"side"`
+		SignatureType SignatureType `json:"signatureType"`
+		Signature     string        `json:"signature"`
+	}
+
+	var decoded wireSignedOrder
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+
+	o.Salt = decoded.Salt.String()
+	o.Maker = decoded.Maker
+	o.Signer = decoded.Signer
+	o.Taker = decoded.Taker
+	o.TokenID = decoded.TokenID
+	o.MakerAmount = decoded.MakerAmount
+	o.TakerAmount = decoded.TakerAmount
+	o.Expiration = decoded.Expiration
+	o.Nonce = decoded.Nonce
+	o.FeeRateBps = decoded.FeeRateBps
+	o.Side = decoded.Side
+	o.SignatureType = decoded.SignatureType
+	o.Signature = decoded.Signature
+	return nil
+}
+
 // PostOrderRequest is the authenticated order-post payload.
 type PostOrderRequest struct {
 	Order     SignedOrder `json:"order"`

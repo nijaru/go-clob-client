@@ -73,11 +73,10 @@ func (c *Client) Close() error {
 }
 
 // SubscribeMarket sends a market subscription message.
-func (c *Client) SubscribeMarket(ctx context.Context, assetIDs []string, customFeature bool) error {
+func (c *Client) SubscribeMarket(ctx context.Context, assetIDs []string) error {
 	sub := MarketSubscription{
-		Type:                 ChannelMarket,
-		AssetIDs:             assetIDs,
-		CustomFeatureEnabled: customFeature,
+		Type:     ChannelMarket,
+		AssetIDs: assetIDs,
 	}
 	return c.sendJSON(ctx, sub)
 }

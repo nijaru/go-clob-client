@@ -34,7 +34,7 @@ func main() {
 	// Subscribe to a popular market (e.g. Trump 2024 Election Win token)
 	// Asset ID for "Yes" token of the 2024 Election Win market (example ID)
 	assetID := "20593414902008800045145829672023910384812242371994326577488052671542151608248"
-	if err := client.SubscribeMarket(ctx, []string{assetID}, true); err != nil {
+	if err := client.SubscribeMarket(ctx, []string{assetID}); err != nil {
 		log.Fatalf("failed to subscribe: %v", err)
 	}
 
