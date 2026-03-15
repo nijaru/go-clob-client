@@ -50,8 +50,17 @@ func TestRFQSurfaces(t *testing.T) {
 				w.WriteHeader(http.StatusNoContent)
 				return
 			}
-		case rfqAcceptQuoteEndpoint:
+		case rfqQuoteAcceptEndpoint:
+			_ = json.NewEncoder(w).Encode(AcceptRFQQuoteResponse{
+				Order: SignedOrder{TokenID: "123", Salt: "456"},
+			})
+		case rfqOrderApproveEndpoint:
 			w.WriteHeader(http.StatusOK)
+		case rfqBestQuoteEndpoint:
+			_ = json.NewEncoder(w).Encode(RFQQuote{
+				ID:        "quote-1",
+				RequestID: "rfq-1",
+			})
 		default:
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
@@ -109,12 +118,32 @@ func TestRFQSurfaces(t *testing.T) {
 		t.Errorf("unexpected quote id: %s", quote.ID)
 	}
 
+	// Get Best Quote
+	best, err := client.GetBestQuote(ctx, "rfq-1")
+	if err != nil {
+		t.Fatalf("get best quote: %v", err)
+	}
+	if best.ID != "quote-1" {
+		t.Errorf("unexpected best quote id: %s", best.ID)
+	}
+
 	// Accept Quote
-	err = client.AcceptRFQQuote(ctx, "quote-1")
+	resp, err := client.AcceptRFQQuote(ctx, "quote-1")
 	if err != nil {
 		t.Fatalf("accept rfq quote: %v", err)
 	}
+	if resp.Order.TokenID != "123" {
+		t.Errorf("unexpected accepted order token: %s", resp.Order.TokenID)
+	}
 
+	// Approve Order
+	err = client.ApproveRFQOrder(ctx, ApproveRFQOrderRequest{
+		RequestID: "rfq-1",
+		Order:     resp.Order,
+	})
+	if err != nil {
+		t.Fatalf("approve rfq order: %v", err)
+	}
 	// Cancel Quote
 	err = client.CancelRFQQuote(ctx, "quote-1")
 	if err != nil {

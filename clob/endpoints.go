@@ -68,8 +68,10 @@ const (
 const (
 	rfqRequestEndpoint         = "/rfq/request"
 	rfqQuoteEndpoint           = "/rfq/quote"
-	rfqAcceptQuoteEndpoint     = "/rfq/accept"
+	rfqQuoteAcceptEndpoint     = "/rfq/quote-accept"
+	rfqOrderApproveEndpoint    = "/rfq/order-approve"
 	rfqDataRequestsEndpoint    = "/rfq/data/requests"
 	rfqRequesterQuotesEndpoint = "/rfq/data/requester/quotes"
 	rfqQuoterQuotesEndpoint    = "/rfq/data/quoter/quotes"
+	rfqBestQuoteEndpoint       = "/rfq/data/best-quote"
 )
