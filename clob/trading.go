@@ -10,13 +10,13 @@ import (
 	ethmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"github.com/nijaru/go-clob-client/internal/polyauth"
-	"github.com/shopspring/decimal"
+	"github.com/quagmt/udecimal"
 )
 
 const (
 	protocolName         = "Polymarket CTF Exchange"
 	protocolVersion      = "1"
-	collateralTokenScale = int32(6)
+	collateralTokenScale = uint8(6)
 )
 
 var roundingConfig = map[TickSize]roundConfig{
@@ -232,8 +232,11 @@ func (c *Client) CalculateMarketPrice(
 		return 0, err
 	}
 
-	target := decimal.NewFromFloat(amount)
-	if target.LessThanOrEqual(decimal.Zero) {
+	target, err := udecimal.NewFromFloat64(amount)
+	if err != nil {
+		return 0, fmt.Errorf("invalid amount: %w", err)
+	}
+	if target.Cmp(udecimal.Zero) <= 0 {
 		return 0, fmt.Errorf("amount must be positive")
 	}
 
@@ -251,18 +254,18 @@ func (c *Client) CalculateMarketPrice(
 		return 0, fmt.Errorf("no opposing orders for token %s", tokenID)
 	}
 
-	sum := decimal.Zero
+	sum := udecimal.Zero
 	// The Polymarket API returns Bids sorted ascending (lowest to highest price)
 	// and Asks sorted descending (highest to lowest price). In both cases,
 	// the "top of the book" (best price) is at the end of the array. Therefore,
 	// iterating backwards always starts at the most competitive price.
 	for i := len(levels) - 1; i >= 0; i-- {
 		level := levels[i]
-		size, err := decimal.NewFromString(level.Size)
+		size, err := udecimal.Parse(level.Size)
 		if err != nil {
 			return 0, fmt.Errorf("parse orderbook size: %w", err)
 		}
-		price, err := decimal.NewFromString(level.Price)
+		price, err := udecimal.Parse(level.Price)
 		if err != nil {
 			return 0, fmt.Errorf("parse orderbook price: %w", err)
 		}
@@ -273,9 +276,8 @@ func (c *Client) CalculateMarketPrice(
 			sum = sum.Add(size)
 		}
 
-		if sum.GreaterThanOrEqual(target) {
-			value, _ := price.Float64()
-			return value, nil
+		if sum.Cmp(target) >= 0 {
+			return price.InexactFloat64(), nil
 		}
 	}
 
@@ -283,12 +285,11 @@ func (c *Client) CalculateMarketPrice(
 		return 0, fmt.Errorf("insufficient liquidity to fill amount %.6f", amount)
 	}
 
-	firstPrice, err := decimal.NewFromString(levels[0].Price)
+	firstPrice, err := udecimal.Parse(levels[0].Price)
 	if err != nil {
 		return 0, fmt.Errorf("parse fallback price: %w", err)
 	}
-	value, _ := firstPrice.Float64()
-	return value, nil
+	return firstPrice.InexactFloat64(), nil
 }
 
 func (c *Client) buildSignedLimitOrder(
@@ -300,12 +301,18 @@ func (c *Client) buildSignedLimitOrder(
 		return nil, fmt.Errorf("unsupported tick size %q", options.TickSize)
 	}
 
-	price := decimal.NewFromFloat(userOrder.Price)
-	size := decimal.NewFromFloat(userOrder.Size)
+	price, err := udecimal.NewFromFloat64(userOrder.Price)
+	if err != nil {
+		return nil, fmt.Errorf("invalid price: %w", err)
+	}
+	size, err := udecimal.NewFromFloat64(userOrder.Size)
+	if err != nil {
+		return nil, fmt.Errorf("invalid size: %w", err)
+	}
 	rawPrice := roundNormal(price, roundConfig.Price)
 
-	var rawMakerAmount decimal.Decimal
-	var rawTakerAmount decimal.Decimal
+	var rawMakerAmount udecimal.Decimal
+	var rawTakerAmount udecimal.Decimal
 
 	switch userOrder.Side {
 	case SideBuy:
@@ -353,16 +360,28 @@ func (c *Client) buildSignedMarketOrder(
 		return nil, fmt.Errorf("unsupported tick size %q", options.TickSize)
 	}
 
-	price := roundDown(decimal.NewFromFloat(userOrder.Price), roundConfig.Price)
-	amount := decimal.NewFromFloat(userOrder.Amount)
+	priceVal, err := udecimal.NewFromFloat64(userOrder.Price)
+	if err != nil {
+		return nil, fmt.Errorf("invalid price: %w", err)
+	}
+	price := roundDown(priceVal, roundConfig.Price)
 
-	var rawMakerAmount decimal.Decimal
-	var rawTakerAmount decimal.Decimal
+	amountVal, err := udecimal.NewFromFloat64(userOrder.Amount)
+	if err != nil {
+		return nil, fmt.Errorf("invalid amount: %w", err)
+	}
+	amount := amountVal
+
+	var rawMakerAmount udecimal.Decimal
+	var rawTakerAmount udecimal.Decimal
 
 	switch userOrder.Side {
 	case SideBuy:
 		rawMakerAmount = roundDown(amount, roundConfig.Size)
-		rawTakerAmount = rawMakerAmount.Div(price)
+		rawTakerAmount, err = rawMakerAmount.Div(price)
+		if err != nil {
+			return nil, fmt.Errorf("calculation error: %w", err)
+		}
 		if decimalPlaces(rawTakerAmount) > roundConfig.Amount {
 			rawTakerAmount = roundUp(rawTakerAmount, roundConfig.Amount+4)
 			if decimalPlaces(rawTakerAmount) > roundConfig.Amount {
@@ -398,8 +417,8 @@ func (c *Client) buildSignedMarketOrder(
 
 type orderBuildInput struct {
 	TokenID       string
-	MakerAmount   decimal.Decimal
-	TakerAmount   decimal.Decimal
+	MakerAmount   udecimal.Decimal
+	TakerAmount   udecimal.Decimal
 	Side          Side
 	FeeRateBps    int64
 	Nonce         uint64
@@ -543,13 +562,16 @@ func validateMarketOrderArgs(order MarketOrderArgs) error {
 }
 
 func validatePrice(price float64, tickSize TickSize) error {
-	value := decimal.NewFromFloat(price)
+	value, err := udecimal.NewFromFloat64(price)
+	if err != nil {
+		return fmt.Errorf("invalid price: %w", err)
+	}
 	minimum, err := parseTickSize(tickSize)
 	if err != nil {
 		return err
 	}
-	maximum := decimal.NewFromInt(1).Sub(minimum)
-	if value.GreaterThanOrEqual(minimum) && value.LessThanOrEqual(maximum) {
+	maximum := udecimal.MustFromInt64(1, 0).Sub(minimum)
+	if value.Cmp(minimum) >= 0 && value.Cmp(maximum) <= 0 {
 		return nil
 	}
 	return fmt.Errorf("invalid price (%v), min: %s - max: %s", price, minimum, maximum)
@@ -622,30 +644,32 @@ func (c *Client) resolveFeeRateBps(
 	return marketFeeRateBps, nil
 }
 
-func roundDown(value decimal.Decimal, places int32) decimal.Decimal {
-	return value.RoundFloor(places)
+func roundDown(value udecimal.Decimal, places uint8) udecimal.Decimal {
+	return value.Trunc(places)
 }
 
-func roundNormal(value decimal.Decimal, places int32) decimal.Decimal {
-	return value.Round(places)
+func roundNormal(value udecimal.Decimal, places uint8) udecimal.Decimal {
+	return value.RoundHAZ(places)
 }
 
-func roundUp(value decimal.Decimal, places int32) decimal.Decimal {
-	return value.RoundCeil(places)
+func roundUp(value udecimal.Decimal, places uint8) udecimal.Decimal {
+	return value.RoundAwayFromZero(places)
 }
 
-func decimalPlaces(value decimal.Decimal) int32 {
-	return -value.Exponent()
+func decimalPlaces(value udecimal.Decimal) uint8 {
+	return value.PrecUint()
 }
 
-func toTokenDecimals(value decimal.Decimal) decimal.Decimal {
-	return value.Shift(collateralTokenScale).Truncate(0)
+func toTokenDecimals(value udecimal.Decimal) udecimal.Decimal {
+	// 10^6
+	scale := udecimal.MustFromInt64(1000000, 0)
+	return value.Mul(scale).Trunc(0)
 }
 
-func parseTickSize(value TickSize) (decimal.Decimal, error) {
-	parsed, err := decimal.NewFromString(string(value))
+func parseTickSize(value TickSize) (udecimal.Decimal, error) {
+	parsed, err := udecimal.Parse(string(value))
 	if err != nil {
-		return decimal.Zero, fmt.Errorf("parse tick size %q: %w", value, err)
+		return udecimal.Zero, fmt.Errorf("parse tick size %q: %w", value, err)
 	}
 	return parsed, nil
 }

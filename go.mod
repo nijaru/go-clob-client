@@ -5,7 +5,7 @@ go 1.26.1
 require (
 	github.com/coder/websocket v1.8.14
 	github.com/ethereum/go-ethereum v1.17.1
-	github.com/shopspring/decimal v1.4.0
+	github.com/quagmt/udecimal v1.10.0
 )
 
 require (
