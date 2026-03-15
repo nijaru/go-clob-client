@@ -38,18 +38,22 @@ func (c *Client) DeriveAPIKey(ctx context.Context, nonce int64) (*Credentials, e
 }
 
 // CreateOrDeriveAPIKey creates a new API key or derives the existing one when the server
-// rejects creation with an API error (e.g. key already exists).
+// rejects creation with an API error indicating the key already exists.
 // Non-API errors (network failures, timeouts) are returned without falling back.
 func (c *Client) CreateOrDeriveAPIKey(ctx context.Context, nonce int64) (*Credentials, error) {
 	creds, err := c.CreateAPIKey(ctx, nonce)
 	if err == nil {
 		return creds, nil
 	}
+
 	var apiErr *APIError
-	if !errors.As(err, &apiErr) {
-		return nil, err
+	if errors.As(err, &apiErr) {
+		// If the error indicates the key already exists (400 or 409), fall back to derivation.
+		if apiErr.StatusCode == 400 || apiErr.StatusCode == 409 {
+			return c.DeriveAPIKey(ctx, nonce)
+		}
 	}
-	return c.DeriveAPIKey(ctx, nonce)
+	return nil, err
 }
 
 // GetAPIKeys lists the authenticated account's API keys.
@@ -64,8 +68,8 @@ func (c *Client) DeleteAPIKey(ctx context.Context) error {
 	return c.deleteJSON(ctx, deleteAPIKeyEndpoint, nil, polyhttp.AuthL2, nil)
 }
 
-// GetClosedOnly returns whether the account is restricted to closed-only mode.
-func (c *Client) GetClosedOnly(ctx context.Context) (*BanStatus, error) {
+// GetClosedOnlyMode returns whether the account is restricted to closed-only mode.
+func (c *Client) GetClosedOnlyMode(ctx context.Context) (*BanStatus, error) {
 	var out BanStatus
 	err := c.getJSON(ctx, closedOnlyEndpoint, nil, polyhttp.AuthL2, &out)
 	return &out, err
@@ -136,6 +140,15 @@ func (c *Client) GetTrades(ctx context.Context, params TradeParams) ([]Trade, er
 	}
 
 	return trades, nil
+}
+
+// GetTradesPaginated is an alias for GetTradesPage.
+func (c *Client) GetTradesPaginated(
+	ctx context.Context,
+	params TradeParams,
+	nextCursor string,
+) (*Page[Trade], error) {
+	return c.GetTradesPage(ctx, params, nextCursor)
 }
 
 // GetTradesPage returns a single page of authenticated trades.

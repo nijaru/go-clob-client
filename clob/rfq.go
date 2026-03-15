@@ -2,6 +2,7 @@ package clob
 
 import (
 	"context"
+	"encoding/json"
 	"net/url"
 	"strconv"
 	"strings"
@@ -78,9 +79,9 @@ func (c *Client) CancelRFQQuote(ctx context.Context, quoteID string) error {
 	return c.deleteJSON(ctx, rfqQuoteEndpoint, body, polyhttp.AuthL2, nil)
 }
 
-// GetRequesterQuotes retrieves quotes on requests created by the authenticated user.
+// GetRFQRequesterQuotes retrieves quotes on requests created by the authenticated user.
 // Level 2 Auth required.
-func (c *Client) GetRequesterQuotes(
+func (c *Client) GetRFQRequesterQuotes(
 	ctx context.Context,
 	params *RFQQuoteFilterParams,
 ) (RFQQuotesResponse, error) {
@@ -104,9 +105,9 @@ func (c *Client) GetRequesterQuotes(
 	return resp, nil
 }
 
-// GetQuoterQuotes retrieves quotes created by the authenticated user.
+// GetRFQQuoterQuotes retrieves quotes created by the authenticated user.
 // Level 2 Auth required.
-func (c *Client) GetQuoterQuotes(
+func (c *Client) GetRFQQuoterQuotes(
 	ctx context.Context,
 	params *RFQQuoteFilterParams,
 ) (RFQQuotesResponse, error) {
@@ -130,9 +131,9 @@ func (c *Client) GetQuoterQuotes(
 	return resp, nil
 }
 
-// GetBestQuote retrieves the current best quote for a specific request.
+// GetRFQBestQuote retrieves the current best quote for a specific request.
 // Level 2 Auth required.
-func (c *Client) GetBestQuote(ctx context.Context, requestID string) (*RFQQuote, error) {
+func (c *Client) GetRFQBestQuote(ctx context.Context, requestID string) (*RFQQuote, error) {
 	query := url.Values{}
 	query.Set("requestId", requestID)
 
@@ -162,4 +163,14 @@ func (c *Client) AcceptRFQQuote(
 // Level 2 Auth required.
 func (c *Client) ApproveRFQOrder(ctx context.Context, params ApproveRFQOrderRequest) error {
 	return c.postJSON(ctx, rfqOrderApproveEndpoint, params, polyhttp.AuthL2, nil)
+}
+
+// GetRFQConfig retrieves the current RFQ configuration.
+// Level 2 Auth required.
+func (c *Client) GetRFQConfig(ctx context.Context) (json.RawMessage, error) {
+	var resp json.RawMessage
+	if err := c.getJSON(ctx, rfqConfigEndpoint, nil, polyhttp.AuthL2, &resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
