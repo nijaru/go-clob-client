@@ -8,8 +8,8 @@ import (
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
 )
 
-// HealthCheck returns the health-check response body.
-func (c *Client) HealthCheck(ctx context.Context) (string, error) {
+// GetOk returns the health-check response body.
+func (c *Client) GetOk(ctx context.Context) (string, error) {
 	var out string
 	err := c.getJSON(ctx, "/", nil, polyhttp.AuthNone, &out)
 	return out, err
@@ -22,12 +22,56 @@ func (c *Client) GetServerTime(ctx context.Context) (int64, error) {
 	return out, err
 }
 
+// GetSamplingSimplifiedMarkets returns all simplified markets from the sampling endpoint.
+func (c *Client) GetSamplingSimplifiedMarkets(ctx context.Context) ([]SimplifiedMarket, error) {
+	cursor := initialCursor
+	var markets []SimplifiedMarket
+
+	for cursor != endCursor {
+		page, err := c.GetSamplingSimplifiedMarketsPage(ctx, cursor)
+		if err != nil {
+			return nil, err
+		}
+		markets = append(markets, page.Data...)
+
+		nextCursor, done := nextPageCursor(cursor, page.NextCursor)
+		if done {
+			return markets, nil
+		}
+		cursor = nextCursor
+	}
+
+	return markets, nil
+}
+
 // GetSamplingSimplifiedMarketsPage returns a typed sampling-simplified markets page.
 func (c *Client) GetSamplingSimplifiedMarketsPage(
 	ctx context.Context,
 	nextCursor string,
 ) (*Page[SimplifiedMarket], error) {
 	return getTypedPage[SimplifiedMarket](ctx, c, samplingSimplifiedMarketsEndpoint, nextCursor)
+}
+
+// GetSamplingMarkets returns all markets from the sampling endpoint.
+func (c *Client) GetSamplingMarkets(ctx context.Context) ([]Market, error) {
+	cursor := initialCursor
+	var markets []Market
+
+	for cursor != endCursor {
+		page, err := c.GetSamplingMarketsPage(ctx, cursor)
+		if err != nil {
+			return nil, err
+		}
+		markets = append(markets, page.Data...)
+
+		nextCursor, done := nextPageCursor(cursor, page.NextCursor)
+		if done {
+			return markets, nil
+		}
+		cursor = nextCursor
+	}
+
+	return markets, nil
 }
 
 // GetSamplingMarketsPage returns a typed sampling markets page.
@@ -38,6 +82,28 @@ func (c *Client) GetSamplingMarketsPage(
 	return getTypedPage[Market](ctx, c, samplingMarketsEndpoint, nextCursor)
 }
 
+// GetSimplifiedMarkets returns all simplified markets.
+func (c *Client) GetSimplifiedMarkets(ctx context.Context) ([]SimplifiedMarket, error) {
+	cursor := initialCursor
+	var markets []SimplifiedMarket
+
+	for cursor != endCursor {
+		page, err := c.GetSimplifiedMarketsPage(ctx, cursor)
+		if err != nil {
+			return nil, err
+		}
+		markets = append(markets, page.Data...)
+
+		nextCursor, done := nextPageCursor(cursor, page.NextCursor)
+		if done {
+			return markets, nil
+		}
+		cursor = nextCursor
+	}
+
+	return markets, nil
+}
+
 // GetSimplifiedMarketsPage returns a typed simplified markets page.
 func (c *Client) GetSimplifiedMarketsPage(
 	ctx context.Context,
@@ -46,13 +112,35 @@ func (c *Client) GetSimplifiedMarketsPage(
 	return getTypedPage[SimplifiedMarket](ctx, c, simplifiedMarketsEndpoint, nextCursor)
 }
 
+// GetMarkets returns all markets.
+func (c *Client) GetMarkets(ctx context.Context) ([]Market, error) {
+	cursor := initialCursor
+	var markets []Market
+
+	for cursor != endCursor {
+		page, err := c.GetMarketsPage(ctx, cursor)
+		if err != nil {
+			return nil, err
+		}
+		markets = append(markets, page.Data...)
+
+		nextCursor, done := nextPageCursor(cursor, page.NextCursor)
+		if done {
+			return markets, nil
+		}
+		cursor = nextCursor
+	}
+
+	return markets, nil
+}
+
 // GetMarketsPage returns a typed markets page.
 func (c *Client) GetMarketsPage(ctx context.Context, nextCursor string) (*Page[Market], error) {
 	return getTypedPage[Market](ctx, c, marketsEndpoint, nextCursor)
 }
 
-// GetMarketInfo returns a typed market record for a condition ID.
-func (c *Client) GetMarketInfo(ctx context.Context, conditionID string) (*Market, error) {
+// GetMarket returns a typed market record for a condition ID.
+func (c *Client) GetMarket(ctx context.Context, conditionID string) (*Market, error) {
 	var out Market
 	err := c.getJSON(ctx, marketEndpoint+conditionID, nil, polyhttp.AuthNone, &out)
 	return &out, err
@@ -206,8 +294,8 @@ func (c *Client) GetFeeRateBps(ctx context.Context, tokenID string) (int64, erro
 	return response.BaseFee, nil
 }
 
-// GetPriceHistory returns the typed price-history series for the supplied filter.
-func (c *Client) GetPriceHistory(
+// GetPricesHistory returns the typed price-history series for the supplied filter.
+func (c *Client) GetPricesHistory(
 	ctx context.Context,
 	params PriceHistoryFilterParams,
 ) ([]MarketPrice, error) {
@@ -233,8 +321,8 @@ func (c *Client) GetPriceHistory(
 	return out, err
 }
 
-// GetMarketTradeEvents returns live market activity events for a condition ID.
-func (c *Client) GetMarketTradeEvents(
+// GetMarketTradesEvents returns live market activity events for a condition ID.
+func (c *Client) GetMarketTradesEvents(
 	ctx context.Context,
 	conditionID string,
 ) ([]MarketTradeEvent, error) {

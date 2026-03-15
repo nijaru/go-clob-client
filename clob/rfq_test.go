@@ -119,7 +119,7 @@ func TestRFQSurfaces(t *testing.T) {
 	}
 
 	// Get Best Quote
-	best, err := client.GetBestQuote(ctx, "rfq-1")
+	best, err := client.GetRFQBestQuote(ctx, "rfq-1")
 	if err != nil {
 		t.Fatalf("get best quote: %v", err)
 	}

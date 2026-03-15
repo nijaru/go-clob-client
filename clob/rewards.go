@@ -61,8 +61,8 @@ func (c *Client) GetTotalEarningsForUserForDay(
 	return out, err
 }
 
-// GetUserRewardsAndMarketsConfig returns all paginated user reward-and-market entries.
-func (c *Client) GetUserRewardsAndMarketsConfig(
+// GetUserEarningsAndMarketsConfig returns all paginated user reward-and-market entries.
+func (c *Client) GetUserEarningsAndMarketsConfig(
 	ctx context.Context,
 	params UserRewardsFilterParams,
 ) ([]UserRewardsEarning, error) {
@@ -70,7 +70,7 @@ func (c *Client) GetUserRewardsAndMarketsConfig(
 	var entries []UserRewardsEarning
 
 	for cursor != endCursor {
-		page, err := c.GetUserRewardsAndMarketsConfigPage(ctx, params, cursor)
+		page, err := c.GetUserEarningsAndMarketsConfigPage(ctx, params, cursor)
 		if err != nil {
 			return nil, err
 		}
@@ -86,8 +86,8 @@ func (c *Client) GetUserRewardsAndMarketsConfig(
 	return entries, nil
 }
 
-// GetUserRewardsAndMarketsConfigPage returns a single user reward-and-market page.
-func (c *Client) GetUserRewardsAndMarketsConfigPage(
+// GetUserEarningsAndMarketsConfigPage returns a single user reward-and-market page.
+func (c *Client) GetUserEarningsAndMarketsConfigPage(
 	ctx context.Context,
 	params UserRewardsFilterParams,
 	nextCursor string,
@@ -154,6 +154,14 @@ func (c *Client) GetCurrentRewardsPage(
 	var out Page[CurrentReward]
 	err := c.getJSON(ctx, rewardsMarketsCurrentEndpoint, query, polyhttp.AuthL2, &out)
 	return &out, err
+}
+
+// GetRawRewardsForMarket is an alias for GetRewardsForMarket.
+func (c *Client) GetRawRewardsForMarket(
+	ctx context.Context,
+	conditionID string,
+) ([]MarketReward, error) {
+	return c.GetRewardsForMarket(ctx, conditionID)
 }
 
 // GetRewardsForMarket returns all paginated reward rows for a specific market.

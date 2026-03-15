@@ -129,17 +129,17 @@ func TestTypedReadOnlySurfaces(t *testing.T) {
 		t.Fatalf("new client: %v", err)
 	}
 
-	health, err := client.HealthCheck(context.Background())
+	health, err := client.GetOk(context.Background())
 	if err != nil {
-		t.Fatalf("health check: %v", err)
+		t.Fatalf("get ok check: %v", err)
 	}
 	if health != "OK" {
 		t.Fatalf("unexpected health: %q", health)
 	}
 
-	market, err := client.GetMarketInfo(context.Background(), "cond-1")
+	market, err := client.GetMarket(context.Background(), "cond-1")
 	if err != nil {
-		t.Fatalf("get market info: %v", err)
+		t.Fatalf("get market: %v", err)
 	}
 	if market.Question != "Will this ship?" {
 		t.Fatalf("unexpected market question: %s", market.Question)
@@ -153,7 +153,7 @@ func TestTypedReadOnlySurfaces(t *testing.T) {
 		t.Fatalf("unexpected market page: %+v", page)
 	}
 
-	history, err := client.GetPriceHistory(context.Background(), PriceHistoryFilterParams{
+	history, err := client.GetPricesHistory(context.Background(), PriceHistoryFilterParams{
 		Market:   "123",
 		Interval: PriceHistoryIntervalOneDay,
 	})
@@ -164,7 +164,7 @@ func TestTypedReadOnlySurfaces(t *testing.T) {
 		t.Fatalf("unexpected price history: %+v", history)
 	}
 
-	events, err := client.GetMarketTradeEvents(context.Background(), "cond-1")
+	events, err := client.GetMarketTradesEvents(context.Background(), "cond-1")
 	if err != nil {
 		t.Fatalf("get market trade events: %v", err)
 	}
@@ -476,7 +476,7 @@ func TestTypedAuthenticatedSurfaces(t *testing.T) {
 		t.Fatalf("get total earnings for user: %+v %v", totalEarnings, err)
 	}
 
-	userRewardsPage, err := client.GetUserRewardsAndMarketsConfigPage(
+	userRewardsPage, err := client.GetUserEarningsAndMarketsConfigPage(
 		context.Background(),
 		UserRewardsFilterParams{
 			Date:          "2026-03-12",
@@ -488,7 +488,7 @@ func TestTypedAuthenticatedSurfaces(t *testing.T) {
 		t.Fatalf("get user rewards and markets config page: %+v %v", userRewardsPage, err)
 	}
 
-	userRewards, err := client.GetUserRewardsAndMarketsConfig(
+	userRewards, err := client.GetUserEarningsAndMarketsConfig(
 		context.Background(),
 		UserRewardsFilterParams{
 			Date:          "2026-03-12",

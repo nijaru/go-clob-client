@@ -121,7 +121,7 @@ func TestRewardsPaginationHelpers(t *testing.T) {
 		t.Fatalf("unexpected earnings: %+v %v", earnings, err)
 	}
 
-	userRewardsPage, err := client.GetUserRewardsAndMarketsConfigPage(
+	userRewardsPage, err := client.GetUserEarningsAndMarketsConfigPage(
 		context.Background(),
 		UserRewardsFilterParams{Date: "2026-03-12"},
 		"",
@@ -129,7 +129,7 @@ func TestRewardsPaginationHelpers(t *testing.T) {
 	if err != nil || len(userRewardsPage.Data) != 1 || userRewardsPage.NextCursor != "cursor-2" {
 		t.Fatalf("unexpected user rewards page: %+v %v", userRewardsPage, err)
 	}
-	userRewards, err := client.GetUserRewardsAndMarketsConfig(
+	userRewards, err := client.GetUserEarningsAndMarketsConfig(
 		context.Background(),
 		UserRewardsFilterParams{Date: "2026-03-12"},
 	)
