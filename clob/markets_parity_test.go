@@ -144,7 +144,10 @@ func TestTypedMarketPricingSurfaces(t *testing.T) {
 		t.Fatalf("unexpected price: %+v", price)
 	}
 
-	prices, err := client.GetPrices(context.Background(), []BookParams{{TokenID: "123"}})
+	prices, err := client.GetPrices(
+		context.Background(),
+		[]BookParams{{TokenID: "123", Side: SideBuy}},
+	)
 	if err != nil {
 		t.Fatalf("get prices: %v", err)
 	}

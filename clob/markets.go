@@ -2,6 +2,7 @@ package clob
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"strconv"
 
@@ -202,7 +203,13 @@ func (c *Client) GetPrice(ctx context.Context, tokenID, side string) (*PriceResp
 }
 
 // GetPrices returns prices for multiple tokens, keyed by token ID and side.
+// Side is required for each BookParams entry.
 func (c *Client) GetPrices(ctx context.Context, books []BookParams) (PricesResponse, error) {
+	for i, b := range books {
+		if b.Side == "" {
+			return nil, fmt.Errorf("GetPrices: books[%d] missing required Side", i)
+		}
+	}
 	var out PricesResponse
 	err := c.postJSON(ctx, pricesEndpoint, books, polyhttp.AuthNone, &out)
 	return out, err
