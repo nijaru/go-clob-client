@@ -25,7 +25,7 @@ func (c *Client) GetServerTime(ctx context.Context) (int64, error) {
 // GetSamplingSimplifiedMarkets returns all simplified markets from the sampling endpoint.
 func (c *Client) GetSamplingSimplifiedMarkets(ctx context.Context) ([]SimplifiedMarket, error) {
 	cursor := initialCursor
-	var markets []SimplifiedMarket
+	markets := make([]SimplifiedMarket, 0, 64)
 
 	for cursor != endCursor {
 		page, err := c.GetSamplingSimplifiedMarketsPage(ctx, cursor)
@@ -55,7 +55,7 @@ func (c *Client) GetSamplingSimplifiedMarketsPage(
 // GetSamplingMarkets returns all markets from the sampling endpoint.
 func (c *Client) GetSamplingMarkets(ctx context.Context) ([]Market, error) {
 	cursor := initialCursor
-	var markets []Market
+	markets := make([]Market, 0, 64)
 
 	for cursor != endCursor {
 		page, err := c.GetSamplingMarketsPage(ctx, cursor)
@@ -85,7 +85,7 @@ func (c *Client) GetSamplingMarketsPage(
 // GetSimplifiedMarkets returns all simplified markets.
 func (c *Client) GetSimplifiedMarkets(ctx context.Context) ([]SimplifiedMarket, error) {
 	cursor := initialCursor
-	var markets []SimplifiedMarket
+	markets := make([]SimplifiedMarket, 0, 64)
 
 	for cursor != endCursor {
 		page, err := c.GetSimplifiedMarketsPage(ctx, cursor)
@@ -115,7 +115,7 @@ func (c *Client) GetSimplifiedMarketsPage(
 // GetMarkets returns all markets.
 func (c *Client) GetMarkets(ctx context.Context) ([]Market, error) {
 	cursor := initialCursor
-	var markets []Market
+	markets := make([]Market, 0, 64)
 
 	for cursor != endCursor {
 		page, err := c.GetMarketsPage(ctx, cursor)

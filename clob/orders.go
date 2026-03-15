@@ -81,7 +81,7 @@ func (c *Client) GetOpenOrders(
 	params OpenOrderParams,
 ) ([]OpenOrder, error) {
 	cursor := initialCursor
-	var orders []OpenOrder
+	orders := make([]OpenOrder, 0, 64)
 
 	for cursor != endCursor {
 		page, err := c.GetOpenOrdersPage(ctx, params, cursor)
@@ -123,7 +123,7 @@ func (c *Client) GetOrder(ctx context.Context, orderID string) (*OpenOrder, erro
 // GetTrades returns all paginated authenticated trades that match the provided filters.
 func (c *Client) GetTrades(ctx context.Context, params TradeParams) ([]Trade, error) {
 	cursor := initialCursor
-	var trades []Trade
+	trades := make([]Trade, 0, 64)
 
 	for cursor != endCursor {
 		page, err := c.GetTradesPage(ctx, params, cursor)
@@ -259,7 +259,7 @@ func (c *Client) GetBuilderTrades(
 	params TradeParams,
 ) ([]BuilderTrade, error) {
 	cursor := initialCursor
-	var trades []BuilderTrade
+	trades := make([]BuilderTrade, 0, 64)
 
 	for cursor != endCursor {
 		page, err := c.GetBuilderTradesPage(ctx, params, cursor)
@@ -372,12 +372,12 @@ func normalizedCursor(nextCursor string) string {
 }
 
 func nextPageCursor(currentCursor, nextCursor string) (string, bool) {
-	switch {
-	case nextCursor == "":
+	switch nextCursor {
+	case "":
 		return "", true
-	case nextCursor == currentCursor:
+	case currentCursor:
 		return "", true
-	case nextCursor == endCursor:
+	case endCursor:
 		return endCursor, false
 	default:
 		return nextCursor, false

@@ -13,7 +13,7 @@ func (c *Client) GetEarningsForUserForDay(
 	date string,
 ) ([]UserEarning, error) {
 	cursor := initialCursor
-	var earnings []UserEarning
+	earnings := make([]UserEarning, 0, 64)
 
 	for cursor != endCursor {
 		page, err := c.GetEarningsForUserForDayPage(ctx, date, cursor)
@@ -67,7 +67,7 @@ func (c *Client) GetUserEarningsAndMarketsConfig(
 	params UserRewardsFilterParams,
 ) ([]UserRewardsEarning, error) {
 	cursor := initialCursor
-	var entries []UserRewardsEarning
+	entries := make([]UserRewardsEarning, 0, 64)
 
 	for cursor != endCursor {
 		page, err := c.GetUserEarningsAndMarketsConfigPage(ctx, params, cursor)
@@ -125,7 +125,7 @@ func (c *Client) GetRewardPercentages(ctx context.Context) (RewardsPercentages, 
 // GetCurrentRewards returns all paginated current reward summaries.
 func (c *Client) GetCurrentRewards(ctx context.Context) ([]CurrentReward, error) {
 	cursor := initialCursor
-	var rewards []CurrentReward
+	rewards := make([]CurrentReward, 0, 64)
 
 	for cursor != endCursor {
 		page, err := c.GetCurrentRewardsPage(ctx, cursor)
@@ -170,7 +170,7 @@ func (c *Client) GetRewardsForMarket(
 	conditionID string,
 ) ([]MarketReward, error) {
 	cursor := initialCursor
-	var rewards []MarketReward
+	rewards := make([]MarketReward, 0, 64)
 
 	for cursor != endCursor {
 		page, err := c.GetRewardsForMarketPage(ctx, conditionID, cursor)

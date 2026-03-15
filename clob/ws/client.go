@@ -13,7 +13,6 @@ import (
 
 const (
 	defaultMarketURL = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
-	defaultUserURL   = "wss://ws-subscriptions-clob.polymarket.com/ws/user"
 	pingInterval     = 10 * time.Second
 )
 
@@ -24,11 +23,11 @@ type Client struct {
 	mu   sync.Mutex
 	conn *websocket.Conn
 
-	events chan interface{}
+	events chan any
 	errs   chan error
 	stop   chan struct{}
 
-	handler func(interface{})
+	handler func(any)
 }
 
 // NewClient creates a new WebSocket client.
@@ -38,7 +37,7 @@ func NewClient(url string) *Client {
 	}
 	return &Client{
 		url:    url,
-		events: make(chan interface{}, 100),
+		events: make(chan any, 100),
 		errs:   make(chan error, 10),
 		stop:   make(chan struct{}),
 	}
@@ -91,7 +90,7 @@ func (c *Client) SubscribeUser(ctx context.Context, auth clob.WSAuth) error {
 }
 
 // Events returns a channel of decoded events.
-func (c *Client) Events() <-chan interface{} {
+func (c *Client) Events() <-chan any {
 	return c.events
 }
 
@@ -148,7 +147,7 @@ func (c *Client) heartbeatLoop() {
 	}
 }
 
-func (c *Client) sendJSON(ctx context.Context, v interface{}) error {
+func (c *Client) sendJSON(ctx context.Context, v any) error {
 	data, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -167,7 +166,7 @@ func (c *Client) handleMessage(data []byte) {
 		return // Silently ignore non-JSON or malformed (might be PONG if missed earlier)
 	}
 
-	var event interface{}
+	var event any
 	switch base.EventType {
 	case EventTypeBook:
 		event = &BookEvent{}

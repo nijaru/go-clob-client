@@ -14,10 +14,11 @@ import (
 )
 
 const (
-	protocolName         = "Polymarket CTF Exchange"
-	protocolVersion      = "1"
-	collateralTokenScale = uint8(6)
+	protocolName    = "Polymarket CTF Exchange"
+	protocolVersion = "1"
 )
+
+var tokenScaleFactor = udecimal.MustFromInt64(1000000, 0) // 10^6
 
 var roundingConfig = map[TickSize]roundConfig{
 	TickSizeTenth:       {Price: 1, Size: 2, Amount: 3},
@@ -665,9 +666,7 @@ func decimalPlaces(value udecimal.Decimal) uint8 {
 }
 
 func toTokenDecimals(value udecimal.Decimal) udecimal.Decimal {
-	// 10^6
-	scale := udecimal.MustFromInt64(1000000, 0)
-	return value.Mul(scale).Trunc(0)
+	return value.Mul(tokenScaleFactor).Trunc(0)
 }
 
 func parseTickSize(value TickSize) (udecimal.Decimal, error) {

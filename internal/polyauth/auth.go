@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -68,8 +69,8 @@ func L1Headers(signer *Signer, chainID, timestamp, nonce int64) (map[string]stri
 	return map[string]string{
 		"POLY_ADDRESS":   signer.address.Hex(),
 		"POLY_SIGNATURE": signature,
-		"POLY_TIMESTAMP": fmt.Sprintf("%d", timestamp),
-		"POLY_NONCE":     fmt.Sprintf("%d", nonce),
+		"POLY_TIMESTAMP": strconv.FormatInt(timestamp, 10),
+		"POLY_NONCE":     strconv.FormatInt(nonce, 10),
 	}, nil
 }
 
@@ -88,7 +89,7 @@ func L2Headers(
 	return map[string]string{
 		"POLY_ADDRESS":    signer.address.Hex(),
 		"POLY_SIGNATURE":  signature,
-		"POLY_TIMESTAMP":  fmt.Sprintf("%d", timestamp),
+		"POLY_TIMESTAMP":  strconv.FormatInt(timestamp, 10),
 		"POLY_API_KEY":    key,
 		"POLY_PASSPHRASE": passphrase,
 	}, nil
@@ -108,7 +109,7 @@ func BuilderHeaders(
 	return map[string]string{
 		"POLY_BUILDER_API_KEY":    key,
 		"POLY_BUILDER_SIGNATURE":  signature,
-		"POLY_BUILDER_TIMESTAMP":  fmt.Sprintf("%d", timestamp),
+		"POLY_BUILDER_TIMESTAMP":  strconv.FormatInt(timestamp, 10),
 		"POLY_BUILDER_PASSPHRASE": passphrase,
 	}, nil
 }
@@ -208,8 +209,8 @@ func (s *Signer) signClobAuth(chainID, timestamp, nonce int64) (string, error) {
 		},
 		Message: apitypes.TypedDataMessage{
 			"address":   s.address.Hex(),
-			"timestamp": fmt.Sprintf("%d", timestamp),
-			"nonce":     fmt.Sprintf("%d", nonce),
+			"timestamp": strconv.FormatInt(timestamp, 10),
+			"nonce":     strconv.FormatInt(nonce, 10),
 			"message":   clobAuthMessage,
 		},
 	}
@@ -233,14 +234,12 @@ func HMACSignature(
 		}
 	}
 
-	message := fmt.Sprintf("%d%s%s", timestamp, method, requestPath)
-	if len(body) > 0 {
-		message += string(body)
-	}
-
 	mac := hmac.New(sha256.New, decoded)
-	if _, err := mac.Write([]byte(message)); err != nil {
-		return "", fmt.Errorf("write HMAC payload: %w", err)
+	mac.Write(strconv.AppendInt(nil, timestamp, 10))
+	mac.Write([]byte(method))
+	mac.Write([]byte(requestPath))
+	if len(body) > 0 {
+		mac.Write(body)
 	}
 
 	return base64.URLEncoding.EncodeToString(mac.Sum(nil)), nil
