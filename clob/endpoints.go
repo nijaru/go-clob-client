@@ -64,3 +64,12 @@ const (
 	rewardsMarketsCurrentEndpoint  = "/rewards/markets/current"
 	rewardsMarketsEndpoint         = "/rewards/markets/"
 )
+
+const (
+	rfqRequestEndpoint         = "/rfq/request"
+	rfqQuoteEndpoint           = "/rfq/quote"
+	rfqAcceptQuoteEndpoint     = "/rfq/accept"
+	rfqDataRequestsEndpoint    = "/rfq/data/requests"
+	rfqRequesterQuotesEndpoint = "/rfq/data/requester/quotes"
+	rfqQuoterQuotesEndpoint    = "/rfq/data/quoter/quotes"
+)
