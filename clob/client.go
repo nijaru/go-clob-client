@@ -3,7 +3,9 @@ package clob
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net/url"
+	"strconv"
 	"sync"
 	"time"
 
@@ -84,6 +86,24 @@ func New(config Config) (*Client, error) {
 	client.negRiskCache = make(map[string]bool)
 
 	return client, nil
+}
+
+// ClearTickSizeCache removes the cached tick size for a specific token.
+func (c *Client) ClearTickSizeCache(tokenID string) {
+	c.tickSizeMu.Lock()
+	delete(c.tickSizeCache, tokenID)
+	c.tickSizeMu.Unlock()
+}
+
+// ClearTickSizeCaches clears all cached tick sizes and negative risk flags.
+func (c *Client) ClearTickSizeCaches() {
+	c.tickSizeMu.Lock()
+	c.tickSizeCache = make(map[string]TickSize)
+	c.tickSizeMu.Unlock()
+
+	c.negRiskMu.Lock()
+	c.negRiskCache = make(map[string]bool)
+	c.negRiskMu.Unlock()
 }
 
 // Host returns the base CLOB API host for the client.
@@ -192,9 +212,7 @@ func (c *Client) addAuthHeaders(
 		if err != nil {
 			return nil, err
 		}
-		for key, value := range builderHeaders {
-			headers[key] = value
-		}
+		maps.Copy(headers, builderHeaders)
 		return headers, nil
 	default:
 		return nil, fmt.Errorf("unknown auth level %d", level)
@@ -348,7 +366,7 @@ func (c *Client) DeriveWSAuth(ctx context.Context) (WSAuth, error) {
 	return WSAuth{
 		Key:        creds.Key,
 		Passphrase: creds.Passphrase,
-		Timestamp:  fmt.Sprintf("%d", timestamp),
+		Timestamp:  strconv.FormatInt(timestamp, 10),
 		Signature:  signature,
 	}, nil
 }
