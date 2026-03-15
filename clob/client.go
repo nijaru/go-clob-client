@@ -26,6 +26,11 @@ type Client struct {
 	signatureType SignatureType
 	funderAddress string
 	saltGenerator func() (uint64, error)
+
+	tickSizeMu    sync.RWMutex
+	tickSizeCache map[string]TickSize
+	negRiskMu     sync.RWMutex
+	negRiskCache  map[string]bool
 }
 
 // New constructs a new Polymarket CLOB client from the provided config.
@@ -74,6 +79,9 @@ func New(config Config) (*Client, error) {
 		HTTPClient: config.HTTPClient,
 		UserAgent:  config.UserAgent,
 	}
+
+	client.tickSizeCache = make(map[string]TickSize)
+	client.negRiskCache = make(map[string]bool)
 
 	return client, nil
 }
@@ -317,4 +325,30 @@ func (c *Client) builderOnlyHeaders(
 		return nil, err
 	}
 	return c.builderHeaders(ctx, method, path, body, timestamp)
+}
+
+// DeriveWSAuth generates credentials for authenticated websocket subscriptions.
+func (c *Client) DeriveWSAuth(ctx context.Context) (WSAuth, error) {
+	creds := c.credentials()
+	if creds == nil {
+		return WSAuth{}, fmt.Errorf("derive ws auth requires API credentials")
+	}
+
+	timestamp, err := c.timestamp(ctx)
+	if err != nil {
+		return WSAuth{}, err
+	}
+
+	// For the WS user channel, we use GET /ws/user as the signing path
+	signature, err := polyauth.HMACSignature(creds.Secret, timestamp, "GET", "/ws/user", nil)
+	if err != nil {
+		return WSAuth{}, err
+	}
+
+	return WSAuth{
+		Key:        creds.Key,
+		Passphrase: creds.Passphrase,
+		Timestamp:  fmt.Sprintf("%d", timestamp),
+		Signature:  signature,
+	}, nil
 }
