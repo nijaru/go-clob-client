@@ -1,7 +1,7 @@
 package clob
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -18,7 +18,7 @@ func TestTypedAuthenticatedResponses(t *testing.T) {
 			cursor := r.URL.Query().Get("next_cursor")
 			switch cursor {
 			case initialCursor:
-				_ = json.NewEncoder(w).Encode(Page[OpenOrder]{
+				data, _ := json.Marshal(Page[OpenOrder]{
 					Limit:      1,
 					Count:      1,
 					NextCursor: "cursor-2",
@@ -40,8 +40,9 @@ func TestTypedAuthenticatedResponses(t *testing.T) {
 						OrderType:       "GTC",
 					}},
 				})
+				w.Write(data)
 			case "cursor-2":
-				_ = json.NewEncoder(w).Encode(Page[OpenOrder]{
+				data, _ := json.Marshal(Page[OpenOrder]{
 					Limit:      1,
 					Count:      1,
 					NextCursor: endCursor,
@@ -63,11 +64,12 @@ func TestTypedAuthenticatedResponses(t *testing.T) {
 						OrderType:       "GTC",
 					}},
 				})
+				w.Write(data)
 			default:
 				t.Fatalf("unexpected open orders cursor: %q", cursor)
 			}
 		case orderEndpoint + "order-1":
-			_ = json.NewEncoder(w).Encode(OpenOrder{
+			data, _ := json.Marshal(OpenOrder{
 				ID:           "order-1",
 				Status:       "LIVE",
 				Owner:        "api-key",
@@ -83,11 +85,12 @@ func TestTypedAuthenticatedResponses(t *testing.T) {
 				Expiration:   "0",
 				OrderType:    "GTC",
 			})
+			w.Write(data)
 		case tradesEndpoint:
 			cursor := r.URL.Query().Get("next_cursor")
 			switch cursor {
 			case initialCursor:
-				_ = json.NewEncoder(w).Encode(Page[Trade]{
+				data, _ := json.Marshal(Page[Trade]{
 					Limit:      1,
 					Count:      1,
 					NextCursor: "cursor-2",
@@ -122,8 +125,9 @@ func TestTypedAuthenticatedResponses(t *testing.T) {
 						TraderSide:      "TAKER",
 					}},
 				})
+				w.Write(data)
 			case "cursor-2":
-				_ = json.NewEncoder(w).Encode(Page[Trade]{
+				data, _ := json.Marshal(Page[Trade]{
 					Limit:      1,
 					Count:      1,
 					NextCursor: endCursor,
@@ -147,12 +151,13 @@ func TestTypedAuthenticatedResponses(t *testing.T) {
 						TraderSide:      "MAKER",
 					}},
 				})
+				w.Write(data)
 			default:
 				t.Fatalf("unexpected trades cursor: %q", cursor)
 			}
 		case postOrderEndpoint:
 			if r.Method == http.MethodPost {
-				_ = json.NewEncoder(w).Encode(PostOrderResponse{
+				data, _ := json.Marshal(PostOrderResponse{
 					Success:            true,
 					OrderID:            "order-1",
 					TransactionsHashes: []string{"0xhash"},
@@ -160,6 +165,7 @@ func TestTypedAuthenticatedResponses(t *testing.T) {
 					TakingAmount:       "10",
 					MakingAmount:       "4.5",
 				})
+				w.Write(data)
 				return
 			}
 

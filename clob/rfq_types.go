@@ -1,7 +1,7 @@
 package clob
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
 	"fmt"
 	"strconv"
 
@@ -158,13 +158,13 @@ func (r ApproveRFQOrderRequest) MarshalJSON() ([]byte, error) {
 // RFQRequestResponse is the response for creating an RFQ request.
 type RFQRequestResponse struct {
 	RequestID string `json:"requestId"`
-	Error     string `json:"error,omitempty"`
+	Error     string `json:"error,omitzero"`
 }
 
 // RFQQuoteResponse is the response for creating an RFQ quote.
 type RFQQuoteResponse struct {
 	QuoteID string `json:"quoteId"`
-	Error   string `json:"error,omitempty"`
+	Error   string `json:"error,omitzero"`
 }
 
 // RFQRequestsResponse is the response for listing RFQ requests.
@@ -175,17 +175,17 @@ type RFQQuotesResponse Page[RFQQuote]
 
 // RFQRequestFilterParams contains the filters for listing RFQ requests.
 type RFQRequestFilterParams struct {
-	Limit      int      `url:"limit,omitempty"`
-	Offset     string   `url:"offset,omitempty"`
-	State      string   `url:"state,omitempty"`
-	RequestIDs []string `url:"requestIds,omitempty"`
-	Markets    []string `url:"markets,omitempty"`
+	Limit      int      `url:"limit,omitzero"`
+	Offset     string   `url:"offset,omitzero"`
+	State      string   `url:"state,omitzero"`
+	RequestIDs []string `url:"requestIds,omitzero"`
+	Markets    []string `url:"markets,omitzero"`
 }
 
 // RFQQuoteFilterParams contains the filters for listing RFQ quotes.
 type RFQQuoteFilterParams struct {
-	Limit      int      `url:"limit,omitempty"`
-	Offset     string   `url:"offset,omitempty"`
-	RequestIDs []string `url:"requestIds,omitempty"`
-	QuoteIDs   []string `url:"quoteIds,omitempty"`
+	Limit      int      `url:"limit,omitzero"`
+	Offset     string   `url:"offset,omitzero"`
+	RequestIDs []string `url:"requestIds,omitzero"`
+	QuoteIDs   []string `url:"quoteIds,omitzero"`
 }

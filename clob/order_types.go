@@ -1,7 +1,7 @@
 package clob
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
 	"fmt"
 	"strconv"
 
@@ -133,7 +133,7 @@ type Trade struct {
 	MakerOrders     []MakerOrder `json:"maker_orders"`
 	TransactionHash string       `json:"transaction_hash"`
 	TraderSide      string       `json:"trader_side"`
-	ErrorMsg        string       `json:"error_msg,omitempty"`
+	ErrorMsg        string       `json:"error_msg,omitzero"`
 }
 
 // OrderArgs contains the inputs for building a limit order.
@@ -220,7 +220,7 @@ func (o SignedOrder) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON handles the diverse salt format from the API.
 func (o *SignedOrder) UnmarshalJSON(data []byte) error {
 	type wireSignedOrder struct {
-		Salt          json.Number   `json:"salt"`
+		Salt          any           `json:"salt"`
 		Maker         string        `json:"maker"`
 		Signer        string        `json:"signer"`
 		Taker         string        `json:"taker"`
@@ -240,7 +240,7 @@ func (o *SignedOrder) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	o.Salt = decoded.Salt.String()
+	o.Salt = fmt.Sprint(decoded.Salt)
 	o.Maker = decoded.Maker
 	o.Signer = decoded.Signer
 	o.Taker = decoded.Taker
@@ -262,7 +262,7 @@ type PostOrderRequest struct {
 	Owner     string      `json:"owner"`
 	OrderType OrderType   `json:"orderType"`
 	DeferExec bool        `json:"deferExec"`
-	PostOnly  bool        `json:"postOnly,omitempty"`
+	PostOnly  bool        `json:"postOnly,omitzero"`
 }
 
 // OpenOrderParams filters authenticated open-order queries.

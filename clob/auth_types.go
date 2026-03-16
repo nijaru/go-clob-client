@@ -121,6 +121,6 @@ type OrdersScoringResponse map[string]bool
 
 // CancelMarketOrdersRequest scopes cancelation to a market and/or asset.
 type CancelMarketOrdersRequest struct {
-	Market  string `json:"market,omitempty"`
-	AssetID string `json:"asset_id,omitempty"`
+	Market  string `json:"market,omitzero"`
+	AssetID string `json:"asset_id,omitzero"`
 }

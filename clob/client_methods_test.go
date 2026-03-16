@@ -1,7 +1,7 @@
 package clob
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,7 +12,8 @@ func TestSetCredentials(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode([]Notification{})
+		data, _ := json.Marshal([]Notification{})
+		w.Write(data)
 	}))
 	defer server.Close()
 

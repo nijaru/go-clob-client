@@ -89,7 +89,7 @@ type OrderEvent struct {
 	Size      string      `json:"size"`
 	Side      clob.Side   `json:"side"`
 	Status    OrderStatus `json:"status"`
-	Reason    string      `json:"reason,omitempty"`
+	Reason    string      `json:"reason,omitzero"`
 	Timestamp string      `json:"timestamp"`
 }
 

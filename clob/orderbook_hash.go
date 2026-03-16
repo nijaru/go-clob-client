@@ -3,7 +3,7 @@ package clob
 import (
 	"crypto/sha1"
 	"encoding/hex"
-	"encoding/json"
+	json "encoding/json/v2"
 )
 
 // Field order must match Python SDK for hash compatibility.

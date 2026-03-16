@@ -46,8 +46,7 @@ func (c *Client) CreateOrDeriveAPIKey(ctx context.Context, nonce int64) (*Creden
 		return creds, nil
 	}
 
-	var apiErr *APIError
-	if errors.As(err, &apiErr) {
+	if apiErr, ok := errors.AsType[*APIError](err); ok {
 		// If the error indicates the key already exists (400 or 409), fall back to derivation.
 		if apiErr.StatusCode == 400 || apiErr.StatusCode == 409 {
 			return c.DeriveAPIKey(ctx, nonce)

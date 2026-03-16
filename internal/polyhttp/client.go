@@ -3,7 +3,8 @@ package polyhttp
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	json "encoding/json/v2"
 	"fmt"
 	"io"
 	"net/http"
@@ -44,9 +45,9 @@ type APIError struct {
 
 func (e *APIError) Error() string {
 	if e.Message == "" {
-		return fmt.Sprintf("polymarket API error: status %d", e.StatusCode)
+		return fmt.Errorf("polymarket API error: status %d", e.StatusCode).Error()
 	}
-	return fmt.Sprintf("polymarket API error: status %d: %s", e.StatusCode, e.Message)
+	return fmt.Errorf("polymarket API error: status %d: %s", e.StatusCode, e.Message).Error()
 }
 
 func (c *Client) GetJSON(
@@ -191,7 +192,7 @@ func (c *Client) doJSON(
 		return nil
 	}
 
-	if value, ok := out.(*json.RawMessage); ok {
+	if value, ok := out.(*jsontext.Value); ok {
 		*value = append((*value)[:0], payload...)
 		return nil
 	}

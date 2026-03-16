@@ -1,7 +1,8 @@
 package clob
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -27,6 +28,7 @@ func TestTypedMarketPricingSurfaces(t *testing.T) {
 	defer geoblockServer.Close()
 
 	clobServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var books []BookParams
 		w.Header().Set("Content-Type", "application/json")
 
 		switch r.Method + " " + r.URL.Path {
@@ -36,8 +38,8 @@ func TestTypedMarketPricingSurfaces(t *testing.T) {
 			}
 			_, _ = w.Write([]byte(`{"mid":"0.50"}`))
 		case http.MethodPost + " " + midpointsEndpoint:
-			var books []BookParams
-			if err := json.NewDecoder(r.Body).Decode(&books); err != nil {
+			body, _ := io.ReadAll(r.Body)
+			if err := json.Unmarshal(body, &books); err != nil {
 				t.Fatalf("decode midpoints request: %v", err)
 			}
 			if len(books) != 2 || books[0].TokenID != "123" || books[1].TokenID != "456" {
@@ -53,8 +55,8 @@ func TestTypedMarketPricingSurfaces(t *testing.T) {
 			}
 			_, _ = w.Write([]byte(`{"price":"0.41"}`))
 		case http.MethodPost + " " + pricesEndpoint:
-			var books []BookParams
-			if err := json.NewDecoder(r.Body).Decode(&books); err != nil {
+			body, _ := io.ReadAll(r.Body)
+			if err := json.Unmarshal(body, &books); err != nil {
 				t.Fatalf("decode prices request: %v", err)
 			}
 			if len(books) != 1 || books[0].TokenID != "123" {
@@ -72,8 +74,8 @@ func TestTypedMarketPricingSurfaces(t *testing.T) {
 			}
 			_, _ = w.Write([]byte(`{"spread":"0.18"}`))
 		case http.MethodPost + " " + spreadsEndpoint:
-			var books []BookParams
-			if err := json.NewDecoder(r.Body).Decode(&books); err != nil {
+			body, _ := io.ReadAll(r.Body)
+			if err := json.Unmarshal(body, &books); err != nil {
 				t.Fatalf("decode spreads request: %v", err)
 			}
 			if len(books) != 1 || books[0].TokenID != "123" {
@@ -86,8 +88,8 @@ func TestTypedMarketPricingSurfaces(t *testing.T) {
 			}
 			_, _ = w.Write([]byte(`{"price":"0.55","side":"BUY"}`))
 		case http.MethodPost + " " + lastTradesPricesEndpoint:
-			var books []BookParams
-			if err := json.NewDecoder(r.Body).Decode(&books); err != nil {
+			body, _ := io.ReadAll(r.Body)
+			if err := json.Unmarshal(body, &books); err != nil {
 				t.Fatalf("decode last trades request: %v", err)
 			}
 			if len(books) != 1 || books[0].TokenID != "123" {

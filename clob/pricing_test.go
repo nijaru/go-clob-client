@@ -1,7 +1,7 @@
 package clob
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -31,7 +31,13 @@ func TestCalculateMarketPriceBuyFOK(t *testing.T) {
 	ctx := t.Context()
 
 	// amount=5: 10*0.4=4 < 5, next: 4+20*0.45=13 >= 5, return 0.45
-	price, err := client.CalculateMarketPrice(ctx, "tok", SideBuy, udecimal.MustParse("5"), OrderTypeFOK)
+	price, err := client.CalculateMarketPrice(
+		ctx,
+		"tok",
+		SideBuy,
+		udecimal.MustParse("5"),
+		OrderTypeFOK,
+	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -40,7 +46,13 @@ func TestCalculateMarketPriceBuyFOK(t *testing.T) {
 	}
 
 	// amount=20: 4 < 20, 4+9=13 < 20, 13+30*0.5=28 >= 20, return 0.50
-	price, err = client.CalculateMarketPrice(ctx, "tok", SideBuy, udecimal.MustParse("20"), OrderTypeFOK)
+	price, err = client.CalculateMarketPrice(
+		ctx,
+		"tok",
+		SideBuy,
+		udecimal.MustParse("20"),
+		OrderTypeFOK,
+	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -64,7 +76,13 @@ func TestCalculateMarketPriceSellFOK(t *testing.T) {
 	ctx := t.Context()
 
 	// amount=10: 15 >= 10 (best bid 0.35), return 0.35
-	price, err := client.CalculateMarketPrice(ctx, "tok", SideSell, udecimal.MustParse("10"), OrderTypeFOK)
+	price, err := client.CalculateMarketPrice(
+		ctx,
+		"tok",
+		SideSell,
+		udecimal.MustParse("10"),
+		OrderTypeFOK,
+	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -73,7 +91,13 @@ func TestCalculateMarketPriceSellFOK(t *testing.T) {
 	}
 
 	// amount=30: 15 < 30, 15+25=40 >= 30, return 0.30
-	price, err = client.CalculateMarketPrice(ctx, "tok", SideSell, udecimal.MustParse("30"), OrderTypeFOK)
+	price, err = client.CalculateMarketPrice(
+		ctx,
+		"tok",
+		SideSell,
+		udecimal.MustParse("30"),
+		OrderTypeFOK,
+	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -96,13 +120,25 @@ func TestCalculateMarketPriceInsufficientLiquidity(t *testing.T) {
 	ctx := t.Context()
 
 	// FOK: should fail when total < amount
-	_, err := client.CalculateMarketPrice(ctx, "tok", SideBuy, udecimal.MustParse("100"), OrderTypeFOK)
+	_, err := client.CalculateMarketPrice(
+		ctx,
+		"tok",
+		SideBuy,
+		udecimal.MustParse("100"),
+		OrderTypeFOK,
+	)
 	if err == nil {
 		t.Fatal("FOK should fail with insufficient liquidity")
 	}
 
 	// GTC: should return worst available price (first element)
-	price, err := client.CalculateMarketPrice(ctx, "tok", SideBuy, udecimal.MustParse("100"), OrderTypeGTC)
+	price, err := client.CalculateMarketPrice(
+		ctx,
+		"tok",
+		SideBuy,
+		udecimal.MustParse("100"),
+		OrderTypeGTC,
+	)
 	if err != nil {
 		t.Fatalf("GTC should not fail: %v", err)
 	}
@@ -128,7 +164,13 @@ func TestCalculateMarketPriceEdgeCases(t *testing.T) {
 
 	// Exact match: amount equals level size * price
 	// 10 * 0.50 = 5, amount=5 should return 0.50
-	price, err := client.CalculateMarketPrice(ctx, "tok", SideBuy, udecimal.MustParse("5"), OrderTypeFOK)
+	price, err := client.CalculateMarketPrice(
+		ctx,
+		"tok",
+		SideBuy,
+		udecimal.MustParse("5"),
+		OrderTypeFOK,
+	)
 	if err != nil {
 		t.Fatalf("exact match: %v", err)
 	}
@@ -141,11 +183,12 @@ func newOrderBookServer(t *testing.T, asks, bids []OrderSummary) *httptest.Serve
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(OrderBookSummary{
+		data, _ := json.Marshal(OrderBookSummary{
 			Market:  "test",
 			AssetID: "tok",
 			Asks:    asks,
 			Bids:    bids,
 		})
+		w.Write(data)
 	}))
 }

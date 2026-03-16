@@ -8,7 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
+	json "encoding/json/v2"
 	"fmt"
 	"io"
 	"net/http"
@@ -26,6 +26,14 @@ const clobAuthMessage = "This message attests that I control the given wallet"
 type Signer struct {
 	key     *ecdsa.PrivateKey
 	address common.Address
+}
+
+func GenerateKey() (string, error) {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(crypto.FromECDSA(key)), nil
 }
 
 func ParsePrivateKey(raw string) (*Signer, error) {

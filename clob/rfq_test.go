@@ -1,7 +1,8 @@
 package clob
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	json "encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -40,7 +41,7 @@ func TestAcceptRFQQuoteMarshalJSON(t *testing.T) {
 	}
 
 	// Verify salt and expiration are JSON numbers, not strings
-	var raw map[string]json.RawMessage
+	var raw map[string]jsontext.Value
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("unmarshal raw: %v", err)
 	}
@@ -88,7 +89,7 @@ func TestApproveRFQOrderMarshalJSON(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 
-	var raw map[string]json.RawMessage
+	var raw map[string]jsontext.Value
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("unmarshal raw: %v", err)
 	}
@@ -152,9 +153,10 @@ func TestRFQSurfaces(t *testing.T) {
 		switch r.URL.Path {
 		case rfqRequestEndpoint:
 			if r.Method == http.MethodPost {
-				_ = json.NewEncoder(w).Encode(RFQRequestResponse{
+				data, _ := json.Marshal(RFQRequestResponse{
 					RequestID: "rfq-1",
 				})
+				w.Write(data)
 				return
 			}
 			if r.Method == http.MethodDelete {
@@ -162,16 +164,18 @@ func TestRFQSurfaces(t *testing.T) {
 				return
 			}
 		case rfqDataRequestsEndpoint:
-			_ = json.NewEncoder(w).Encode(RFQRequestsResponse{
+			data, _ := json.Marshal(RFQRequestsResponse{
 				Data: []RFQRequest{
 					{ID: "rfq-1", State: "active"},
 				},
 			})
+			w.Write(data)
 		case rfqQuoteEndpoint:
 			if r.Method == http.MethodPost {
-				_ = json.NewEncoder(w).Encode(RFQQuoteResponse{
+				data, _ := json.Marshal(RFQQuoteResponse{
 					QuoteID: "quote-1",
 				})
+				w.Write(data)
 				return
 			}
 			if r.Method == http.MethodDelete {
@@ -179,16 +183,18 @@ func TestRFQSurfaces(t *testing.T) {
 				return
 			}
 		case rfqRequestAcceptEndpoint:
-			_ = json.NewEncoder(w).Encode(AcceptRFQQuoteResponse{
+			data, _ := json.Marshal(AcceptRFQQuoteResponse{
 				TradeIDs: []string{"trade-1"},
 			})
+			w.Write(data)
 		case rfqQuoteApproveEndpoint:
 			w.WriteHeader(http.StatusOK)
 		case rfqBestQuoteEndpoint:
-			_ = json.NewEncoder(w).Encode(RFQQuote{
+			data, _ := json.Marshal(RFQQuote{
 				ID:        "quote-1",
 				RequestID: "rfq-1",
 			})
+			w.Write(data)
 		default:
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}

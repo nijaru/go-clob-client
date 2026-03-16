@@ -2,7 +2,7 @@ package clob
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
 	"net/url"
 	"strconv"
 
@@ -174,8 +174,8 @@ func (c *Client) ApproveRFQOrder(ctx context.Context, params ApproveRFQOrderRequ
 
 // GetRFQConfig retrieves the current RFQ configuration.
 // Level 2 Auth required.
-func (c *Client) GetRFQConfig(ctx context.Context) (json.RawMessage, error) {
-	var resp json.RawMessage
+func (c *Client) GetRFQConfig(ctx context.Context) (jsontext.Value, error) {
+	var resp jsontext.Value
 	if err := c.getJSON(ctx, rfqConfigEndpoint, nil, polyhttp.AuthL2, &resp); err != nil {
 		return nil, err
 	}

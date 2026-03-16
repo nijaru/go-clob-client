@@ -4,7 +4,8 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
+	json "encoding/json/v2"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -67,7 +68,8 @@ func TestRemoteBuilderAuthHeaders(t *testing.T) {
 			Body      string `json:"body"`
 			Timestamp int64  `json:"timestamp"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		body, _ := io.ReadAll(r.Body)
+		if err := json.Unmarshal(body, &payload); err != nil {
 			t.Fatalf("decode payload: %v", err)
 		}
 		if payload.Method != http.MethodGet || payload.Path != builderTradesEndpoint {
@@ -152,7 +154,8 @@ func TestBuilderAndHeartbeatEndpoints(t *testing.T) {
 			if r.Header.Get("POLY_TIMESTAMP") != r.Header.Get("POLY_BUILDER_TIMESTAMP") {
 				t.Fatalf("expected builder and L2 timestamps to match")
 			}
-			_ = json.NewEncoder(w).Encode(OpenOrder{ID: "order-1"})
+			data, _ := json.Marshal(OpenOrder{ID: "order-1"})
+			w.Write(data)
 		case http.MethodPost + " " + createBuilderAPIKeyEndpoint:
 			if r.Header.Get("POLY_API_KEY") != "api-key" {
 				t.Fatalf("missing L2 api key header on create builder key")
@@ -234,7 +237,8 @@ func TestBuilderAndHeartbeatEndpoints(t *testing.T) {
 			}
 
 			var payload map[string]*string
-			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			body, _ := io.ReadAll(r.Body)
+			if err := json.Unmarshal(body, &payload); err != nil {
 				t.Fatalf("decode heartbeat payload: %v", err)
 			}
 			if payload["heartbeat_id"] == nil {

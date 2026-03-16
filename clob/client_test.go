@@ -1,7 +1,7 @@
 package clob
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -18,7 +18,7 @@ func TestGetOrderBook(t *testing.T) {
 			t.Fatalf("unexpected token_id: %s", got)
 		}
 
-		_ = json.NewEncoder(w).Encode(OrderBookSummary{
+		data, _ := json.Marshal(OrderBookSummary{
 			Market:         "market-1",
 			AssetID:        "123",
 			Timestamp:      "1710000000",
@@ -30,6 +30,7 @@ func TestGetOrderBook(t *testing.T) {
 			LastTradePrice: "0.50",
 			Hash:           "abc",
 		})
+		w.Write(data)
 	}))
 	defer server.Close()
 
@@ -58,11 +59,12 @@ func TestCreateOrDeriveAPIKeyFallsBackToDerive(t *testing.T) {
 		case createAPIKeyEndpoint:
 			http.Error(w, `{"error":"exists"}`, http.StatusConflict)
 		case deriveAPIKeyEndpoint:
-			_ = json.NewEncoder(w).Encode(apiKeyRaw{
+			data, _ := json.Marshal(apiKeyRaw{
 				APIKey:     "key",
 				Secret:     "c2VjcmV0",
 				Passphrase: "pass",
 			})
+			w.Write(data)
 		default:
 			http.NotFound(w, r)
 		}

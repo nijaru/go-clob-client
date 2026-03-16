@@ -28,8 +28,8 @@ type RemoteBuilderAuthConfig struct {
 // BuilderAPIKey is the metadata returned when listing builder API keys.
 type BuilderAPIKey struct {
 	Key       string `json:"key"`
-	CreatedAt string `json:"createdAt,omitempty"`
-	RevokedAt string `json:"revokedAt,omitempty"`
+	CreatedAt string `json:"createdAt,omitzero"`
+	RevokedAt string `json:"revokedAt,omitzero"`
 }
 
 // BuilderTrade is a builder-specific trade record.
@@ -48,20 +48,20 @@ type BuilderTrade struct {
 	Outcome         string `json:"outcome"`
 	OutcomeIndex    int64  `json:"outcomeIndex"`
 	RequestID       string `json:"requestId"`
-	Error           string `json:"error,omitempty"`
-	Owner           string `json:"owner,omitempty"`
-	Maker           string `json:"maker,omitempty"`
-	TransactionHash string `json:"transactionHash,omitempty"`
-	MatchTime       string `json:"matchTime,omitempty"`
-	BucketIndex     int64  `json:"bucketIndex,omitempty"`
-	Fee             string `json:"fee,omitempty"`
-	FeeUSDC         string `json:"feeUsdc,omitempty"`
-	CreatedAt       string `json:"createdAt,omitempty"`
-	UpdatedAt       string `json:"updatedAt,omitempty"`
+	Error           string `json:"error,omitzero"`
+	Owner           string `json:"owner,omitzero"`
+	Maker           string `json:"maker,omitzero"`
+	TransactionHash string `json:"transactionHash,omitzero"`
+	MatchTime       string `json:"matchTime,omitzero"`
+	BucketIndex     int64  `json:"bucketIndex,omitzero"`
+	Fee             string `json:"fee,omitzero"`
+	FeeUSDC         string `json:"feeUsdc,omitzero"`
+	CreatedAt       string `json:"createdAt,omitzero"`
+	UpdatedAt       string `json:"updatedAt,omitzero"`
 }
 
 // HeartbeatResponse is the response payload from posting a heartbeat.
 type HeartbeatResponse struct {
 	HeartbeatID string `json:"heartbeat_id"`
-	Error       string `json:"error,omitempty"`
+	Error       string `json:"error,omitzero"`
 }

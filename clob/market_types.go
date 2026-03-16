@@ -69,7 +69,7 @@ type Rewards struct {
 // Side is optional; when set it filters price results to the specified side.
 type BookParams struct {
 	TokenID string `json:"token_id"`
-	Side    Side   `json:"side,omitempty"`
+	Side    Side   `json:"side,omitzero"`
 }
 
 // OrderSummary is a single order book level.

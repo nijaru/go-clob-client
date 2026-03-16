@@ -1,7 +1,7 @@
 package clob
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -192,7 +192,8 @@ func TestTypedAuthenticatedSurfaces(t *testing.T) {
 			_, _ = w.Write([]byte(`["readonly-1","readonly-2"]`))
 		case http.MethodDelete + " " + deleteReadonlyAPIKeyEndpoint:
 			var payload DeleteReadonlyAPIKeyRequest
-			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			body, _ := io.ReadAll(r.Body)
+			if err := json.Unmarshal(body, &payload); err != nil {
 				t.Fatalf("decode readonly delete payload: %v", err)
 			}
 			if payload.Key != "readonly-1" {
@@ -269,7 +270,8 @@ func TestTypedAuthenticatedSurfaces(t *testing.T) {
 			_, _ = w.Write([]byte(`{"order-1":true,"order-2":false}`))
 		case http.MethodDelete + " " + cancelMarketOrdersEndpoint:
 			var payload CancelMarketOrdersRequest
-			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			body, _ := io.ReadAll(r.Body)
+			if err := json.Unmarshal(body, &payload); err != nil {
 				t.Fatalf("decode cancel market payload: %v", err)
 			}
 			if payload.Market != "cond-1" || payload.AssetID != "123" {
