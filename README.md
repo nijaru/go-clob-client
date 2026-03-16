@@ -1,18 +1,14 @@
 # go-clob-client
 
-> [!WARNING]
-> In development. This SDK is usable for core CLOB flows, but it is not yet feature-complete or at parity with the official TypeScript, Python, or Rust SDKs.
+> [!NOTE]
+> This SDK is feature-complete for the core CLOB flows (including RFQ and WebSockets) and market metadata (Gamma). Use with confidence for building Polymarket applications in Go.
 
 Go SDK for the Polymarket CLOB.
 
-## Status
-
-- Read-only health, market, orderbook, price history, and live-activity queries work.
-- Typed read-only pricing helpers now cover midpoint, price, spread, last-trade, all-prices, and geoblock checks.
-- API key bootstrap, readonly API key management, paginated authenticated orders/trades, and authenticated REST calls work.
-- Typed limit and market order construction/signing now have deterministic fixture coverage.
-- Builder auth, builder API key management, builder trades, and heartbeats are supported.
-- Full parity, RFQ, streaming, and non-CLOB packages are still in progress.
+- Full parity for CLOB endpoints (REST + WS) including RFQ.
+- Gamma implemented for market discovery and metadata.
+- Data implemented for user analytics and leaderboards.
+- Bridge and CTF packages implemented for cross-chain and on-chain operations.
 
 If you need complete Polymarket SDK coverage today, use an official SDK. If you want a Go-native client that is actively moving toward parity, this repo is meant for that.
 
@@ -20,6 +16,9 @@ If you need complete Polymarket SDK coverage today, use an official SDK. If you 
 
 ```bash
 go get github.com/nijaru/go-clob-client/clob
+go get github.com/nijaru/go-clob-client/gamma
+go get github.com/nijaru/go-clob-client/data
+go get github.com/nijaru/go-clob-client/bridge
 ```
 
 Import path:
@@ -129,12 +128,12 @@ Available now:
 - paginated authenticated order and trade helpers plus flattened convenience methods
 - typed limit and market order construction/signing
 - order posting, cancel flows, balance/allowance, notifications, scoring, rewards, builder-key, builder-trade, and heartbeat flows
-
-Still incomplete:
-
-- parity coverage is still behind the official SDKs
-- Go doc coverage is still sparse, so the README and examples are the best entry points today
-- streaming, RFQ, and non-CLOB packages are not implemented yet
+- RFQ API surface parity with TypeScript SDK
+- WebSocket streaming (market and user channels) in `clob/ws`
+- Market discovery and metadata in `gamma/`
+- User positions, trades, and leaderboards in `data/`
+- Cross-chain deposits and withdrawals in `bridge/`
+- On-chain split, merge, and redeem operations in `clob/` (CTF)
 
 ## Trading Notes
 
@@ -147,7 +146,7 @@ In practice:
 - authenticated orders and trades now expose explicit page helpers and flattened convenience methods
 - builder auth can be layered onto the same client when you need builder headers or builder-only endpoints
 - market-order and proxy/funder behavior now has deterministic fixture coverage
-- broader endpoint parity is still in progress
+- full feature parity with TypeScript SDK v5.8.0
 
 ## Examples
 
@@ -155,6 +154,11 @@ In practice:
 - `examples/clob/auth_bootstrap/main.go`
 - `examples/clob/limit_order/main.go`
 - `examples/clob/market_order/main.go`
+- `examples/ws/main.go`
+- `examples/gamma/main.go`
+- `examples/data/main.go`
+- `examples/bridge/main.go`
+- `examples/clob/ctf_operations/main.go`
 
 ## Versioning and Parity Goals
 
@@ -166,15 +170,17 @@ The goal of this repo is to track the official SDKs over time while keeping the 
 
 The next major milestones are:
 
-- `clob/ws` websocket streaming for CLOB market and user channels
-- RFQ coverage to match the official SDK surface more closely
-- a parity/polish sweep across caches, auth/transport semantics, godoc, and examples
+- Release v1.0 stabilization and full API audit
+- Performance profiling and optimization
 
 ## Project Structure
 
 User-facing packages:
 
-- `clob/` for the CLOB SDK
+- `clob/` for the CLOB SDK (including CTF)
+- `gamma/` for market discovery and metadata
+- `data/` for user positions and leaderboards
+- `bridge/` for cross-chain transfers
 
 Internal shared packages:
 
