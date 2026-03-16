@@ -1,7 +1,6 @@
 package clob
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -129,7 +128,7 @@ func TestTypedReadOnlySurfaces(t *testing.T) {
 		t.Fatalf("new client: %v", err)
 	}
 
-	health, err := client.GetOk(context.Background())
+	health, err := client.GetOk(t.Context())
 	if err != nil {
 		t.Fatalf("get ok check: %v", err)
 	}
@@ -137,7 +136,7 @@ func TestTypedReadOnlySurfaces(t *testing.T) {
 		t.Fatalf("unexpected health: %q", health)
 	}
 
-	market, err := client.GetMarket(context.Background(), "cond-1")
+	market, err := client.GetMarket(t.Context(), "cond-1")
 	if err != nil {
 		t.Fatalf("get market: %v", err)
 	}
@@ -145,7 +144,7 @@ func TestTypedReadOnlySurfaces(t *testing.T) {
 		t.Fatalf("unexpected market question: %s", market.Question)
 	}
 
-	page, err := client.GetMarketsPage(context.Background(), "")
+	page, err := client.GetMarketsPage(t.Context(), "")
 	if err != nil {
 		t.Fatalf("get markets page: %v", err)
 	}
@@ -153,7 +152,7 @@ func TestTypedReadOnlySurfaces(t *testing.T) {
 		t.Fatalf("unexpected market page: %+v", page)
 	}
 
-	history, err := client.GetPricesHistory(context.Background(), PriceHistoryFilterParams{
+	history, err := client.GetPricesHistory(t.Context(), PriceHistoryFilterParams{
 		Market:   "123",
 		Interval: PriceHistoryIntervalOneDay,
 	})
@@ -164,7 +163,7 @@ func TestTypedReadOnlySurfaces(t *testing.T) {
 		t.Fatalf("unexpected price history: %+v", history)
 	}
 
-	events, err := client.GetMarketTradesEvents(context.Background(), "cond-1")
+	events, err := client.GetMarketTradesEvents(t.Context(), "cond-1")
 	if err != nil {
 		t.Fatalf("get market trade events: %v", err)
 	}
@@ -374,31 +373,31 @@ func TestTypedAuthenticatedSurfaces(t *testing.T) {
 		t.Fatalf("new client: %v", err)
 	}
 
-	readonly, err := client.CreateReadonlyAPIKey(context.Background())
+	readonly, err := client.CreateReadonlyAPIKey(t.Context())
 	if err != nil || readonly.APIKey != "readonly-1" {
 		t.Fatalf("create readonly api key: %+v %v", readonly, err)
 	}
 
-	readonlyKeys, err := client.GetReadonlyAPIKeys(context.Background())
+	readonlyKeys, err := client.GetReadonlyAPIKeys(t.Context())
 	if err != nil || len(readonlyKeys) != 2 {
 		t.Fatalf("get readonly api keys: %+v %v", readonlyKeys, err)
 	}
 
-	deleted, err := client.DeleteReadonlyAPIKey(context.Background(), "readonly-1")
+	deleted, err := client.DeleteReadonlyAPIKey(t.Context(), "readonly-1")
 	if err != nil || !deleted {
 		t.Fatalf("delete readonly api key: %v %v", deleted, err)
 	}
 
-	notifications, err := client.GetNotifications(context.Background())
+	notifications, err := client.GetNotifications(t.Context())
 	if err != nil || len(notifications) != 1 {
 		t.Fatalf("get notifications: %+v %v", notifications, err)
 	}
 
-	if err := client.DeleteNotifications(context.Background(), DeleteNotificationsParams{IDs: []string{"n1", "n2"}}); err != nil {
+	if err := client.DeleteNotifications(t.Context(), DeleteNotificationsParams{IDs: []string{"n1", "n2"}}); err != nil {
 		t.Fatalf("delete notifications: %v", err)
 	}
 
-	allowance, err := client.GetBalanceAllowance(context.Background(), BalanceAllowanceParams{
+	allowance, err := client.GetBalanceAllowance(t.Context(), BalanceAllowanceParams{
 		AssetType: AssetTypeConditional,
 		TokenID:   "123",
 	})
@@ -406,7 +405,7 @@ func TestTypedAuthenticatedSurfaces(t *testing.T) {
 		t.Fatalf("get balance allowance: %+v %v", allowance, err)
 	}
 
-	if err := client.UpdateBalanceAllowance(context.Background(), BalanceAllowanceParams{
+	if err := client.UpdateBalanceAllowance(t.Context(), BalanceAllowanceParams{
 		AssetType: AssetTypeConditional,
 		TokenID:   "123",
 	}); err != nil {
@@ -414,21 +413,21 @@ func TestTypedAuthenticatedSurfaces(t *testing.T) {
 	}
 
 	scoring, err := client.IsOrderScoring(
-		context.Background(),
+		t.Context(),
 		OrderScoringParams{OrderID: "order-1"},
 	)
 	if err != nil || !scoring.Scoring {
 		t.Fatalf("is order scoring: %+v %v", scoring, err)
 	}
 
-	ordersScoring, err := client.AreOrdersScoring(context.Background(), OrdersScoringParams{
+	ordersScoring, err := client.AreOrdersScoring(t.Context(), OrdersScoringParams{
 		OrderIDs: []string{"order-1", "order-2"},
 	})
 	if err != nil || !ordersScoring["order-1"] || ordersScoring["order-2"] {
 		t.Fatalf("are orders scoring: %+v %v", ordersScoring, err)
 	}
 
-	cancelled, err := client.CancelMarketOrders(context.Background(), CancelMarketOrdersRequest{
+	cancelled, err := client.CancelMarketOrders(t.Context(), CancelMarketOrdersRequest{
 		Market:  "cond-1",
 		AssetID: "123",
 	})
@@ -436,48 +435,48 @@ func TestTypedAuthenticatedSurfaces(t *testing.T) {
 		t.Fatalf("cancel market orders: %+v %v", cancelled, err)
 	}
 
-	percentages, err := client.GetRewardPercentages(context.Background())
+	percentages, err := client.GetRewardPercentages(t.Context())
 	if err != nil || percentages["cond-1"] != "0.25" {
 		t.Fatalf("get reward percentages: %+v %v", percentages, err)
 	}
 
-	currentRewardsPage, err := client.GetCurrentRewardsPage(context.Background(), "")
+	currentRewardsPage, err := client.GetCurrentRewardsPage(t.Context(), "")
 	if err != nil || len(currentRewardsPage.Data) != 1 {
 		t.Fatalf("get current rewards page: %+v %v", currentRewardsPage, err)
 	}
 
-	currentRewards, err := client.GetCurrentRewards(context.Background())
+	currentRewards, err := client.GetCurrentRewards(t.Context())
 	if err != nil || len(currentRewards) != 1 {
 		t.Fatalf("get current rewards: %+v %v", currentRewards, err)
 	}
 
-	marketRewardsPage, err := client.GetRewardsForMarketPage(context.Background(), "cond-1", "")
+	marketRewardsPage, err := client.GetRewardsForMarketPage(t.Context(), "cond-1", "")
 	if err != nil || len(marketRewardsPage.Data) != 1 {
 		t.Fatalf("get rewards for market page: %+v %v", marketRewardsPage, err)
 	}
 
-	marketRewards, err := client.GetRewardsForMarket(context.Background(), "cond-1")
+	marketRewards, err := client.GetRewardsForMarket(t.Context(), "cond-1")
 	if err != nil || len(marketRewards) != 1 {
 		t.Fatalf("get rewards for market: %+v %v", marketRewards, err)
 	}
 
-	earningsPage, err := client.GetEarningsForUserForDayPage(context.Background(), "2026-03-12", "")
+	earningsPage, err := client.GetEarningsForUserForDayPage(t.Context(), "2026-03-12", "")
 	if err != nil || len(earningsPage.Data) != 1 {
 		t.Fatalf("get earnings for user page: %+v %v", earningsPage, err)
 	}
 
-	earnings, err := client.GetEarningsForUserForDay(context.Background(), "2026-03-12")
+	earnings, err := client.GetEarningsForUserForDay(t.Context(), "2026-03-12")
 	if err != nil || len(earnings) != 1 {
 		t.Fatalf("get earnings for user: %+v %v", earnings, err)
 	}
 
-	totalEarnings, err := client.GetTotalEarningsForUserForDay(context.Background(), "2026-03-12")
+	totalEarnings, err := client.GetTotalEarningsForUserForDay(t.Context(), "2026-03-12")
 	if err != nil || len(totalEarnings) != 1 {
 		t.Fatalf("get total earnings for user: %+v %v", totalEarnings, err)
 	}
 
 	userRewardsPage, err := client.GetUserEarningsAndMarketsConfigPage(
-		context.Background(),
+		t.Context(),
 		UserRewardsFilterParams{
 			Date:          "2026-03-12",
 			NoCompetition: true,
@@ -489,7 +488,7 @@ func TestTypedAuthenticatedSurfaces(t *testing.T) {
 	}
 
 	userRewards, err := client.GetUserEarningsAndMarketsConfig(
-		context.Background(),
+		t.Context(),
 		UserRewardsFilterParams{
 			Date:          "2026-03-12",
 			NoCompetition: true,
@@ -523,7 +522,7 @@ func TestValidateReadonlyAPIKeyUsesPublicEndpoint(t *testing.T) {
 		t.Fatalf("new client: %v", err)
 	}
 
-	result, err := client.ValidateReadonlyAPIKey(context.Background(), "0xabc", "readonly-1")
+	result, err := client.ValidateReadonlyAPIKey(t.Context(), "0xabc", "readonly-1")
 	if err != nil {
 		t.Fatalf("validate readonly api key: %v", err)
 	}

@@ -1,7 +1,6 @@
 package clob
 
 import (
-	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -20,7 +19,7 @@ func TestLocalBuilderAuthHeaders(t *testing.T) {
 		Passphrase: "builder-pass",
 	})
 
-	headers, err := auth.Headers(context.Background(), BuilderHeaderRequest{
+	headers, err := auth.Headers(t.Context(), BuilderHeaderRequest{
 		Method:    http.MethodPost,
 		Path:      postOrderEndpoint,
 		Body:      []byte(`{"order":"payload"}`),
@@ -95,7 +94,7 @@ func TestRemoteBuilderAuthHeaders(t *testing.T) {
 		t.Fatalf("new remote builder auth: %v", err)
 	}
 
-	headers, err := auth.Headers(context.Background(), BuilderHeaderRequest{
+	headers, err := auth.Headers(t.Context(), BuilderHeaderRequest{
 		Method:    http.MethodGet,
 		Path:      builderTradesEndpoint,
 		Timestamp: 1710000000,
@@ -270,11 +269,11 @@ func TestBuilderAndHeartbeatEndpoints(t *testing.T) {
 		t.Fatalf("new client: %v", err)
 	}
 
-	if _, err := client.GetOrder(context.Background(), "order-1"); err != nil {
+	if _, err := client.GetOrder(t.Context(), "order-1"); err != nil {
 		t.Fatalf("get order with builder headers: %v", err)
 	}
 
-	creds, err := client.CreateBuilderAPIKey(context.Background())
+	creds, err := client.CreateBuilderAPIKey(t.Context())
 	if err != nil {
 		t.Fatalf("create builder api key: %v", err)
 	}
@@ -282,7 +281,7 @@ func TestBuilderAndHeartbeatEndpoints(t *testing.T) {
 		t.Fatalf("unexpected builder creds: %+v", creds)
 	}
 
-	keys, err := client.GetBuilderAPIKeys(context.Background())
+	keys, err := client.GetBuilderAPIKeys(t.Context())
 	if err != nil {
 		t.Fatalf("get builder api keys: %v", err)
 	}
@@ -290,11 +289,11 @@ func TestBuilderAndHeartbeatEndpoints(t *testing.T) {
 		t.Fatalf("unexpected builder api keys: %+v", keys)
 	}
 
-	if err := client.RevokeBuilderAPIKey(context.Background()); err != nil {
+	if err := client.RevokeBuilderAPIKey(t.Context()); err != nil {
 		t.Fatalf("revoke builder api key: %v", err)
 	}
 
-	builderTradesPage, err := client.GetBuilderTradesPage(context.Background(), TradeParams{}, "")
+	builderTradesPage, err := client.GetBuilderTradesPage(t.Context(), TradeParams{}, "")
 	if err != nil {
 		t.Fatalf("get builder trades page: %v", err)
 	}
@@ -302,7 +301,7 @@ func TestBuilderAndHeartbeatEndpoints(t *testing.T) {
 		t.Fatalf("unexpected builder trades page: %+v", builderTradesPage)
 	}
 
-	builderTrades, err := client.GetBuilderTrades(context.Background(), TradeParams{})
+	builderTrades, err := client.GetBuilderTrades(t.Context(), TradeParams{})
 	if err != nil {
 		t.Fatalf("get builder trades: %v", err)
 	}
@@ -310,7 +309,7 @@ func TestBuilderAndHeartbeatEndpoints(t *testing.T) {
 		t.Fatalf("unexpected builder trades: %+v", builderTrades)
 	}
 
-	heartbeat, err := client.PostHeartbeat(context.Background(), nil)
+	heartbeat, err := client.PostHeartbeat(t.Context(), nil)
 	if err != nil {
 		t.Fatalf("post heartbeat nil: %v", err)
 	}
@@ -319,7 +318,7 @@ func TestBuilderAndHeartbeatEndpoints(t *testing.T) {
 	}
 
 	nextHeartbeatID := heartbeat.HeartbeatID
-	heartbeat, err = client.PostHeartbeat(context.Background(), &nextHeartbeatID)
+	heartbeat, err = client.PostHeartbeat(t.Context(), &nextHeartbeatID)
 	if err != nil {
 		t.Fatalf("post heartbeat chained: %v", err)
 	}

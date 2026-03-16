@@ -80,54 +80,60 @@ type AcceptRFQQuoteRequest struct {
 	SignedOrder
 }
 
-// MarshalJSON encodes the accept request with salt and expiration as JSON numbers.
-func (r AcceptRFQQuoteRequest) MarshalJSON() ([]byte, error) {
-	salt, err := strconv.ParseUint(r.Salt, 10, 64)
+// wireRFQOrder is the shared wire format for RFQ accept/approve payloads.
+type wireRFQOrder struct {
+	RequestID     string        `json:"requestId"`
+	QuoteID       string        `json:"quoteId"`
+	Owner         string        `json:"owner"`
+	Salt          uint64        `json:"salt"`
+	Maker         string        `json:"maker"`
+	Signer        string        `json:"signer"`
+	Taker         string        `json:"taker"`
+	TokenID       string        `json:"tokenId"`
+	MakerAmount   string        `json:"makerAmount"`
+	TakerAmount   string        `json:"takerAmount"`
+	Expiration    uint64        `json:"expiration"`
+	Nonce         string        `json:"nonce"`
+	FeeRateBps    string        `json:"feeRateBps"`
+	Side          Side          `json:"side"`
+	SignatureType SignatureType `json:"signatureType"`
+	Signature     string        `json:"signature"`
+}
+
+// marshalRFQOrder encodes an RFQ accept/approve payload with numeric salt and expiration.
+func marshalRFQOrder(requestID, quoteID, owner string, o SignedOrder) ([]byte, error) {
+	salt, err := strconv.ParseUint(o.Salt, 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("parse order salt: %w", err)
 	}
-	expiration, err := strconv.ParseUint(r.Expiration, 10, 64)
+	expiration, err := strconv.ParseUint(o.Expiration, 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("parse order expiration: %w", err)
 	}
 
-	type wireAccept struct {
-		RequestID     string        `json:"requestId"`
-		QuoteID       string        `json:"quoteId"`
-		Owner         string        `json:"owner"`
-		Salt          uint64        `json:"salt"`
-		Maker         string        `json:"maker"`
-		Signer        string        `json:"signer"`
-		Taker         string        `json:"taker"`
-		TokenID       string        `json:"tokenId"`
-		MakerAmount   string        `json:"makerAmount"`
-		TakerAmount   string        `json:"takerAmount"`
-		Expiration    uint64        `json:"expiration"`
-		Nonce         string        `json:"nonce"`
-		FeeRateBps    string        `json:"feeRateBps"`
-		Side          Side          `json:"side"`
-		SignatureType SignatureType `json:"signatureType"`
-		Signature     string        `json:"signature"`
-	}
-
-	return json.Marshal(wireAccept{
-		RequestID:     r.RequestID,
-		QuoteID:       r.QuoteID,
-		Owner:         r.Owner,
+	return json.Marshal(wireRFQOrder{
+		RequestID:     requestID,
+		QuoteID:       quoteID,
+		Owner:         owner,
 		Salt:          salt,
-		Maker:         r.Maker,
-		Signer:        r.Signer,
-		Taker:         r.Taker,
-		TokenID:       r.TokenID,
-		MakerAmount:   r.MakerAmount,
-		TakerAmount:   r.TakerAmount,
+		Maker:         o.Maker,
+		Signer:        o.Signer,
+		Taker:         o.Taker,
+		TokenID:       o.TokenID,
+		MakerAmount:   o.MakerAmount,
+		TakerAmount:   o.TakerAmount,
 		Expiration:    expiration,
-		Nonce:         r.Nonce,
-		FeeRateBps:    r.FeeRateBps,
-		Side:          r.Side,
-		SignatureType: r.SignatureType,
-		Signature:     r.Signature,
+		Nonce:         o.Nonce,
+		FeeRateBps:    o.FeeRateBps,
+		Side:          o.Side,
+		SignatureType: o.SignatureType,
+		Signature:     o.Signature,
 	})
+}
+
+// MarshalJSON encodes the accept request with salt and expiration as JSON numbers.
+func (r AcceptRFQQuoteRequest) MarshalJSON() ([]byte, error) {
+	return marshalRFQOrder(r.RequestID, r.QuoteID, r.Owner, r.SignedOrder)
 }
 
 // AcceptRFQQuoteResponse is the response for accepting a quote.
@@ -146,52 +152,7 @@ type ApproveRFQOrderRequest struct {
 
 // MarshalJSON encodes the approve request with salt and expiration as JSON numbers.
 func (r ApproveRFQOrderRequest) MarshalJSON() ([]byte, error) {
-	salt, err := strconv.ParseUint(r.Salt, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("parse order salt: %w", err)
-	}
-	expiration, err := strconv.ParseUint(r.Expiration, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("parse order expiration: %w", err)
-	}
-
-	type wireApprove struct {
-		RequestID     string        `json:"requestId"`
-		QuoteID       string        `json:"quoteId"`
-		Owner         string        `json:"owner"`
-		Salt          uint64        `json:"salt"`
-		Maker         string        `json:"maker"`
-		Signer        string        `json:"signer"`
-		Taker         string        `json:"taker"`
-		TokenID       string        `json:"tokenId"`
-		MakerAmount   string        `json:"makerAmount"`
-		TakerAmount   string        `json:"takerAmount"`
-		Expiration    uint64        `json:"expiration"`
-		Nonce         string        `json:"nonce"`
-		FeeRateBps    string        `json:"feeRateBps"`
-		Side          Side          `json:"side"`
-		SignatureType SignatureType `json:"signatureType"`
-		Signature     string        `json:"signature"`
-	}
-
-	return json.Marshal(wireApprove{
-		RequestID:     r.RequestID,
-		QuoteID:       r.QuoteID,
-		Owner:         r.Owner,
-		Salt:          salt,
-		Maker:         r.Maker,
-		Signer:        r.Signer,
-		Taker:         r.Taker,
-		TokenID:       r.TokenID,
-		MakerAmount:   r.MakerAmount,
-		TakerAmount:   r.TakerAmount,
-		Expiration:    expiration,
-		Nonce:         r.Nonce,
-		FeeRateBps:    r.FeeRateBps,
-		Side:          r.Side,
-		SignatureType: r.SignatureType,
-		Signature:     r.Signature,
-	})
+	return marshalRFQOrder(r.RequestID, r.QuoteID, r.Owner, r.SignedOrder)
 }
 
 // RFQRequestResponse is the response for creating an RFQ request.

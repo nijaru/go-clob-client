@@ -1,7 +1,6 @@
 package clob
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -190,7 +189,7 @@ func TestTypedAuthenticatedResponses(t *testing.T) {
 		t.Fatalf("new client: %v", err)
 	}
 
-	openOrdersPage, err := client.GetOpenOrdersPage(context.Background(), OpenOrderParams{}, "")
+	openOrdersPage, err := client.GetOpenOrdersPage(t.Context(), OpenOrderParams{}, "")
 	if err != nil {
 		t.Fatalf("get open orders page: %v", err)
 	}
@@ -198,7 +197,7 @@ func TestTypedAuthenticatedResponses(t *testing.T) {
 		t.Fatalf("unexpected open orders page: %#v", openOrdersPage)
 	}
 
-	openOrders, err := client.GetOpenOrders(context.Background(), OpenOrderParams{})
+	openOrders, err := client.GetOpenOrders(t.Context(), OpenOrderParams{})
 	if err != nil {
 		t.Fatalf("get open orders: %v", err)
 	}
@@ -206,7 +205,7 @@ func TestTypedAuthenticatedResponses(t *testing.T) {
 		t.Fatalf("unexpected open orders: %#v", openOrders)
 	}
 
-	order, err := client.GetOrder(context.Background(), "order-1")
+	order, err := client.GetOrder(t.Context(), "order-1")
 	if err != nil {
 		t.Fatalf("get order: %v", err)
 	}
@@ -214,7 +213,7 @@ func TestTypedAuthenticatedResponses(t *testing.T) {
 		t.Fatalf("unexpected order: %#v", order)
 	}
 
-	tradesPage, err := client.GetTradesPage(context.Background(), TradeParams{}, "")
+	tradesPage, err := client.GetTradesPage(t.Context(), TradeParams{}, "")
 	if err != nil {
 		t.Fatalf("get trades page: %v", err)
 	}
@@ -222,7 +221,7 @@ func TestTypedAuthenticatedResponses(t *testing.T) {
 		t.Fatalf("unexpected trades page: %#v", tradesPage)
 	}
 
-	trades, err := client.GetTrades(context.Background(), TradeParams{})
+	trades, err := client.GetTrades(t.Context(), TradeParams{})
 	if err != nil {
 		t.Fatalf("get trades: %v", err)
 	}
@@ -230,7 +229,7 @@ func TestTypedAuthenticatedResponses(t *testing.T) {
 		t.Fatalf("unexpected trades: %#v", trades)
 	}
 
-	postResponse, err := client.PostOrder(context.Background(), PostOrderRequest{
+	postResponse, err := client.PostOrder(t.Context(), PostOrderRequest{
 		Order: SignedOrder{
 			Salt:          "42",
 			Maker:         "0x0000000000000000000000000000000000000001",
@@ -256,7 +255,7 @@ func TestTypedAuthenticatedResponses(t *testing.T) {
 		t.Fatalf("unexpected post order response: %#v", postResponse)
 	}
 
-	cancelResponse, err := client.CancelOrder(context.Background(), "order-1")
+	cancelResponse, err := client.CancelOrder(t.Context(), "order-1")
 	if err != nil {
 		t.Fatalf("cancel order: %v", err)
 	}

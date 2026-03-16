@@ -1,7 +1,6 @@
 package clob
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -39,7 +38,7 @@ func TestGetOrderBook(t *testing.T) {
 		t.Fatalf("new client: %v", err)
 	}
 
-	book, err := client.GetOrderBook(context.Background(), "123")
+	book, err := client.GetOrderBook(t.Context(), "123")
 	if err != nil {
 		t.Fatalf("get order book: %v", err)
 	}
@@ -75,7 +74,7 @@ func TestCreateOrDeriveAPIKeyFallsBackToDerive(t *testing.T) {
 		t.Fatalf("new client: %v", err)
 	}
 
-	creds, err := client.CreateOrDeriveAPIKey(context.Background(), 0)
+	creds, err := client.CreateOrDeriveAPIKey(t.Context(), 0)
 	if err != nil {
 		t.Fatalf("create or derive: %v", err)
 	}

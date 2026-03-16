@@ -1,7 +1,6 @@
 package clob
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -109,7 +108,7 @@ func TestTypedMarketPricingSurfaces(t *testing.T) {
 		t.Fatalf("new client: %v", err)
 	}
 
-	geoblock, err := client.CheckGeoblock(context.Background())
+	geoblock, err := client.CheckGeoblock(t.Context())
 	if err != nil {
 		t.Fatalf("check geoblock: %v", err)
 	}
@@ -117,7 +116,7 @@ func TestTypedMarketPricingSurfaces(t *testing.T) {
 		t.Fatalf("unexpected geoblock response: %+v", geoblock)
 	}
 
-	midpoint, err := client.GetMidpoint(context.Background(), "123")
+	midpoint, err := client.GetMidpoint(t.Context(), "123")
 	if err != nil {
 		t.Fatalf("get midpoint: %v", err)
 	}
@@ -125,7 +124,7 @@ func TestTypedMarketPricingSurfaces(t *testing.T) {
 		t.Fatalf("unexpected midpoint: %+v", midpoint)
 	}
 
-	midpoints, err := client.GetMidpoints(context.Background(), []BookParams{
+	midpoints, err := client.GetMidpoints(t.Context(), []BookParams{
 		{TokenID: "123"},
 		{TokenID: "456"},
 	})
@@ -136,7 +135,7 @@ func TestTypedMarketPricingSurfaces(t *testing.T) {
 		t.Fatalf("unexpected midpoints: %+v", midpoints)
 	}
 
-	price, err := client.GetPrice(context.Background(), "123", string(SideBuy))
+	price, err := client.GetPrice(t.Context(), "123", string(SideBuy))
 	if err != nil {
 		t.Fatalf("get price: %v", err)
 	}
@@ -145,7 +144,7 @@ func TestTypedMarketPricingSurfaces(t *testing.T) {
 	}
 
 	prices, err := client.GetPrices(
-		context.Background(),
+		t.Context(),
 		[]BookParams{{TokenID: "123", Side: SideBuy}},
 	)
 	if err != nil {
@@ -155,7 +154,7 @@ func TestTypedMarketPricingSurfaces(t *testing.T) {
 		t.Fatalf("unexpected prices: %+v", prices)
 	}
 
-	allPrices, err := client.GetAllPrices(context.Background())
+	allPrices, err := client.GetAllPrices(t.Context())
 	if err != nil {
 		t.Fatalf("get all prices: %v", err)
 	}
@@ -163,7 +162,7 @@ func TestTypedMarketPricingSurfaces(t *testing.T) {
 		t.Fatalf("unexpected all prices: %+v", allPrices)
 	}
 
-	spread, err := client.GetSpread(context.Background(), "123")
+	spread, err := client.GetSpread(t.Context(), "123")
 	if err != nil {
 		t.Fatalf("get spread: %v", err)
 	}
@@ -171,7 +170,7 @@ func TestTypedMarketPricingSurfaces(t *testing.T) {
 		t.Fatalf("unexpected spread: %+v", spread)
 	}
 
-	spreads, err := client.GetSpreads(context.Background(), []BookParams{{TokenID: "123"}})
+	spreads, err := client.GetSpreads(t.Context(), []BookParams{{TokenID: "123"}})
 	if err != nil {
 		t.Fatalf("get spreads: %v", err)
 	}
@@ -179,7 +178,7 @@ func TestTypedMarketPricingSurfaces(t *testing.T) {
 		t.Fatalf("unexpected spreads: %+v", spreads)
 	}
 
-	lastTrade, err := client.GetLastTradePrice(context.Background(), "123")
+	lastTrade, err := client.GetLastTradePrice(t.Context(), "123")
 	if err != nil {
 		t.Fatalf("get last trade price: %v", err)
 	}
@@ -188,7 +187,7 @@ func TestTypedMarketPricingSurfaces(t *testing.T) {
 	}
 
 	lastTrades, err := client.GetLastTradesPrices(
-		context.Background(),
+		t.Context(),
 		[]BookParams{{TokenID: "123"}},
 	)
 	if err != nil {

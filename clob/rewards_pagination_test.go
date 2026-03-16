@@ -1,7 +1,6 @@
 package clob
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -112,17 +111,17 @@ func TestRewardsPaginationHelpers(t *testing.T) {
 		t.Fatalf("new client: %v", err)
 	}
 
-	earningsPage, err := client.GetEarningsForUserForDayPage(context.Background(), "2026-03-12", "")
+	earningsPage, err := client.GetEarningsForUserForDayPage(t.Context(), "2026-03-12", "")
 	if err != nil || len(earningsPage.Data) != 1 || earningsPage.NextCursor != "cursor-2" {
 		t.Fatalf("unexpected earnings page: %+v %v", earningsPage, err)
 	}
-	earnings, err := client.GetEarningsForUserForDay(context.Background(), "2026-03-12")
+	earnings, err := client.GetEarningsForUserForDay(t.Context(), "2026-03-12")
 	if err != nil || len(earnings) != 2 {
 		t.Fatalf("unexpected earnings: %+v %v", earnings, err)
 	}
 
 	userRewardsPage, err := client.GetUserEarningsAndMarketsConfigPage(
-		context.Background(),
+		t.Context(),
 		UserRewardsFilterParams{Date: "2026-03-12"},
 		"",
 	)
@@ -130,29 +129,29 @@ func TestRewardsPaginationHelpers(t *testing.T) {
 		t.Fatalf("unexpected user rewards page: %+v %v", userRewardsPage, err)
 	}
 	userRewards, err := client.GetUserEarningsAndMarketsConfig(
-		context.Background(),
+		t.Context(),
 		UserRewardsFilterParams{Date: "2026-03-12"},
 	)
 	if err != nil || len(userRewards) != 2 {
 		t.Fatalf("unexpected user rewards: %+v %v", userRewards, err)
 	}
 
-	currentRewardsPage, err := client.GetCurrentRewardsPage(context.Background(), "")
+	currentRewardsPage, err := client.GetCurrentRewardsPage(t.Context(), "")
 	if err != nil || len(currentRewardsPage.Data) != 1 ||
 		currentRewardsPage.NextCursor != "cursor-2" {
 		t.Fatalf("unexpected current rewards page: %+v %v", currentRewardsPage, err)
 	}
-	currentRewards, err := client.GetCurrentRewards(context.Background())
+	currentRewards, err := client.GetCurrentRewards(t.Context())
 	if err != nil || len(currentRewards) != 2 {
 		t.Fatalf("unexpected current rewards: %+v %v", currentRewards, err)
 	}
 
-	marketRewardsPage, err := client.GetRewardsForMarketPage(context.Background(), "cond-1", "")
+	marketRewardsPage, err := client.GetRewardsForMarketPage(t.Context(), "cond-1", "")
 	if err != nil || len(marketRewardsPage.Data) != 1 ||
 		marketRewardsPage.NextCursor != "cursor-2" {
 		t.Fatalf("unexpected market rewards page: %+v %v", marketRewardsPage, err)
 	}
-	marketRewards, err := client.GetRewardsForMarket(context.Background(), "cond-1")
+	marketRewards, err := client.GetRewardsForMarket(t.Context(), "cond-1")
 	if err != nil || len(marketRewards) != 2 {
 		t.Fatalf("unexpected market rewards: %+v %v", marketRewards, err)
 	}

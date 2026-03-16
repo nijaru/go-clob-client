@@ -1,7 +1,6 @@
 package clob
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -27,7 +26,7 @@ func TestCreateOrderBuildsSignedLimitOrder(t *testing.T) {
 	}
 	client.saltGenerator = func() (uint64, error) { return 42, nil }
 
-	order, err := client.CreateOrder(context.Background(), OrderArgs{
+	order, err := client.CreateOrder(t.Context(), OrderArgs{
 		TokenID: "100",
 		Price:   udecimal.MustParse("0.45"),
 		Size:    udecimal.MustParse("10"),
@@ -91,7 +90,7 @@ func TestCreateAndPostOrderSendsExpectedPayload(t *testing.T) {
 	}
 	client.saltGenerator = func() (uint64, error) { return 42, nil }
 
-	_, err = client.CreateAndPostOrder(context.Background(), OrderArgs{
+	_, err = client.CreateAndPostOrder(t.Context(), OrderArgs{
 		TokenID: "100",
 		Price:   udecimal.MustParse("0.45"),
 		Size:    udecimal.MustParse("10"),
@@ -143,7 +142,7 @@ func TestCreateMarketOrderDerivesPriceFromBook(t *testing.T) {
 	}
 	client.saltGenerator = func() (uint64, error) { return 42, nil }
 
-	order, err := client.CreateMarketOrder(context.Background(), MarketOrderArgs{
+	order, err := client.CreateMarketOrder(t.Context(), MarketOrderArgs{
 		TokenID:   "100",
 		Amount:    udecimal.MustParse("2"),
 		Side:      SideBuy,
@@ -176,7 +175,7 @@ func TestCreateOrderReturnsSaltGenerationError(t *testing.T) {
 	}
 	client.saltGenerator = func() (uint64, error) { return 0, errors.New("entropy unavailable") }
 
-	_, err = client.CreateOrder(context.Background(), OrderArgs{
+	_, err = client.CreateOrder(t.Context(), OrderArgs{
 		TokenID: "100",
 		Price:   udecimal.MustParse("0.45"),
 		Size:    udecimal.MustParse("10"),

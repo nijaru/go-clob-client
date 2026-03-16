@@ -1,7 +1,6 @@
 package clob
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -127,7 +126,7 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 				PrivateKey: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
 			},
 			build: func(client *Client) (*SignedOrder, error) {
-				return client.CreateOrder(context.Background(), OrderArgs{
+				return client.CreateOrder(t.Context(), OrderArgs{
 					TokenID: "123",
 					Price:   udecimal.MustParse("0.5"),
 					Size:    udecimal.MustParse("100"),
@@ -157,7 +156,7 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 				PrivateKey: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
 			},
 			build: func(client *Client) (*SignedOrder, error) {
-				return client.CreateOrder(context.Background(), OrderArgs{
+				return client.CreateOrder(t.Context(), OrderArgs{
 					TokenID: "123",
 					Price:   udecimal.MustParse("0.5"),
 					Size:    udecimal.MustParse("100"),
@@ -187,7 +186,7 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 				PrivateKey: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
 			},
 			build: func(client *Client) (*SignedOrder, error) {
-				return client.CreateMarketOrder(context.Background(), MarketOrderArgs{
+				return client.CreateMarketOrder(t.Context(), MarketOrderArgs{
 					TokenID:   "123",
 					Price:     udecimal.MustParse("0.56"),
 					Amount:    udecimal.MustParse("100"),
@@ -218,7 +217,7 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 				PrivateKey: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
 			},
 			build: func(client *Client) (*SignedOrder, error) {
-				return client.CreateMarketOrder(context.Background(), MarketOrderArgs{
+				return client.CreateMarketOrder(t.Context(), MarketOrderArgs{
 					TokenID:   "123",
 					Price:     udecimal.MustParse("0.56"),
 					Amount:    udecimal.MustParse("100"),
@@ -252,7 +251,7 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 				FunderAddress: "0xaDEFf2158d668f64308C62ef227C5CcaCAAf976D",
 			},
 			build: func(client *Client) (*SignedOrder, error) {
-				return client.CreateOrder(context.Background(), OrderArgs{
+				return client.CreateOrder(t.Context(), OrderArgs{
 					TokenID: "123",
 					Price:   udecimal.MustParse("0.512"),
 					Size:    udecimal.MustParse("100"),
