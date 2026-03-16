@@ -6,17 +6,19 @@ import (
 	"encoding/json"
 )
 
+// Field order must match Python SDK for hash compatibility.
+// Python computes SHA1 over JSON with keys in insertion order.
 type orderBookHashPayload struct {
 	Market         string         `json:"market"`
 	AssetID        string         `json:"asset_id"`
 	Timestamp      string         `json:"timestamp"`
+	Hash           string         `json:"hash"`
 	Bids           []OrderSummary `json:"bids"`
 	Asks           []OrderSummary `json:"asks"`
 	MinOrderSize   string         `json:"min_order_size"`
 	TickSize       string         `json:"tick_size"`
 	NegRisk        bool           `json:"neg_risk"`
 	LastTradePrice string         `json:"last_trade_price"`
-	Hash           string         `json:"hash"`
 }
 
 // GetOrderBookHash returns the server-compatible hash for the supplied orderbook summary.
@@ -25,13 +27,23 @@ func (c *Client) GetOrderBookHash(orderbook OrderBookSummary) (string, error) {
 }
 
 func generateOrderBookHash(orderbook OrderBookSummary) (string, error) {
+	// Python parity: empty/nil slices must serialize as [] not null.
+	bids := orderbook.Bids
+	if bids == nil {
+		bids = []OrderSummary{}
+	}
+	asks := orderbook.Asks
+	if asks == nil {
+		asks = []OrderSummary{}
+	}
+
 	payload := orderBookHashPayload{
 		Market:         orderbook.Market,
 		AssetID:        orderbook.AssetID,
 		Timestamp:      orderbook.Timestamp,
 		Hash:           "",
-		Bids:           append([]OrderSummary{}, orderbook.Bids...),
-		Asks:           append([]OrderSummary{}, orderbook.Asks...),
+		Bids:           bids,
+		Asks:           asks,
 		MinOrderSize:   orderbook.MinOrderSize,
 		TickSize:       orderbook.TickSize,
 		NegRisk:        orderbook.NegRisk,

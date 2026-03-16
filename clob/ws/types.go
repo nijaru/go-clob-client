@@ -106,6 +106,7 @@ type TradeEvent struct {
 	Timestamp string    `json:"timestamp"`
 }
 
+// OrderStatus represents the lifecycle state of an order as streamed by the user channel.
 type OrderStatus string
 
 const (
