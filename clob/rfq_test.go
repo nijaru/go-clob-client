@@ -4,10 +4,144 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/quagmt/udecimal"
 )
+
+func TestAcceptRFQQuoteMarshalJSON(t *testing.T) {
+	t.Parallel()
+
+	req := AcceptRFQQuoteRequest{
+		RequestID: "req-1",
+		QuoteID:   "quote-1",
+		Owner:     "0xabc",
+		SignedOrder: SignedOrder{
+			Salt:          "1234567890",
+			Maker:         "0xmaker",
+			Signer:        "0xsigner",
+			Taker:         "0xtaker",
+			TokenID:       "token-1",
+			MakerAmount:   "100",
+			TakerAmount:   "200",
+			Expiration:    "1700000000",
+			Nonce:         "1",
+			FeeRateBps:    "50",
+			Side:          SideBuy,
+			SignatureType: SignatureTypeEOA,
+			Signature:     "0xsig",
+		},
+	}
+
+	data, err := json.Marshal(req)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	// Verify salt and expiration are JSON numbers, not strings
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal raw: %v", err)
+	}
+
+	// salt must be a JSON number
+	if len(raw["salt"]) == 0 || raw["salt"][0] == '"' {
+		t.Errorf("salt should be a JSON number, got: %s", raw["salt"])
+	}
+	if string(raw["salt"]) != "1234567890" {
+		t.Errorf("salt = %s, want 1234567890", raw["salt"])
+	}
+
+	// expiration must be a JSON number
+	if len(raw["expiration"]) == 0 || raw["expiration"][0] == '"' {
+		t.Errorf("expiration should be a JSON number, got: %s", raw["expiration"])
+	}
+	if string(raw["expiration"]) != "1700000000" {
+		t.Errorf("expiration = %s, want 1700000000", raw["expiration"])
+	}
+
+	// Verify requestId/quoteId are present
+	if string(raw["requestId"]) != `"req-1"` {
+		t.Errorf("requestId = %s, want %q", raw["requestId"], "req-1")
+	}
+	if string(raw["quoteId"]) != `"quote-1"` {
+		t.Errorf("quoteId = %s, want %q", raw["quoteId"], "quote-1")
+	}
+}
+
+func TestApproveRFQOrderMarshalJSON(t *testing.T) {
+	t.Parallel()
+
+	req := ApproveRFQOrderRequest{
+		RequestID: "req-2",
+		QuoteID:   "quote-2",
+		Owner:     "0xdef",
+		SignedOrder: SignedOrder{
+			Salt:       "999",
+			Expiration: "0",
+		},
+	}
+
+	data, err := json.Marshal(req)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("unmarshal raw: %v", err)
+	}
+
+	if string(raw["salt"]) != "999" {
+		t.Errorf("salt = %s, want 999", raw["salt"])
+	}
+	if string(raw["expiration"]) != "0" {
+		t.Errorf("expiration = %s, want 0", raw["expiration"])
+	}
+}
+
+func TestMarshalRFQOrderInvalidSalt(t *testing.T) {
+	t.Parallel()
+
+	req := AcceptRFQQuoteRequest{
+		RequestID: "req-1",
+		QuoteID:   "q-1",
+		SignedOrder: SignedOrder{
+			Salt:       "not-a-number",
+			Expiration: "0",
+		},
+	}
+
+	_, err := json.Marshal(req)
+	if err == nil {
+		t.Fatal("expected error for invalid salt")
+	}
+	if !strings.Contains(err.Error(), "parse order salt") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestMarshalRFQOrderInvalidExpiration(t *testing.T) {
+	t.Parallel()
+
+	req := AcceptRFQQuoteRequest{
+		RequestID: "req-1",
+		QuoteID:   "q-1",
+		SignedOrder: SignedOrder{
+			Salt:       "1",
+			Expiration: "abc",
+		},
+	}
+
+	_, err := json.Marshal(req)
+	if err == nil {
+		t.Fatal("expected error for invalid expiration")
+	}
+	if !strings.Contains(err.Error(), "parse order expiration") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
 
 func TestRFQSurfaces(t *testing.T) {
 	t.Parallel()

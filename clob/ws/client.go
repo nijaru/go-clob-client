@@ -20,14 +20,15 @@ const (
 type Client struct {
 	url string
 
-	mu   sync.Mutex
-	conn *websocket.Conn
+	mu       sync.Mutex
+	conn     *websocket.Conn
+	connDone chan struct{} // closed when conn.Close() completes
 
 	events chan any
 	errs   chan error
 	stop   chan struct{}
-
-	handler func(any)
+	cancel context.CancelFunc
+	closed bool
 }
 
 // NewClient creates a new WebSocket client.
@@ -50,23 +51,44 @@ func (c *Client) Connect(ctx context.Context) error {
 		return fmt.Errorf("dial: %w", err)
 	}
 
+	loopCtx, cancel := context.WithCancel(context.Background())
+
 	c.mu.Lock()
 	c.conn = conn
+	c.connDone = make(chan struct{})
+	c.cancel = cancel
 	c.mu.Unlock()
 
-	go c.readLoop()
-	go c.heartbeatLoop()
+	go c.readLoop(loopCtx)
+	go c.heartbeatLoop(loopCtx)
 
 	return nil
 }
 
 // Close closes the connection and stops the loops.
+// Safe to call multiple times.
 func (c *Client) Close() error {
-	close(c.stop)
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.conn != nil {
-		return c.conn.Close(websocket.StatusNormalClosure, "")
+	if c.closed {
+		c.mu.Unlock()
+		return nil
+	}
+	c.closed = true
+	cancel := c.cancel
+	done := c.connDone
+	conn := c.conn
+	c.mu.Unlock()
+
+	close(c.stop)
+	if cancel != nil {
+		cancel()
+	}
+	if conn != nil {
+		err := conn.Close(websocket.StatusNormalClosure, "")
+		if done != nil {
+			<-done
+		}
+		return err
 	}
 	return nil
 }
@@ -99,48 +121,52 @@ func (c *Client) Errors() <-chan error {
 	return c.errs
 }
 
-func (c *Client) readLoop() {
+func (c *Client) readLoop(ctx context.Context) {
+	defer close(c.connDone)
+
 	for {
-		select {
-		case <-c.stop:
+		_, data, err := c.conn.Read(ctx)
+		if err != nil {
+			// Context canceled means Close() was called — exit silently.
+			if ctx.Err() != nil {
+				return
+			}
+			select {
+			case c.errs <- fmt.Errorf("read: %w", err):
+			default:
+			}
 			return
-		default:
-			_, data, err := c.conn.Read(context.Background())
-			if err != nil {
-				// Avoid reporting error on closure
-				select {
-				case <-c.stop:
-					return
-				default:
-					c.errs <- fmt.Errorf("read: %w", err)
-					return
-				}
-			}
-
-			// Handle PONG
-			if string(data) == "PONG" {
-				continue
-			}
-
-			// Decode event
-			c.handleMessage(data)
 		}
+
+		// Handle PONG
+		if string(data) == "PONG" {
+			continue
+		}
+
+		// Decode event
+		c.handleMessage(data)
 	}
 }
 
-func (c *Client) heartbeatLoop() {
+func (c *Client) heartbeatLoop(ctx context.Context) {
 	ticker := time.NewTicker(pingInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-c.stop:
+		case <-ctx.Done():
 			return
 		case <-ticker.C:
 			// Polymarket expects plain text "PING"
-			err := c.conn.Write(context.Background(), websocket.MessageText, []byte("PING"))
+			err := c.conn.Write(ctx, websocket.MessageText, []byte("PING"))
 			if err != nil {
-				c.errs <- fmt.Errorf("ping: %w", err)
+				if ctx.Err() != nil {
+					return
+				}
+				select {
+				case c.errs <- fmt.Errorf("ping: %w", err):
+				default:
+				}
 				return
 			}
 		}
@@ -163,7 +189,8 @@ func (c *Client) sendJSON(ctx context.Context, v any) error {
 func (c *Client) handleMessage(data []byte) {
 	var base BaseEvent
 	if err := json.Unmarshal(data, &base); err != nil {
-		return // Silently ignore non-JSON or malformed (might be PONG if missed earlier)
+		// Non-JSON message (text heartbeat, etc.) — not an error.
+		return
 	}
 
 	var event any
@@ -181,12 +208,19 @@ func (c *Client) handleMessage(data []byte) {
 	case EventTypeTrade:
 		event = &TradeEvent{}
 	default:
-		// Unknown event
+		// Unknown event type — report so callers can notice new API events.
+		select {
+		case c.errs <- fmt.Errorf("unknown event type: %s", base.EventType):
+		default:
+		}
 		return
 	}
 
 	if err := json.Unmarshal(data, event); err != nil {
-		c.errs <- fmt.Errorf("decode event %s: %w", base.EventType, err)
+		select {
+		case c.errs <- fmt.Errorf("decode event %s: %w", base.EventType, err):
+		default:
+		}
 		return
 	}
 
