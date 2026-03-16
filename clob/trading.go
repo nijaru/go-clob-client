@@ -27,11 +27,6 @@ var roundingConfig = map[TickSize]roundConfig{
 	TickSizeTenThousand: {Price: 4, Size: 2, Amount: 6},
 }
 
-// Bool returns a pointer to the provided bool.
-func Bool(value bool) *bool {
-	return &value
-}
-
 // CreateOrder builds and signs a limit order.
 func (c *Client) CreateOrder(
 	ctx context.Context,
@@ -67,7 +62,7 @@ func (c *Client) CreateOrder(
 
 	return c.buildSignedLimitOrder(userOrder, CreateOrderOptions{
 		TickSize: tickSize,
-		NegRisk:  Bool(negRisk),
+		NegRisk:  new(negRisk),
 	})
 }
 
@@ -127,7 +122,7 @@ func (c *Client) CreateMarketOrder(
 
 	return c.buildSignedMarketOrder(userOrder, CreateOrderOptions{
 		TickSize: tickSize,
-		NegRisk:  Bool(negRisk),
+		NegRisk:  new(negRisk),
 	})
 }
 

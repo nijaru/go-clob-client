@@ -51,15 +51,10 @@ type BookEvent struct {
 // PriceChangeEvent is an incremental order book update.
 type PriceChangeEvent struct {
 	BaseEvent
-	AssetID string              `json:"asset_id"`
-	Changes []PriceChangeDetail `json:"changes"`
-}
-
-// PriceChangeDetail represents a single price level update.
-type PriceChangeDetail struct {
-	Price string    `json:"price"`
-	Size  string    `json:"size"`
-	Side  clob.Side `json:"side"`
+	AssetID string    `json:"asset_id"`
+	Price   string    `json:"price"`
+	Size    string    `json:"size"`
+	Side    clob.Side `json:"side"`
 }
 
 // TickSizeChangeEvent is emitted when a market's tick size changes.

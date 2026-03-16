@@ -1,7 +1,6 @@
 package clob
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -19,13 +18,8 @@ func TestRFQSurfaces(t *testing.T) {
 		switch r.URL.Path {
 		case rfqRequestEndpoint:
 			if r.Method == http.MethodPost {
-				_ = json.NewEncoder(w).Encode(RFQRequest{
-					ID:        "rfq-1",
-					AssetIn:   "asset-1",
-					AssetOut:  "asset-2",
-					AmountIn:  "100",
-					AmountOut: "50",
-					Status:    "active",
+				_ = json.NewEncoder(w).Encode(RFQRequestResponse{
+					RequestID: "rfq-1",
 				})
 				return
 			}
@@ -35,14 +29,14 @@ func TestRFQSurfaces(t *testing.T) {
 			}
 		case rfqDataRequestsEndpoint:
 			_ = json.NewEncoder(w).Encode(RFQRequestsResponse{
-				{ID: "rfq-1", Status: "active"},
+				Data: []RFQRequest{
+					{ID: "rfq-1", State: "active"},
+				},
 			})
 		case rfqQuoteEndpoint:
 			if r.Method == http.MethodPost {
-				_ = json.NewEncoder(w).Encode(RFQQuote{
-					ID:        "quote-1",
-					RequestID: "rfq-1",
-					Status:    "active",
+				_ = json.NewEncoder(w).Encode(RFQQuoteResponse{
+					QuoteID: "quote-1",
 				})
 				return
 			}
@@ -50,11 +44,11 @@ func TestRFQSurfaces(t *testing.T) {
 				w.WriteHeader(http.StatusNoContent)
 				return
 			}
-		case rfqQuoteAcceptEndpoint:
+		case rfqRequestAcceptEndpoint:
 			_ = json.NewEncoder(w).Encode(AcceptRFQQuoteResponse{
-				Order: SignedOrder{TokenID: "123", Salt: "456"},
+				TradeIDs: []string{"trade-1"},
 			})
-		case rfqOrderApproveEndpoint:
+		case rfqQuoteApproveEndpoint:
 			w.WriteHeader(http.StatusOK)
 		case rfqBestQuoteEndpoint:
 			_ = json.NewEncoder(w).Encode(RFQQuote{
@@ -80,7 +74,7 @@ func TestRFQSurfaces(t *testing.T) {
 		t.Fatalf("new client: %v", err)
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Create Request
 	req, err := client.CreateRFQRequest(ctx, CreateRFQRequestParams{
@@ -92,8 +86,8 @@ func TestRFQSurfaces(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create rfq: %v", err)
 	}
-	if req.ID != "rfq-1" {
-		t.Errorf("unexpected rfq id: %s", req.ID)
+	if req.RequestID != "rfq-1" {
+		t.Errorf("unexpected rfq id: %s", req.RequestID)
 	}
 
 	// Get Requests
@@ -101,7 +95,7 @@ func TestRFQSurfaces(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get rfq requests: %v", err)
 	}
-	if len(list) != 1 || list[0].ID != "rfq-1" {
+	if len(list.Data) != 1 || list.Data[0].ID != "rfq-1" {
 		t.Errorf("unexpected rfq list: %+v", list)
 	}
 
@@ -114,8 +108,8 @@ func TestRFQSurfaces(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create rfq quote: %v", err)
 	}
-	if quote.ID != "quote-1" {
-		t.Errorf("unexpected quote id: %s", quote.ID)
+	if quote.QuoteID != "quote-1" {
+		t.Errorf("unexpected quote id: %s", quote.QuoteID)
 	}
 
 	// Get Best Quote
@@ -128,18 +122,29 @@ func TestRFQSurfaces(t *testing.T) {
 	}
 
 	// Accept Quote
-	resp, err := client.AcceptRFQQuote(ctx, "quote-1")
+	resp, err := client.AcceptRFQQuote(ctx, AcceptRFQQuoteRequest{
+		RequestID: "rfq-1",
+		QuoteID:   "quote-1",
+		SignedOrder: SignedOrder{
+			Salt:       "123",
+			Expiration: "0",
+		},
+	})
 	if err != nil {
 		t.Fatalf("accept rfq quote: %v", err)
 	}
-	if resp.Order.TokenID != "123" {
-		t.Errorf("unexpected accepted order token: %s", resp.Order.TokenID)
+	if len(resp.TradeIDs) != 1 || resp.TradeIDs[0] != "trade-1" {
+		t.Errorf("unexpected accepted trade ids: %v", resp.TradeIDs)
 	}
 
 	// Approve Order
 	err = client.ApproveRFQOrder(ctx, ApproveRFQOrderRequest{
 		RequestID: "rfq-1",
-		Order:     resp.Order,
+		QuoteID:   "quote-1",
+		SignedOrder: SignedOrder{
+			Salt:       "456",
+			Expiration: "0",
+		},
 	})
 	if err != nil {
 		t.Fatalf("approve rfq order: %v", err)

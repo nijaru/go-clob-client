@@ -132,7 +132,7 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 					Price:   udecimal.MustParse("0.5"),
 					Size:    udecimal.MustParse("100"),
 					Side:    SideBuy,
-				}, &CreateOrderOptions{TickSize: TickSizeTenth, NegRisk: Bool(false)})
+				}, &CreateOrderOptions{TickSize: TickSizeTenth, NegRisk: new(false)})
 			},
 			expect: SignedOrder{
 				Salt:          "1",
@@ -162,7 +162,7 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 					Price:   udecimal.MustParse("0.5"),
 					Size:    udecimal.MustParse("100"),
 					Side:    SideSell,
-				}, &CreateOrderOptions{TickSize: TickSizeTenth, NegRisk: Bool(false)})
+				}, &CreateOrderOptions{TickSize: TickSizeTenth, NegRisk: new(false)})
 			},
 			expect: SignedOrder{
 				Salt:          "1",
@@ -193,7 +193,7 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 					Amount:    udecimal.MustParse("100"),
 					Side:      SideBuy,
 					OrderType: OrderTypeFOK,
-				}, &CreateOrderOptions{TickSize: TickSizeHundredth, NegRisk: Bool(false)})
+				}, &CreateOrderOptions{TickSize: TickSizeHundredth, NegRisk: new(false)})
 			},
 			expect: SignedOrder{
 				Salt:          "1",
@@ -224,7 +224,7 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 					Amount:    udecimal.MustParse("100"),
 					Side:      SideSell,
 					OrderType: OrderTypeFOK,
-				}, &CreateOrderOptions{TickSize: TickSizeHundredth, NegRisk: Bool(false)})
+				}, &CreateOrderOptions{TickSize: TickSizeHundredth, NegRisk: new(false)})
 			},
 			expect: SignedOrder{
 				Salt:          "1",
@@ -259,7 +259,7 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 					Side:    SideBuy,
 					Nonce:   2,
 					Taker:   "0xf7fB45986800e2D259BAa25B56466bd02dA37a44",
-				}, &CreateOrderOptions{TickSize: TickSizeThousandth, NegRisk: Bool(true)})
+				}, &CreateOrderOptions{TickSize: TickSizeThousandth, NegRisk: new(true)})
 			},
 			expect: SignedOrder{
 				Salt:          "1",
@@ -280,7 +280,6 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 	}
 
 	for _, fixture := range fixtures {
-		fixture := fixture
 		t.Run(fixture.name, func(t *testing.T) {
 			client, err := New(fixture.client)
 			if err != nil {
