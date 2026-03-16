@@ -573,6 +573,17 @@ func (c *Client) resolveTickSize(
 	options *CreateOrderOptions,
 ) (TickSize, error) {
 	if options != nil && options.TickSize != "" {
+		marketTickSizeResp, err := c.GetTickSize(ctx, tokenID)
+		if err != nil {
+			return "", err
+		}
+		if isTickSizeSmaller(options.TickSize, marketTickSizeResp.MinimumTickSize) {
+			return "", fmt.Errorf(
+				"invalid tick size %q, minimum for market is %q",
+				options.TickSize,
+				marketTickSizeResp.MinimumTickSize,
+			)
+		}
 		return options.TickSize, nil
 	}
 
@@ -695,4 +706,16 @@ func generateSalt() (uint64, error) {
 
 func derefBool(value *bool) bool {
 	return value != nil && *value
+}
+
+func isTickSizeSmaller(a, b TickSize) bool {
+	aParsed, err := udecimal.Parse(string(a))
+	if err != nil {
+		return false
+	}
+	bParsed, err := udecimal.Parse(string(b))
+	if err != nil {
+		return false
+	}
+	return aParsed.Cmp(bParsed) < 0
 }

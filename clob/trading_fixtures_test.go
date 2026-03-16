@@ -66,7 +66,7 @@ func newTradingFixtureServer(t *testing.T) *httptest.Server {
 
 		switch r.URL.Path {
 		case tickSizeEndpoint:
-			_, _ = w.Write([]byte(`{"minimum_tick_size":"0.01"}`))
+			_, _ = w.Write([]byte(`{"minimum_tick_size":"0.001"}`))
 		case feeRateEndpoint:
 			_, _ = w.Write([]byte(`{"base_fee":0}`))
 		case negRiskEndpoint:

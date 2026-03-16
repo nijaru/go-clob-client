@@ -91,11 +91,19 @@ func New(config Config) (*Client, error) {
 	return client, nil
 }
 
-// ClearTickSizeCache removes the cached tick size for a specific token.
+// ClearTickSizeCache removes the cached tick size, negative risk flag, and fee rate for a specific token.
 func (c *Client) ClearTickSizeCache(tokenID string) {
 	c.tickSizeMu.Lock()
 	delete(c.tickSizeCache, tokenID)
 	c.tickSizeMu.Unlock()
+
+	c.negRiskMu.Lock()
+	delete(c.negRiskCache, tokenID)
+	c.negRiskMu.Unlock()
+
+	c.feeRateMu.Lock()
+	delete(c.feeRateCache, tokenID)
+	c.feeRateMu.Unlock()
 }
 
 // ClearTickSizeCaches clears all cached tick sizes, negative risk flags, and fee rates.
@@ -118,6 +126,13 @@ func (c *Client) ClearFeeRateCache(tokenID string) {
 	c.feeRateMu.Lock()
 	delete(c.feeRateCache, tokenID)
 	c.feeRateMu.Unlock()
+}
+
+// ClearNegRiskCache removes the cached negative risk flag for a specific token.
+func (c *Client) ClearNegRiskCache(tokenID string) {
+	c.negRiskMu.Lock()
+	delete(c.negRiskCache, tokenID)
+	c.negRiskMu.Unlock()
 }
 
 // Host returns the base CLOB API host for the client.
