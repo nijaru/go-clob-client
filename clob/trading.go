@@ -569,43 +569,40 @@ func (c *Client) resolveTickSize(
 	tokenID string,
 	options *CreateOrderOptions,
 ) (TickSize, error) {
-	if options != nil && options.TickSize != "" {
-		marketTickSizeResp, err := c.GetTickSize(ctx, tokenID)
-		if err != nil {
-			return "", err
-		}
-		if isTickSizeSmaller(options.TickSize, marketTickSizeResp.MinimumTickSize) {
-			return "", fmt.Errorf(
-				"invalid tick size %q, minimum for market is %q",
-				options.TickSize,
-				marketTickSizeResp.MinimumTickSize,
-			)
-		}
-		return options.TickSize, nil
-	}
-
 	c.tickSizeMu.RLock()
 	cached, ok := c.tickSizeCache[tokenID]
 	ts := c.tickSizeTimestamps[tokenID]
 	c.tickSizeMu.RUnlock()
 
+	var marketTickSize TickSize
 	if ok && (c.tickSizeTTL == 0 || time.Since(ts) < c.tickSizeTTL) {
-		return cached, nil
+		marketTickSize = cached
+	} else {
+		response, err := c.GetTickSize(ctx, tokenID)
+		if err != nil {
+			return "", err
+		}
+		marketTickSize = response.MinimumTickSize
+
+		c.tickSizeMu.Lock()
+		c.tickSizeCache[tokenID] = marketTickSize
+		c.tickSizeTimestamps[tokenID] = time.Now()
+		c.tickSizeMu.Unlock()
 	}
 
-	response, err := c.GetTickSize(ctx, tokenID)
-	if err != nil {
-		return "", err
+	if options != nil && options.TickSize != "" {
+		if isTickSizeSmaller(options.TickSize, marketTickSize) {
+			return "", fmt.Errorf(
+				"invalid tick size %q, minimum for market is %q",
+				options.TickSize,
+				marketTickSize,
+			)
+		}
+		return options.TickSize, nil
 	}
 
-	c.tickSizeMu.Lock()
-	c.tickSizeCache[tokenID] = response.MinimumTickSize
-	c.tickSizeTimestamps[tokenID] = time.Now()
-	c.tickSizeMu.Unlock()
-
-	return response.MinimumTickSize, nil
+	return marketTickSize, nil
 }
-
 func (c *Client) resolveNegRisk(
 	ctx context.Context,
 	tokenID string,

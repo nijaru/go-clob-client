@@ -2,8 +2,10 @@ package clob
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
+	"net/http"
 	"net/url"
 	"strconv"
 	"sync"
@@ -544,6 +546,25 @@ func (c *Client) withRetry(ctx context.Context, fn func() error) error {
 			return nil
 		}
 		lastErr = err
+
+		// Only retry on:
+		// 1. Connection/context errors (non-API errors)
+		// 2. HTTP 429 (Rate Limit)
+		// 3. HTTP 5xx (Server Error)
+		var apiErr *polyhttp.APIError
+		shouldRetry := false
+		if errors.As(err, &apiErr) {
+			if apiErr.StatusCode == http.StatusTooManyRequests || apiErr.StatusCode >= 500 {
+				shouldRetry = true
+			}
+		} else {
+			// Not an API error (e.g., timeout, connection refused) - safe to retry
+			shouldRetry = true
+		}
+
+		if !shouldRetry {
+			return err
+		}
 
 		if i < c.retryMax {
 			backoff := c.retryBackoff * time.Duration(1<<i)
