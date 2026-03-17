@@ -124,11 +124,10 @@ func TestTypedReadOnlySurfaces(t *testing.T) {
 	}))
 	defer server.Close()
 
-	clientRaw, err := New(Config{Host: server.URL})
+	client, err := NewClient(Config{Host: server.URL})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
-	client := clientRaw.(*Client)
 
 	health, err := client.GetOk(t.Context())
 	if err != nil {
@@ -364,7 +363,7 @@ func TestTypedAuthenticatedSurfaces(t *testing.T) {
 	}))
 	defer server.Close()
 
-	clientRaw, err := New(Config{
+	client, err := NewAuthenticatedClient(Config{
 		Host:       server.URL,
 		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
 		Credentials: &Credentials{
@@ -376,7 +375,6 @@ func TestTypedAuthenticatedSurfaces(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
-	client := clientRaw.(*AuthenticatedClient)
 
 	readonly, err := client.CreateReadonlyAPIKey(t.Context())
 	if err != nil || readonly.APIKey != "readonly-1" {
@@ -522,11 +520,10 @@ func TestValidateReadonlyAPIKeyUsesPublicEndpoint(t *testing.T) {
 	}))
 	defer server.Close()
 
-	clientRaw, err := New(Config{Host: server.URL})
+	client, err := NewClient(Config{Host: server.URL})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
-	client := clientRaw.(*Client)
 
 	result, err := client.ValidateReadonlyAPIKey(t.Context(), "0xabc", "readonly-1")
 	if err != nil {

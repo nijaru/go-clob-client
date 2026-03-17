@@ -256,7 +256,7 @@ func TestBuilderAndHeartbeatEndpoints(t *testing.T) {
 	}))
 	defer server.Close()
 
-	clientRaw, err := New(Config{
+	client, err := NewAuthenticatedClient(Config{
 		Host:       server.URL,
 		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
 		Credentials: &Credentials{
@@ -273,7 +273,6 @@ func TestBuilderAndHeartbeatEndpoints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
-	client := clientRaw.(*AuthenticatedClient)
 
 	if _, err := client.GetOrder(t.Context(), "order-1"); err != nil {
 		t.Fatalf("get order with builder headers: %v", err)

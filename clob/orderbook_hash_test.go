@@ -5,11 +5,10 @@ import "testing"
 func TestGetOrderBookHash(t *testing.T) {
 	t.Parallel()
 
-	clientRaw, err := New(Config{})
+	client, err := NewClient(Config{})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
-	client := clientRaw.(*Client)
 
 	hash, err := client.GetOrderBookHash(OrderBookSummary{
 		Market:    "0xaabbcc",
@@ -41,11 +40,10 @@ func TestGetOrderBookHash(t *testing.T) {
 func TestGetOrderBookHashEmptyBook(t *testing.T) {
 	t.Parallel()
 
-	clientRaw, err := New(Config{})
+	client, err := NewClient(Config{})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
-	client := clientRaw.(*Client)
 
 	hash, err := client.GetOrderBookHash(OrderBookSummary{
 		Market:         "0xaabbcc",
@@ -70,11 +68,10 @@ func TestGetOrderBookHashEmptyBook(t *testing.T) {
 func TestGetOrderBookHashNilSlices(t *testing.T) {
 	t.Parallel()
 
-	clientRaw, err := New(Config{})
+	client, err := NewClient(Config{})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
-	client := clientRaw.(*Client)
 
 	// nil bids/asks should produce the same hash as empty slices
 	hashNil, err := client.GetOrderBookHash(OrderBookSummary{
@@ -125,11 +122,10 @@ func TestOrderBookHashMatchesOfficialReference(t *testing.T) {
 	//   print(hashlib.sha1(json.dumps(p,separators=(',',':')).encode()).hexdigest())"
 	expectedHash := "6d87cb5de10f3372dcd425c5dd5b90dd20ca3a7b"
 
-	clientRaw, err := New(Config{})
+	client, err := NewClient(Config{})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
-	client := clientRaw.(*Client)
 
 	hash, err := client.GetOrderBookHash(OrderBookSummary{
 		Market:         "0x123",

@@ -10,11 +10,10 @@ func TestAsAuthenticated(t *testing.T) {
 	t.Parallel()
 
 	privateKey := "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c"
-	clientRaw, err := New(Config{Host: "http://example.com", PrivateKey: privateKey})
+	client, err := NewSignerClient(Config{Host: "http://example.com", PrivateKey: privateKey})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
-	client := clientRaw.(*SignerClient)
 
 	// Upgrade to AuthenticatedClient
 	authClient := client.AsAuthenticated(Credentials{
@@ -31,11 +30,10 @@ func TestAsAuthenticated(t *testing.T) {
 func TestHost(t *testing.T) {
 	t.Parallel()
 
-	clientRaw, err := New(Config{Host: "https://example.com"})
+	client, err := NewClient(Config{Host: "https://example.com"})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
-	client := clientRaw.(*Client)
 
 	if got := client.Host(); got != "https://example.com" {
 		t.Errorf("Host() = %q, want %q", got, "https://example.com")
@@ -46,11 +44,10 @@ func TestAddressWithSigner(t *testing.T) {
 	t.Parallel()
 
 	privateKey := "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c"
-	clientRaw, err := New(Config{PrivateKey: privateKey})
+	client, err := NewSignerClient(Config{PrivateKey: privateKey})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
-	client := clientRaw.(*SignerClient)
 
 	addr := client.Address()
 	if addr == "" {
@@ -64,11 +61,10 @@ func TestAddressWithSigner(t *testing.T) {
 func TestClearTickSizeCache(t *testing.T) {
 	t.Parallel()
 
-	clientRaw, err := New(Config{})
+	client, err := NewClient(Config{})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
-	client := clientRaw.(*Client)
 
 	// Populate cache directly (cache is populated by resolveTickSize, not GetTickSize)
 	client.tickSizeMu.Lock()
@@ -97,11 +93,10 @@ func TestClearTickSizeCache(t *testing.T) {
 func TestClearFeeRateCache(t *testing.T) {
 	t.Parallel()
 
-	clientRaw, err := New(Config{})
+	client, err := NewClient(Config{})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
-	client := clientRaw.(*Client)
 
 	// Populate cache directly (cache is populated by resolveFeeRateBps, not GetFeeRateBps)
 	client.feeRateMu.Lock()
@@ -128,11 +123,10 @@ func TestClearFeeRateCache(t *testing.T) {
 func TestClearTickSizeCaches(t *testing.T) {
 	t.Parallel()
 
-	clientRaw, err := New(Config{})
+	client, err := NewClient(Config{})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
-	client := clientRaw.(*Client)
 
 	// Populate all caches directly
 	client.tickSizeMu.Lock()
@@ -185,7 +179,7 @@ func TestDropNotifications(t *testing.T) {
 	defer server.Close()
 
 	privateKey := "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c"
-	clientRaw, err := New(Config{
+	client, err := NewAuthenticatedClient(Config{
 		Host:       server.URL,
 		PrivateKey: privateKey,
 		Credentials: &Credentials{
@@ -197,7 +191,6 @@ func TestDropNotifications(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
-	client := clientRaw.(*AuthenticatedClient)
 
 	err = client.DropNotifications(t.Context(), DeleteNotificationsParams{
 		IDs: []string{"n1", "n2"},
@@ -215,7 +208,7 @@ func TestDeriveWSAuth(t *testing.T) {
 	t.Parallel()
 
 	privateKey := "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c"
-	clientRaw, err := New(Config{
+	client, err := NewAuthenticatedClient(Config{
 		PrivateKey: privateKey,
 		Credentials: &Credentials{
 			Key:        "my-key",
@@ -226,7 +219,6 @@ func TestDeriveWSAuth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
-	client := clientRaw.(*AuthenticatedClient)
 
 	auth, err := client.DeriveWSAuth(t.Context())
 	if err != nil {

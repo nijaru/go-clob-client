@@ -9,14 +9,13 @@ import (
 )
 
 func main() {
-	clientRaw, err := clob.New(clob.Config{
+	client, err := clob.NewSignerClient(clob.Config{
 		ChainID:    clob.PolygonChainID,
 		PrivateKey: os.Getenv("POLYMARKET_PRIVATE_KEY"),
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
-	client := clientRaw.(*clob.SignerClient)
 
 	creds, err := client.CreateOrDeriveAPIKey(context.Background(), 0)
 	if err != nil {

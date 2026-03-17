@@ -35,8 +35,7 @@ The SDK uses a three-tiered client structure to ensure safety. You cannot call t
 ### Read-Only Access
 
 ```go
-clientRaw, _ := clob.New(clob.Config{})
-client := clientRaw.(*clob.Client)
+client, _ := clob.NewClient(clob.Config{})
 
 book, _ := client.GetOrderBook(ctx, "<token-id>")
 fmt.Printf("Best bid: %s\n", book.Bids[len(book.Bids)-1].Price)
@@ -44,14 +43,13 @@ fmt.Printf("Best bid: %s\n", book.Bids[len(book.Bids)-1].Price)
 
 ### Full Authenticated Trading
 
-Providing both a `PrivateKey` and `Credentials` to `New()` returns an `*AuthenticatedClient` which automatically starts the background **Heartbeat loop** to maintain order liveness and priority.
+`NewAuthenticatedClient` returns an `*AuthenticatedClient` which automatically starts the background **Heartbeat loop** to maintain order liveness and priority.
 
 ```go
-clientRaw, _ := clob.New(clob.Config{
+client, _ := clob.NewAuthenticatedClient(clob.Config{
     PrivateKey:  os.Getenv("PK"),
     Credentials: &clob.Credentials{...},
 })
-client := clientRaw.(*clob.AuthenticatedClient)
 
 // Automatic heartbeats are now running in the background.
 // Batch up to 15 orders (2026 standard)
@@ -74,11 +72,11 @@ for order, err := range client.IterOpenOrders(ctx, clob.OpenOrderParams{}) {
 ## Features
 
 - **CLOB**: Full REST + WebSocket (Market & User channels) support.
-- **2026 Standards**: 
-    - Automated **Heartbeats** with ID rotation.
-    - **Batch Order Limits** increased to 15.
-    - **Post-Only** validation for GTC/GTD orders.
-    - **Maker Rebates** (`rebate_estimated`) in responses.
+- **2026 Standards**:
+  - Automated **Heartbeats** with ID rotation.
+  - **Batch Order Limits** increased to 15.
+  - **Post-Only** validation for GTC/GTD orders.
+  - **Maker Rebates** (`rebate_estimated`) in responses.
 - **Bridge**: Updated Jan 2026 API for `/withdraw` and `/status`.
 - **CTF**: On-chain `Split`, `Merge`, and `Redeem` operations.
 - **Gamma/Data**: Full market discovery and user analytics.

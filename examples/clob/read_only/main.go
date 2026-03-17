@@ -9,11 +9,10 @@ import (
 )
 
 func main() {
-	clientRaw, err := clob.New(clob.Config{})
+	client, err := clob.NewClient(clob.Config{})
 	if err != nil {
 		log.Fatal(err)
 	}
-	client := clientRaw.(*clob.Client)
 
 	serverTime, err := client.GetServerTime(context.Background())
 	if err != nil {

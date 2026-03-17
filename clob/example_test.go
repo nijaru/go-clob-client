@@ -8,25 +8,22 @@ import (
 	"github.com/quagmt/udecimal"
 )
 
-func ExampleNew_readOnly() {
-	clientRaw, err := clob.New(clob.Config{})
+func ExampleNewClient() {
+	client, err := clob.NewClient(clob.Config{})
 	if err != nil {
 		log.Fatal(err)
 	}
-	client := clientRaw.(*clob.Client)
-
 	_ = client
 }
 
 func ExampleSignerClient_CreateOrDeriveAPIKey() {
-	clientRaw, err := clob.New(clob.Config{
+	client, err := clob.NewSignerClient(clob.Config{
 		ChainID:    clob.PolygonChainID,
 		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
-	client := clientRaw.(*clob.SignerClient)
 
 	if false {
 		creds, err := client.CreateOrDeriveAPIKey(context.Background(), 0)
@@ -39,7 +36,7 @@ func ExampleSignerClient_CreateOrDeriveAPIKey() {
 }
 
 func ExampleNewLocalBuilderAuth() {
-	clientRaw, err := clob.New(clob.Config{
+	client, err := clob.NewAuthenticatedClient(clob.Config{
 		ChainID:    clob.PolygonChainID,
 		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
 		Credentials: &clob.Credentials{
@@ -56,13 +53,11 @@ func ExampleNewLocalBuilderAuth() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	client := clientRaw.(*clob.AuthenticatedClient)
-
 	_ = client
 }
 
 func ExampleAuthenticatedClient_CreateAndPostOrder() {
-	clientRaw, err := clob.New(clob.Config{
+	client, err := clob.NewAuthenticatedClient(clob.Config{
 		ChainID:    clob.PolygonChainID,
 		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
 		Credentials: &clob.Credentials{
@@ -74,7 +69,6 @@ func ExampleAuthenticatedClient_CreateAndPostOrder() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	client := clientRaw.(*clob.AuthenticatedClient)
 
 	if false {
 		_, err := client.CreateAndPostOrder(context.Background(), clob.OrderArgs{

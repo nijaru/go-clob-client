@@ -103,14 +103,13 @@ func TestTypedMarketPricingSurfaces(t *testing.T) {
 	}))
 	defer clobServer.Close()
 
-	clientRaw, err := New(Config{
+	client, err := NewClient(Config{
 		Host:         clobServer.URL,
 		GeoblockHost: geoblockServer.URL,
 	})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
-	client := clientRaw.(*Client)
 
 	geoblock, err := client.CheckGeoblock(t.Context())
 	if err != nil {

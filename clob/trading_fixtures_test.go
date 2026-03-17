@@ -86,7 +86,7 @@ func newTradingFixtureServer(t *testing.T) *httptest.Server {
 func TestNewDerivesFunderForProxySignatureTypes(t *testing.T) {
 	t.Parallel()
 
-	clientRaw, err := New(Config{
+	client, err := NewSignerClient(Config{
 		Host:          "https://clob.polymarket.com",
 		ChainID:       PolygonChainID,
 		PrivateKey:    "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
@@ -95,7 +95,6 @@ func TestNewDerivesFunderForProxySignatureTypes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
-	client := clientRaw.(*SignerClient)
 
 	if common.HexToAddress(
 		client.funderAddress,
@@ -306,11 +305,10 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 
 	for _, fixture := range fixtures {
 		t.Run(fixture.name, func(t *testing.T) {
-			clientRaw, err := New(fixture.client)
+			client, err := NewAuthenticatedClient(fixture.client)
 			if err != nil {
 				t.Fatalf("new client: %v", err)
 			}
-			client := clientRaw.(*AuthenticatedClient)
 			client.saltGenerator = func() (uint64, error) { return 1, nil }
 
 			order, err := fixture.build(client.SignerClient)

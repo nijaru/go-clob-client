@@ -50,11 +50,50 @@ type AuthenticatedClient struct {
 	heartbeatDone     chan struct{}
 }
 
-// New constructs a new Polymarket CLOB client. It returns a base Client if no auth is provided,
-// a SignerClient if only a PrivateKey is provided, or an AuthenticatedClient if both are provided.
-func New(config Config) (any, error) {
+// NewClient creates a read-only CLOB client. No private key or credentials are required.
+func NewClient(config Config) (*Client, error) {
 	config = config.normalized()
+	return newBase(config), nil
+}
 
+// NewSignerClient creates a signing CLOB client with L1 Ethereum auth. PrivateKey is required.
+func NewSignerClient(config Config) (*SignerClient, error) {
+	if config.PrivateKey == "" {
+		return nil, fmt.Errorf("PrivateKey is required")
+	}
+	config = config.normalized()
+	return newSignerFrom(newBase(config), config)
+}
+
+// NewAuthenticatedClient creates a fully authenticated CLOB client with L2 API key auth.
+// Both PrivateKey and Credentials are required.
+func NewAuthenticatedClient(config Config) (*AuthenticatedClient, error) {
+	if config.PrivateKey == "" {
+		return nil, fmt.Errorf("PrivateKey is required")
+	}
+	if config.Credentials == nil {
+		return nil, fmt.Errorf("Credentials are required")
+	}
+	config = config.normalized()
+	base := newBase(config)
+	sc, err := newSignerFrom(base, config)
+	if err != nil {
+		return nil, err
+	}
+	authClient := &AuthenticatedClient{
+		SignerClient:      sc,
+		creds:             config.Credentials,
+		builderAuth:       config.BuilderAuth,
+		heartbeatInterval: config.HeartbeatInterval,
+	}
+	base.http.Headers = authClient.addAuthHeaders
+	if !config.DisableAutoHeartbeat {
+		authClient.startHeartbeatLoop()
+	}
+	return authClient, nil
+}
+
+func newBase(config Config) *Client {
 	base := &Client{
 		host:          config.Host,
 		chainID:       config.ChainID,
@@ -66,7 +105,6 @@ func New(config Config) (any, error) {
 		feeRateMu:     &sync.RWMutex{},
 		feeRateCache:  make(map[string]int64),
 	}
-
 	base.http = &polyhttp.Client{
 		BaseURL:    config.Host,
 		HTTPClient: config.HTTPClient,
@@ -77,16 +115,14 @@ func New(config Config) (any, error) {
 		HTTPClient: config.HTTPClient,
 		UserAgent:  config.UserAgent,
 	}
+	return base
+}
 
-	if config.PrivateKey == "" {
-		return base, nil
-	}
-
+func newSignerFrom(base *Client, config Config) (*SignerClient, error) {
 	signer, err := polyauth.ParsePrivateKey(config.PrivateKey)
 	if err != nil {
 		return nil, err
 	}
-
 	funderAddress, err := normalizeFunderAddress(
 		config.ChainID,
 		signer.Address().Hex(),
@@ -96,37 +132,15 @@ func New(config Config) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	signerClient := &SignerClient{
+	sc := &SignerClient{
 		Client:        base,
 		signer:        signer,
 		signatureType: config.SignatureType,
 		funderAddress: funderAddress,
 		saltGenerator: generateSalt,
 	}
-
-	// Update base http handler to support L1 auth signing if needed
-	base.http.Headers = signerClient.addAuthHeaders
-
-	if config.Credentials == nil {
-		return signerClient, nil
-	}
-
-	authClient := &AuthenticatedClient{
-		SignerClient:      signerClient,
-		creds:             config.Credentials,
-		builderAuth:       config.BuilderAuth,
-		heartbeatInterval: config.HeartbeatInterval,
-	}
-
-	// Update base http handler to support L2 auth signing
-	base.http.Headers = authClient.addAuthHeaders
-
-	if !config.DisableAutoHeartbeat {
-		authClient.startHeartbeatLoop()
-	}
-
-	return authClient, nil
+	base.http.Headers = sc.addAuthHeaders
+	return sc, nil
 }
 
 // AsSigner upgrades a base client to a SignerClient.

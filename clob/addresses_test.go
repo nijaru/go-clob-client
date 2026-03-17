@@ -5,11 +5,10 @@ import "testing"
 func TestContractAddressHelpers(t *testing.T) {
 	t.Parallel()
 
-	clientRaw, err := New(Config{ChainID: PolygonChainID})
+	client, err := NewClient(Config{ChainID: PolygonChainID})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
-	client := clientRaw.(*Client)
 
 	collateral, err := client.GetCollateralAddress()
 	if err != nil {
@@ -47,11 +46,10 @@ func TestContractAddressHelpers(t *testing.T) {
 func TestContractAddressHelpersUnsupportedChain(t *testing.T) {
 	t.Parallel()
 
-	clientRaw, err := New(Config{ChainID: 1})
+	client, err := NewClient(Config{ChainID: 1})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
-	client := clientRaw.(*Client)
 
 	if _, err := client.GetCollateralAddress(); err == nil {
 		t.Fatal("expected unsupported chain error")
