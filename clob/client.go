@@ -52,7 +52,7 @@ type SignerClient struct {
 // AuthenticatedClient extends the base client with methods requiring API credentials (L2).
 type AuthenticatedClient struct {
 	*SignerClient
-	credsMu           sync.RWMutex
+	authMu           sync.RWMutex
 	creds             *Credentials
 	builderAuth       BuilderAuth
 	heartbeatID       string
@@ -102,6 +102,18 @@ func NewAuthenticatedClient(config Config) (*AuthenticatedClient, error) {
 		authClient.startHeartbeatLoop()
 	}
 	return authClient, nil
+}
+
+// Credentials returns the current API credentials.
+func (c *AuthenticatedClient) Credentials() *Credentials {
+	return c.credentials()
+}
+
+// PromoteToBuilder upgrades the client with builder credentials, enabling builder-authenticated requests.
+func (c *AuthenticatedClient) PromoteToBuilder(auth BuilderAuth) {
+	c.authMu.Lock()
+	defer c.authMu.Unlock()
+	c.builderAuth = auth
 }
 
 func newBase(config Config) *Client {
@@ -334,9 +346,9 @@ func (c *Client) Host() string {
 // SetCredentials updates the API credentials used for authenticated requests.
 // Safe to call concurrently with in-flight requests.
 func (c *AuthenticatedClient) SetCredentials(creds Credentials) {
-	c.credsMu.Lock()
+	c.authMu.Lock()
 	c.creds = &creds
-	c.credsMu.Unlock()
+	c.authMu.Unlock()
 }
 
 // Address returns the signer address backing the client.
@@ -349,10 +361,16 @@ func (c *SignerClient) Address() string {
 
 // credentials returns the current credentials under a read lock.
 func (c *AuthenticatedClient) credentials() *Credentials {
-	c.credsMu.RLock()
+	c.authMu.RLock()
 	creds := c.creds
-	c.credsMu.RUnlock()
+	c.authMu.RUnlock()
 	return creds
+}
+
+func (c *AuthenticatedClient) getBuilderAuth() BuilderAuth {
+	c.authMu.RLock()
+	defer c.authMu.RUnlock()
+	return c.builderAuth
 }
 
 func (c *SignerClient) addAuthHeaders(
@@ -433,7 +451,7 @@ func (c *AuthenticatedClient) addAuthHeaders(
 		if err != nil {
 			return nil, err
 		}
-		if c.builderAuth == nil {
+		if c.getBuilderAuth() == nil {
 			return headers, nil
 		}
 		builderHeaders, err := c.builderHeaders(ctx, method, path, body, timestamp)
@@ -604,11 +622,11 @@ func (c *AuthenticatedClient) builderHeaders(
 	body []byte,
 	timestamp int64,
 ) (map[string]string, error) {
-	if c.builderAuth == nil {
+	if c.getBuilderAuth() == nil {
 		return nil, fmt.Errorf("builder auth requires Config.BuilderAuth")
 	}
 
-	return c.builderAuth.Headers(ctx, BuilderHeaderRequest{
+	return c.getBuilderAuth().Headers(ctx, BuilderHeaderRequest{
 		Method:    method,
 		Path:      path,
 		Body:      body,
