@@ -133,11 +133,11 @@ type Comment struct {
 
 // CommentProfile contains author information for a comment.
 type CommentProfile struct {
-	BaseAddress            string  `json:"baseAddress"`
-	DisplayUsernamePublic  bool    `json:"displayUsernamePublic"`
-	Name                   string  `json:"name"`
-	ProxyWallet            *string `json:"proxyWallet,omitzero"`
-	Pseudonym              *string `json:"pseudonym,omitzero"`
+	BaseAddress           string  `json:"baseAddress"`
+	DisplayUsernamePublic bool    `json:"displayUsernamePublic"`
+	Name                  string  `json:"name"`
+	ProxyWallet           *string `json:"proxyWallet,omitzero"`
+	Pseudonym             *string `json:"pseudonym,omitzero"`
 }
 
 // CommentType defines the types of comment events.

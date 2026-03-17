@@ -75,7 +75,7 @@ func TestRTDSClient(t *testing.T) {
 						Timestamp: time.Now().UnixMilli(),
 					}
 					resp.Payload, _ = json.Marshal(payload)
-					
+
 					respData, _ := json.Marshal(resp)
 					conn.Write(r.Context(), websocket.MessageText, respData)
 				}
@@ -113,7 +113,7 @@ func TestRTDSClient(t *testing.T) {
 		select {
 		case msg := <-client.Messages():
 			receivedTopics[msg.Topic] = true
-			
+
 			// Verify payload extraction helpers
 			switch msg.Topic {
 			case "crypto_prices":
@@ -164,7 +164,7 @@ func TestRTDSReconnect(t *testing.T) {
 		if err != nil {
 			return
 		}
-		
+
 		// If it's the first connection, close it immediately to trigger reconnect
 		if connCount == 1 {
 			conn.Close(websocket.StatusGoingAway, "bye")

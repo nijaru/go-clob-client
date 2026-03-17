@@ -4,32 +4,32 @@ import "time"
 
 // Position represents an open market position.
 type Position struct {
-	ProxyWallet        string    `json:"proxyWallet"`
-	Asset              string    `json:"asset"`
-	ConditionID        string    `json:"conditionId"`
-	Size               string    `json:"size"`
-	AvgPrice           string    `json:"avgPrice"`
-	InitialValue       string    `json:"initialValue"`
-	CurrentValue       string    `json:"currentValue"`
-	CashPNL            string    `json:"cashPnl"`
-	PercentPNL         string    `json:"percentPnl"`
-	TotalBought        string    `json:"totalBought"`
-	RealizedPNL        string    `json:"realizedPnl"`
-	PercentRealizedPNL string    `json:"percentRealizedPnl"`
-	CurPrice           string    `json:"curPrice"`
-	Redeemable         bool      `json:"redeemable"`
-	Mergeable          bool      `json:"mergeable"`
-	Title              string    `json:"title"`
-	Slug               string    `json:"slug"`
-	Icon               string    `json:"icon"`
-	EventSlug          string    `json:"eventSlug"`
-	EventID            string    `json:"eventId,omitzero"`
-	Outcome            string    `json:"outcome"`
-	OutcomeIndex       int       `json:"outcomeIndex"`
-	OppositeOutcome    string    `json:"oppositeOutcome"`
-	OppositeAsset      string    `json:"oppositeAsset"`
-	EndDate            string    `json:"endDate,omitzero"`
-	NegativeRisk       bool      `json:"negativeRisk"`
+	ProxyWallet        string `json:"proxyWallet"`
+	Asset              string `json:"asset"`
+	ConditionID        string `json:"conditionId"`
+	Size               string `json:"size"`
+	AvgPrice           string `json:"avgPrice"`
+	InitialValue       string `json:"initialValue"`
+	CurrentValue       string `json:"currentValue"`
+	CashPNL            string `json:"cashPnl"`
+	PercentPNL         string `json:"percentPnl"`
+	TotalBought        string `json:"totalBought"`
+	RealizedPNL        string `json:"realizedPnl"`
+	PercentRealizedPNL string `json:"percentRealizedPnl"`
+	CurPrice           string `json:"curPrice"`
+	Redeemable         bool   `json:"redeemable"`
+	Mergeable          bool   `json:"mergeable"`
+	Title              string `json:"title"`
+	Slug               string `json:"slug"`
+	Icon               string `json:"icon"`
+	EventSlug          string `json:"eventSlug"`
+	EventID            string `json:"eventId,omitzero"`
+	Outcome            string `json:"outcome"`
+	OutcomeIndex       int    `json:"outcomeIndex"`
+	OppositeOutcome    string `json:"oppositeOutcome"`
+	OppositeAsset      string `json:"oppositeAsset"`
+	EndDate            string `json:"endDate,omitzero"`
+	NegativeRisk       bool   `json:"negativeRisk"`
 }
 
 // ClosedPosition represents a historical market position.
