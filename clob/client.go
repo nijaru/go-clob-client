@@ -52,7 +52,7 @@ type SignerClient struct {
 // AuthenticatedClient extends the base client with methods requiring API credentials (L2).
 type AuthenticatedClient struct {
 	*SignerClient
-	authMu           sync.RWMutex
+	authMu            sync.RWMutex
 	creds             *Credentials
 	builderAuth       BuilderAuth
 	heartbeatID       string
@@ -118,10 +118,10 @@ func (c *AuthenticatedClient) PromoteToBuilder(auth BuilderAuth) {
 
 func newBase(config Config) *Client {
 	base := &Client{
-		host:          config.Host,
-		rtdsHost:      config.RTDSHost,
-		chainID:       config.ChainID,
-		useServerTime: config.UseServerTime,
+		host:               config.Host,
+		rtdsHost:           config.RTDSHost,
+		chainID:            config.ChainID,
+		useServerTime:      config.UseServerTime,
 		tickSizeMu:         &sync.RWMutex{},
 		tickSizeCache:      make(map[string]TickSize),
 		tickSizeTimestamps: make(map[string]time.Time),
@@ -336,6 +336,32 @@ func (c *Client) ClearNegRiskCache(tokenID string) {
 	c.negRiskMu.Lock()
 	delete(c.negRiskCache, tokenID)
 	c.negRiskMu.Unlock()
+}
+
+// SetTickSize pre-populates the tick size cache for tokenID, bypassing the HTTP fetch.
+func (c *Client) SetTickSize(tokenID string, size TickSize) {
+	c.tickSizeMu.Lock()
+	c.tickSizeCache[tokenID] = size
+	c.tickSizeMu.Unlock()
+}
+
+// SetNegRisk pre-populates the neg risk cache for tokenID.
+func (c *Client) SetNegRisk(tokenID string, negRisk bool) {
+	c.negRiskMu.Lock()
+	c.negRiskCache[tokenID] = negRisk
+	c.negRiskMu.Unlock()
+}
+
+// SetFeeRateBps pre-populates the fee rate cache for tokenID.
+func (c *Client) SetFeeRateBps(tokenID string, bps int64) {
+	c.feeRateMu.Lock()
+	c.feeRateCache[tokenID] = bps
+	c.feeRateMu.Unlock()
+}
+
+// InvalidateCaches clears all internal caches (tick size, neg risk, fee rate).
+func (c *Client) InvalidateCaches() {
+	c.ClearTickSizeCaches()
 }
 
 // Host returns the base CLOB API host for the client.
