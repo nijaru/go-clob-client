@@ -41,7 +41,10 @@ func (c *SignerClient) DeriveAPIKey(ctx context.Context, nonce int64) (*Credenti
 
 // CreateOrDeriveAPIKey creates a new API key or derives the existing one when the server
 // rejects creation with an API error indicating the key already exists.
-func (c *SignerClient) CreateOrDeriveAPIKey(ctx context.Context, nonce int64) (*Credentials, error) {
+func (c *SignerClient) CreateOrDeriveAPIKey(
+	ctx context.Context,
+	nonce int64,
+) (*Credentials, error) {
 	creds, err := c.CreateAPIKey(ctx, nonce)
 	if err == nil {
 		return creds, nil
@@ -213,7 +216,10 @@ func (c *AuthenticatedClient) PostOrders(
 	requests []PostOrderRequest,
 ) ([]PostOrderResponse, error) {
 	if len(requests) > PostOrdersBatchLimit {
-		return nil, fmt.Errorf("batch size exceeds limit of %d (2026 standard)", PostOrdersBatchLimit)
+		return nil, fmt.Errorf(
+			"batch size exceeds limit of %d (2026 standard)",
+			PostOrdersBatchLimit,
+		)
 	}
 	var out []PostOrderResponse
 	err := c.postJSON(ctx, postOrdersEndpoint, requests, polyhttp.AuthL2Builder, &out)
@@ -221,7 +227,10 @@ func (c *AuthenticatedClient) PostOrders(
 }
 
 // CancelOrder cancels a single order by ID.
-func (c *AuthenticatedClient) CancelOrder(ctx context.Context, orderID string) (*CancelOrdersResponse, error) {
+func (c *AuthenticatedClient) CancelOrder(
+	ctx context.Context,
+	orderID string,
+) (*CancelOrdersResponse, error) {
 	var out CancelOrdersResponse
 	err := c.deleteJSON(
 		ctx,

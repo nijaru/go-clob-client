@@ -310,7 +310,7 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 			if err != nil {
 				t.Fatalf("new client: %v", err)
 			}
-	client := clientRaw.(*AuthenticatedClient)
+			client := clientRaw.(*AuthenticatedClient)
 			client.saltGenerator = func() (uint64, error) { return 1, nil }
 
 			order, err := fixture.build(client.SignerClient)

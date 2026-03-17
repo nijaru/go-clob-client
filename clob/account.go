@@ -10,7 +10,9 @@ import (
 )
 
 // CreateReadonlyAPIKey creates a readonly API key for the authenticated account.
-func (c *AuthenticatedClient) CreateReadonlyAPIKey(ctx context.Context) (*ReadonlyAPIKeyResponse, error) {
+func (c *AuthenticatedClient) CreateReadonlyAPIKey(
+	ctx context.Context,
+) (*ReadonlyAPIKeyResponse, error) {
 	var out ReadonlyAPIKeyResponse
 	err := c.postJSON(ctx, createReadonlyAPIKeyEndpoint, nil, polyhttp.AuthL2, &out)
 	return &out, err
@@ -62,7 +64,10 @@ func (c *AuthenticatedClient) GetNotifications(ctx context.Context) ([]Notificat
 }
 
 // DropNotifications is an alias for DeleteNotifications.
-func (c *AuthenticatedClient) DropNotifications(ctx context.Context, params DeleteNotificationsParams) error {
+func (c *AuthenticatedClient) DropNotifications(
+	ctx context.Context,
+	params DeleteNotificationsParams,
+) error {
 	return c.DeleteNotifications(ctx, params)
 }
 

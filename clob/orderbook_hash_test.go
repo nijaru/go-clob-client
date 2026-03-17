@@ -147,6 +147,10 @@ func TestOrderBookHashMatchesOfficialReference(t *testing.T) {
 	}
 
 	if hash != expectedHash {
-		t.Errorf("hash mismatch with official reference:\n  got:  %s\n  want: %s", hash, expectedHash)
+		t.Errorf(
+			"hash mismatch with official reference:\n  got:  %s\n  want: %s",
+			hash,
+			expectedHash,
+		)
 	}
 }

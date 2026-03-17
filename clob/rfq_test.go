@@ -1,12 +1,13 @@
 package clob
 
 import (
-	"github.com/go-json-experiment/json/jsontext"
-	json "github.com/go-json-experiment/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	json "github.com/go-json-experiment/json"
+	"github.com/go-json-experiment/json/jsontext"
 
 	"github.com/quagmt/udecimal"
 )

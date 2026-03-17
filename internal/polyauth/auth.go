@@ -8,12 +8,13 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	json "github.com/go-json-experiment/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
+
+	json "github.com/go-json-experiment/json"
 
 	"github.com/ethereum/go-ethereum/common"
 	ethmath "github.com/ethereum/go-ethereum/common/math"

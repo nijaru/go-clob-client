@@ -113,7 +113,9 @@ func (c *AuthenticatedClient) GetUserEarningsAndMarketsConfigPage(
 }
 
 // GetRewardPercentages returns the liquidity reward percentages for the authenticated user.
-func (c *AuthenticatedClient) GetRewardPercentages(ctx context.Context) (RewardsPercentages, error) {
+func (c *AuthenticatedClient) GetRewardPercentages(
+	ctx context.Context,
+) (RewardsPercentages, error) {
 	query := url.Values{}
 	query.Set("signature_type", signatureTypeString(c.signatureType))
 

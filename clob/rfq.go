@@ -2,9 +2,10 @@ package clob
 
 import (
 	"context"
-	"github.com/go-json-experiment/json/jsontext"
 	"net/url"
 	"strconv"
+
+	"github.com/go-json-experiment/json/jsontext"
 
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
 )
@@ -141,7 +142,10 @@ func (c *AuthenticatedClient) GetRFQQuoterQuotes(
 
 // GetRFQBestQuote retrieves the current best quote for a specific request.
 // Level 2 Auth required.
-func (c *AuthenticatedClient) GetRFQBestQuote(ctx context.Context, requestID string) (*RFQQuote, error) {
+func (c *AuthenticatedClient) GetRFQBestQuote(
+	ctx context.Context,
+	requestID string,
+) (*RFQQuote, error) {
 	query := url.Values{}
 	query.Set("requestId", requestID)
 
@@ -168,7 +172,10 @@ func (c *AuthenticatedClient) AcceptRFQQuote(
 
 // ApproveRFQOrder allows a quoter to approve the final order.
 // Level 2 Auth required.
-func (c *AuthenticatedClient) ApproveRFQOrder(ctx context.Context, params ApproveRFQOrderRequest) error {
+func (c *AuthenticatedClient) ApproveRFQOrder(
+	ctx context.Context,
+	params ApproveRFQOrderRequest,
+) error {
 	return c.postJSON(ctx, rfqQuoteApproveEndpoint, params, polyhttp.AuthL2, nil)
 }
 

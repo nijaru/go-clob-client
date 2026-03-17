@@ -4,11 +4,12 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
-	json "github.com/go-json-experiment/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	json "github.com/go-json-experiment/json"
 )
 
 func TestLocalBuilderAuthHeaders(t *testing.T) {

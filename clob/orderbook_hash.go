@@ -3,6 +3,7 @@ package clob
 import (
 	"crypto/sha1"
 	"encoding/hex"
+
 	json "github.com/go-json-experiment/json"
 )
 

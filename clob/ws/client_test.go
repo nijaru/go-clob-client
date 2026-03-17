@@ -1,12 +1,13 @@
 package ws
 
 import (
-	json "github.com/go-json-experiment/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	json "github.com/go-json-experiment/json"
 
 	"github.com/coder/websocket"
 	"github.com/nijaru/go-clob-client/clob"

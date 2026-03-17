@@ -72,11 +72,11 @@ type StatusResponse struct {
 
 // BridgeTransaction represents a single bridge transaction.
 type BridgeTransaction struct {
-	ID                   string `json:"id"`
-	Status               string `json:"status"`
-	FromAmountBaseUnit   string `json:"fromAmountBaseUnit"`
-	FromTokenAddress     string `json:"fromTokenAddress"`
-	FromChainID          string `json:"fromChainId"`
-	ToChainID            string `json:"toChainId"`
-	TransactionHash      string `json:"transactionHash"`
+	ID                 string `json:"id"`
+	Status             string `json:"status"`
+	FromAmountBaseUnit string `json:"fromAmountBaseUnit"`
+	FromTokenAddress   string `json:"fromTokenAddress"`
+	FromChainID        string `json:"fromChainId"`
+	ToChainID          string `json:"toChainId"`
+	TransactionHash    string `json:"transactionHash"`
 }

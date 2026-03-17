@@ -1,10 +1,11 @@
 package data
 
 import (
-	json "github.com/go-json-experiment/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	json "github.com/go-json-experiment/json"
 )
 
 func TestClient_GetPositions(t *testing.T) {

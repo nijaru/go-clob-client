@@ -3,14 +3,15 @@ package polyhttp
 import (
 	"bytes"
 	"context"
-	"github.com/go-json-experiment/json/jsontext"
-	json "github.com/go-json-experiment/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+
+	json "github.com/go-json-experiment/json"
+	"github.com/go-json-experiment/json/jsontext"
 )
 
 type AuthLevel int

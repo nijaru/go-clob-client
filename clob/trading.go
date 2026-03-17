@@ -193,7 +193,9 @@ func (c *AuthenticatedClient) BuildPostOrderRequest(
 	}
 
 	if postOnly && orderType != OrderTypeGTC && orderType != OrderTypeGTD {
-		return PostOrderRequest{}, fmt.Errorf("postOnly is only supported for GTC and GTD orders (2026 standard)")
+		return PostOrderRequest{}, fmt.Errorf(
+			"postOnly is only supported for GTC and GTD orders (2026 standard)",
+		)
 	}
 
 	return PostOrderRequest{

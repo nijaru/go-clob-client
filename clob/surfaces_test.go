@@ -1,11 +1,12 @@
 package clob
 
 import (
-	json "github.com/go-json-experiment/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	json "github.com/go-json-experiment/json"
 )
 
 func TestTypedReadOnlySurfaces(t *testing.T) {

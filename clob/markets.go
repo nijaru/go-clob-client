@@ -37,7 +37,9 @@ func (c *Client) GetSamplingSimplifiedMarkets(ctx context.Context) ([]Simplified
 }
 
 // IterSamplingSimplifiedMarkets returns an iterator over simplified markets from the sampling endpoint.
-func (c *Client) IterSamplingSimplifiedMarkets(ctx context.Context) iter.Seq2[SimplifiedMarket, error] {
+func (c *Client) IterSamplingSimplifiedMarkets(
+	ctx context.Context,
+) iter.Seq2[SimplifiedMarket, error] {
 	return func(yield func(SimplifiedMarket, error) bool) {
 		cursor := initialCursor
 		for cursor != endCursor {

@@ -246,4 +246,3 @@ func TestDeriveWSAuth(t *testing.T) {
 		t.Error("signature should not be empty")
 	}
 }
-

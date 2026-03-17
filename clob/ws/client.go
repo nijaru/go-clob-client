@@ -2,10 +2,11 @@ package ws
 
 import (
 	"context"
-	json "github.com/go-json-experiment/json"
 	"fmt"
 	"sync"
 	"time"
+
+	json "github.com/go-json-experiment/json"
 
 	"github.com/coder/websocket"
 	"github.com/nijaru/go-clob-client/clob"

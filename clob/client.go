@@ -130,7 +130,11 @@ func New(config Config) (any, error) {
 }
 
 // AsSigner upgrades a base client to a SignerClient.
-func (c *Client) AsSigner(privateKey string, sigType SignatureType, funder string) (*SignerClient, error) {
+func (c *Client) AsSigner(
+	privateKey string,
+	sigType SignatureType,
+	funder string,
+) (*SignerClient, error) {
 	signer, err := polyauth.ParsePrivateKey(privateKey)
 	if err != nil {
 		return nil, err
@@ -166,7 +170,10 @@ func (c *Client) AsSigner(privateKey string, sigType SignatureType, funder strin
 }
 
 // AsAuthenticated upgrades a SignerClient to an AuthenticatedClient.
-func (c *SignerClient) AsAuthenticated(creds Credentials, builder BuilderAuth) *AuthenticatedClient {
+func (c *SignerClient) AsAuthenticated(
+	creds Credentials,
+	builder BuilderAuth,
+) *AuthenticatedClient {
 	// Deep copy the base client to prevent mutating the shared http transport
 	baseCopy := *(c.Client)
 	baseCopy.http = &polyhttp.Client{
@@ -326,7 +333,9 @@ func (c *SignerClient) addAuthHeaders(
 		}
 		return polyauth.L1Headers(c.signer, c.chainID, timestamp, value)
 	default:
-		return nil, fmt.Errorf("this client only supports L1 auth, please upgrade to an AuthenticatedClient")
+		return nil, fmt.Errorf(
+			"this client only supports L1 auth, please upgrade to an AuthenticatedClient",
+		)
 	}
 }
 

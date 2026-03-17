@@ -1,10 +1,11 @@
 package clob
 
 import (
-	json "github.com/go-json-experiment/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	json "github.com/go-json-experiment/json"
 )
 
 func TestTypedAuthenticatedResponses(t *testing.T) {

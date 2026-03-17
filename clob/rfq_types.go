@@ -1,9 +1,10 @@
 package clob
 
 import (
-	json "github.com/go-json-experiment/json"
 	"fmt"
 	"strconv"
+
+	json "github.com/go-json-experiment/json"
 
 	"github.com/quagmt/udecimal"
 )
