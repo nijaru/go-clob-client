@@ -1,10 +1,7 @@
 # go-clob-client
 
-> [!CAUTION]
-> **Experimental SDK**: This SDK has not yet been extensively tested in high-volume live trading environments. Use at your own risk. Errors in financial software can lead to irreversible loss of funds.
-
-> [!NOTE]
-> This SDK is feature-complete for the core CLOB flows (including RFQ and WebSockets) and market metadata (Gamma). It implements the **March 2026 Polymarket Technical Standards**, including Type-Level Auth Guards, automated Heartbeats, and 15-order batch limits.
+> [!WARNING]
+> **Experimental SDK**: This implementation of the March 2026 Polymarket Technical Standards (including Type-Level Auth Guards and automated Heartbeats) is feature-complete but has not been extensively tested in high-volume live trading environments. Use at your own risk. Errors in financial software can lead to irreversible loss of funds.
 
 Go SDK for the Polymarket CLOB.
 
