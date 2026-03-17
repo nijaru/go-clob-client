@@ -214,12 +214,6 @@ func (c *SignerClient) AsAuthenticated(
 	return ac
 }
 
-// IsAuthenticated returns true if the client is an AuthenticatedClient.
-func (c *Client) IsAuthenticated() bool {
-	_, ok := any(c).(*AuthenticatedClient)
-	return ok
-}
-
 // Close stops any background tasks (like heartbeats) and cleans up resources.
 func (c *AuthenticatedClient) Close() error {
 	if c.heartbeatCancel != nil {

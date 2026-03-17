@@ -716,13 +716,5 @@ func isTickSizeSmaller(a, b TickSize) bool {
 	return aParsed.Cmp(bParsed) < 0
 }
 
-// AuthenticatedOnly returns an error if the client is not in an authenticated state (2026 Type Guard).
-func (c *Client) AuthenticatedOnly() error {
-	if !c.IsAuthenticated() {
-		return fmt.Errorf("this method requires an authenticated client (signer + API credentials)")
-	}
-	return nil
-}
-
 // PostOrdersBatchLimit is the maximum number of orders allowed in a single batch (2026 limit).
 const PostOrdersBatchLimit = 15

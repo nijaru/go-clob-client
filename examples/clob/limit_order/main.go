@@ -22,6 +22,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer client.Close()
 
 	response, err := client.CreateAndPostOrder(context.Background(), clob.OrderArgs{
 		TokenID: os.Getenv("POLYMARKET_TOKEN_ID"),

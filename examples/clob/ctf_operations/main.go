@@ -23,6 +23,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer client.Close()
 
 	ctx := context.Background()
 	conditionID := "0x..." // Replace with a real market condition ID
