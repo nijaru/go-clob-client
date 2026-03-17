@@ -85,23 +85,12 @@ for order, err := range client.IterOpenOrders(ctx, clob.OpenOrderParams{}) {
 
 ## Examples
 
-- `examples/clob/read_only/main.go`
-- `examples/clob/auth_bootstrap/main.go`
-- `examples/clob/limit_order/main.go`
-- `examples/ws/main.go`
-- `examples/clob/ctf_operations/main.go`
+Explore the `examples/` directory for runnable implementations:
 
-## Development
-
-```bash
-# Modern Go 1.26 formatting
-make fmt
-
-# Test
-make test
-
-# Build
-make build
-```
+- **Read-Only**: `examples/clob/read_only` — Public orderbook and market data.
+- **Auth Bootstrap**: `examples/clob/auth_bootstrap` — Creating and deriving API keys.
+- **Trading**: `examples/clob/limit_order` — Placing limit orders with tiered clients.
+- **WebSockets**: `examples/ws` — Real-time orderbook and user event streaming.
+- **On-chain Ops**: `examples/clob/ctf_operations` — Splitting, merging, and redeeming shares.
 
 Requires Go 1.26.1+.
