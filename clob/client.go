@@ -21,11 +21,11 @@ type Client struct {
 	http          *polyhttp.Client
 	geoblockHTTP  *polyhttp.Client
 
-	tickSizeMu    sync.RWMutex
+	tickSizeMu    *sync.RWMutex
 	tickSizeCache map[string]TickSize
-	negRiskMu     sync.RWMutex
+	negRiskMu     *sync.RWMutex
 	negRiskCache  map[string]bool
-	feeRateMu     sync.RWMutex
+	feeRateMu     *sync.RWMutex
 	feeRateCache  map[string]int64
 }
 
@@ -59,8 +59,11 @@ func New(config Config) (any, error) {
 		host:          config.Host,
 		chainID:       config.ChainID,
 		useServerTime: config.UseServerTime,
+		tickSizeMu:    &sync.RWMutex{},
 		tickSizeCache: make(map[string]TickSize),
+		negRiskMu:     &sync.RWMutex{},
 		negRiskCache:  make(map[string]bool),
+		feeRateMu:     &sync.RWMutex{},
 		feeRateCache:  make(map[string]int64),
 	}
 
