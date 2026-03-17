@@ -7,7 +7,7 @@ Go SDK for the Polymarket CLOB.
 
 - **Full 2026 Parity**: Implements Heartbeats API, 15-order batch limits, and the new Bridge withdrawal endpoints.
 - **Type-Level Auth Guards**: Strict client tiers (`Client`, `SignerClient`, `AuthenticatedClient`) prevent accidental unauthenticated calls to trading endpoints.
-- **Modern Go 1.26**: Built for Go 1.26 with experimental `jsonv2` support, iterators for pagination, and type-safe error handling.
+- **Modern Go 1.26**: Built for Go 1.26 with `json/v2` (external package), iterators for pagination, and type-safe error handling.
 - **Comprehensive Coverage**: CLOB (REST + WS), RFQ, Gamma (Metadata), Data (User Stats), Bridge (Cross-chain), and CTF (On-chain operations).
 
 ## Install
@@ -97,11 +97,11 @@ for order, err := range client.IterOpenOrders(ctx, clob.OpenOrderParams{}) {
 # Modern Go 1.26 formatting
 make fmt
 
-# Test with jsonv2 experiment
+# Test
 make test
 
-# Build with jsonv2 experiment
+# Build
 make build
 ```
 
-Requires Go 1.26.1+ and `GOEXPERIMENT=jsonv2`.
+Requires Go 1.26.1+.

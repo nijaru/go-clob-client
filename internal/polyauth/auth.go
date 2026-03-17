@@ -8,7 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	json "encoding/json/v2"
+	json "github.com/go-json-experiment/json"
 	"fmt"
 	"io"
 	"net/http"

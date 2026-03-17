@@ -1,7 +1,7 @@
 package data
 
 import (
-	json "encoding/json/v2"
+	json "github.com/go-json-experiment/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"

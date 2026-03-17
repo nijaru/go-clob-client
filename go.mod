@@ -5,6 +5,7 @@ go 1.26.1
 require (
 	github.com/coder/websocket v1.8.14
 	github.com/ethereum/go-ethereum v1.17.1
+	github.com/go-json-experiment/json v0.0.0-20260214004413-d219187c3433
 	github.com/quagmt/udecimal v1.10.0
 )
 

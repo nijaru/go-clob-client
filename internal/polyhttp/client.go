@@ -3,8 +3,8 @@ package polyhttp
 import (
 	"bytes"
 	"context"
-	"encoding/json/jsontext"
-	json "encoding/json/v2"
+	"github.com/go-json-experiment/json/jsontext"
+	json "github.com/go-json-experiment/json"
 	"fmt"
 	"io"
 	"net/http"

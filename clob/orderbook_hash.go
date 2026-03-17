@@ -3,7 +3,7 @@ package clob
 import (
 	"crypto/sha1"
 	"encoding/hex"
-	json "encoding/json/v2"
+	json "github.com/go-json-experiment/json"
 )
 
 // orderBookHashPayload represents the payload used for order book hashing.

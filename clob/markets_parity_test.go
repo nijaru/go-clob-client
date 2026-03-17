@@ -1,7 +1,7 @@
 package clob
 
 import (
-	json "encoding/json/v2"
+	json "github.com/go-json-experiment/json"
 	"io"
 	"net/http"
 	"net/http/httptest"

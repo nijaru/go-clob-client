@@ -2,7 +2,7 @@ package ws
 
 import (
 	"context"
-	json "encoding/json/v2"
+	json "github.com/go-json-experiment/json"
 	"fmt"
 	"sync"
 	"time"

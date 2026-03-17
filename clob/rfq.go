@@ -2,7 +2,7 @@ package clob
 
 import (
 	"context"
-	"encoding/json/jsontext"
+	"github.com/go-json-experiment/json/jsontext"
 	"net/url"
 	"strconv"
 

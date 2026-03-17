@@ -4,7 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
-	json "encoding/json/v2"
+	json "github.com/go-json-experiment/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
