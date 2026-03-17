@@ -158,7 +158,14 @@ func (c *Client) heartbeatLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			// Polymarket expects plain text "PING"
+			c.mu.Lock()
+			if c.conn == nil {
+				c.mu.Unlock()
+				return
+			}
 			err := c.conn.Write(ctx, websocket.MessageText, []byte("PING"))
+			c.mu.Unlock()
+
 			if err != nil {
 				if ctx.Err() != nil {
 					return
