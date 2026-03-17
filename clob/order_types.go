@@ -29,8 +29,8 @@ type PostOrderResponse struct {
 
 // CancelOrdersResponse reports which orders were canceled successfully.
 type CancelOrdersResponse struct {
-	Canceled    []string
-	NotCanceled map[string]string
+	Canceled    []string          `json:"canceled"`
+	NotCanceled map[string]string `json:"notCanceled"`
 }
 
 // Side is the taker or maker side for an order or trade.
