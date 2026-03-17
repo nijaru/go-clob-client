@@ -2,6 +2,7 @@ package clob
 
 import (
 	"context"
+	"iter"
 	"net/url"
 
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
@@ -12,24 +13,42 @@ func (c *AuthenticatedClient) GetEarningsForUserForDay(
 	ctx context.Context,
 	date string,
 ) ([]UserEarning, error) {
-	cursor := initialCursor
 	earnings := make([]UserEarning, 0, 64)
-
-	for cursor != endCursor {
-		page, err := c.GetEarningsForUserForDayPage(ctx, date, cursor)
+	for earning, err := range c.IterEarningsForUserForDay(ctx, date) {
 		if err != nil {
 			return nil, err
 		}
-		earnings = append(earnings, page.Data...)
-
-		nextCursor, done := nextPageCursor(cursor, page.NextCursor)
-		if done {
-			return earnings, nil
-		}
-		cursor = nextCursor
+		earnings = append(earnings, earning)
 	}
-
 	return earnings, nil
+}
+
+// IterEarningsForUserForDay returns an iterator over earnings entries for a given day.
+func (c *AuthenticatedClient) IterEarningsForUserForDay(
+	ctx context.Context,
+	date string,
+) iter.Seq2[UserEarning, error] {
+	return func(yield func(UserEarning, error) bool) {
+		cursor := initialCursor
+		for cursor != endCursor {
+			page, err := c.GetEarningsForUserForDayPage(ctx, date, cursor)
+			if err != nil {
+				var zero UserEarning
+				yield(zero, err)
+				return
+			}
+			for _, earning := range page.Data {
+				if !yield(earning, nil) {
+					return
+				}
+			}
+			nextCursor, done := nextPageCursor(cursor, page.NextCursor)
+			if done {
+				return
+			}
+			cursor = nextCursor
+		}
+	}
 }
 
 // GetEarningsForUserForDayPage returns a single earnings page for a given day.
@@ -66,24 +85,42 @@ func (c *AuthenticatedClient) GetUserEarningsAndMarketsConfig(
 	ctx context.Context,
 	params UserRewardsFilterParams,
 ) ([]UserRewardsEarning, error) {
-	cursor := initialCursor
 	entries := make([]UserRewardsEarning, 0, 64)
-
-	for cursor != endCursor {
-		page, err := c.GetUserEarningsAndMarketsConfigPage(ctx, params, cursor)
+	for entry, err := range c.IterUserEarningsAndMarketsConfig(ctx, params) {
 		if err != nil {
 			return nil, err
 		}
-		entries = append(entries, page.Data...)
-
-		nextCursor, done := nextPageCursor(cursor, page.NextCursor)
-		if done {
-			return entries, nil
-		}
-		cursor = nextCursor
+		entries = append(entries, entry)
 	}
-
 	return entries, nil
+}
+
+// IterUserEarningsAndMarketsConfig returns an iterator over user reward-and-market entries.
+func (c *AuthenticatedClient) IterUserEarningsAndMarketsConfig(
+	ctx context.Context,
+	params UserRewardsFilterParams,
+) iter.Seq2[UserRewardsEarning, error] {
+	return func(yield func(UserRewardsEarning, error) bool) {
+		cursor := initialCursor
+		for cursor != endCursor {
+			page, err := c.GetUserEarningsAndMarketsConfigPage(ctx, params, cursor)
+			if err != nil {
+				var zero UserRewardsEarning
+				yield(zero, err)
+				return
+			}
+			for _, entry := range page.Data {
+				if !yield(entry, nil) {
+					return
+				}
+			}
+			nextCursor, done := nextPageCursor(cursor, page.NextCursor)
+			if done {
+				return
+			}
+			cursor = nextCursor
+		}
+	}
 }
 
 // GetUserEarningsAndMarketsConfigPage returns a single user reward-and-market page.
@@ -126,24 +163,41 @@ func (c *AuthenticatedClient) GetRewardPercentages(
 
 // GetCurrentRewards returns all paginated current reward summaries.
 func (c *AuthenticatedClient) GetCurrentRewards(ctx context.Context) ([]CurrentReward, error) {
-	cursor := initialCursor
 	rewards := make([]CurrentReward, 0, 64)
-
-	for cursor != endCursor {
-		page, err := c.GetCurrentRewardsPage(ctx, cursor)
+	for reward, err := range c.IterCurrentRewards(ctx) {
 		if err != nil {
 			return nil, err
 		}
-		rewards = append(rewards, page.Data...)
-
-		nextCursor, done := nextPageCursor(cursor, page.NextCursor)
-		if done {
-			return rewards, nil
-		}
-		cursor = nextCursor
+		rewards = append(rewards, reward)
 	}
-
 	return rewards, nil
+}
+
+// IterCurrentRewards returns an iterator over current reward summaries.
+func (c *AuthenticatedClient) IterCurrentRewards(
+	ctx context.Context,
+) iter.Seq2[CurrentReward, error] {
+	return func(yield func(CurrentReward, error) bool) {
+		cursor := initialCursor
+		for cursor != endCursor {
+			page, err := c.GetCurrentRewardsPage(ctx, cursor)
+			if err != nil {
+				var zero CurrentReward
+				yield(zero, err)
+				return
+			}
+			for _, reward := range page.Data {
+				if !yield(reward, nil) {
+					return
+				}
+			}
+			nextCursor, done := nextPageCursor(cursor, page.NextCursor)
+			if done {
+				return
+			}
+			cursor = nextCursor
+		}
+	}
 }
 
 // GetCurrentRewardsPage returns a single current rewards page.
@@ -171,24 +225,42 @@ func (c *AuthenticatedClient) GetRewardsForMarket(
 	ctx context.Context,
 	conditionID string,
 ) ([]MarketReward, error) {
-	cursor := initialCursor
 	rewards := make([]MarketReward, 0, 64)
-
-	for cursor != endCursor {
-		page, err := c.GetRewardsForMarketPage(ctx, conditionID, cursor)
+	for reward, err := range c.IterRewardsForMarket(ctx, conditionID) {
 		if err != nil {
 			return nil, err
 		}
-		rewards = append(rewards, page.Data...)
-
-		nextCursor, done := nextPageCursor(cursor, page.NextCursor)
-		if done {
-			return rewards, nil
-		}
-		cursor = nextCursor
+		rewards = append(rewards, reward)
 	}
-
 	return rewards, nil
+}
+
+// IterRewardsForMarket returns an iterator over reward rows for a specific market.
+func (c *AuthenticatedClient) IterRewardsForMarket(
+	ctx context.Context,
+	conditionID string,
+) iter.Seq2[MarketReward, error] {
+	return func(yield func(MarketReward, error) bool) {
+		cursor := initialCursor
+		for cursor != endCursor {
+			page, err := c.GetRewardsForMarketPage(ctx, conditionID, cursor)
+			if err != nil {
+				var zero MarketReward
+				yield(zero, err)
+				return
+			}
+			for _, reward := range page.Data {
+				if !yield(reward, nil) {
+					return
+				}
+			}
+			nextCursor, done := nextPageCursor(cursor, page.NextCursor)
+			if done {
+				return
+			}
+			cursor = nextCursor
+		}
+	}
 }
 
 // GetRewardsForMarketPage returns a single reward page for a specific market.

@@ -20,6 +20,9 @@ const (
 	EventTypeLastTradePrice EventType = "last_trade_price"
 	EventTypeOrder          EventType = "order"
 	EventTypeTrade          EventType = "trade"
+	EventTypeBestBidAsk     EventType = "best_bid_ask"
+	EventTypeNewMarket      EventType = "new_market"
+	EventTypeMarketResolved EventType = "market_resolved"
 )
 
 // UserSubscription is the message sent to subscribe to user updates.
@@ -30,8 +33,12 @@ type UserSubscription struct {
 
 // MarketSubscription is the message sent to subscribe to market updates.
 type MarketSubscription struct {
-	Type     Channel  `json:"type"`
-	AssetIDs []string `json:"asset_ids"`
+	Type                 Channel  `json:"type"`
+	Operation            string   `json:"operation,omitzero"`
+	Markets              []string `json:"markets,omitzero"`
+	AssetIDs             []string `json:"asset_ids"`
+	InitialDump          bool     `json:"initial_dump,omitzero"`
+	CustomFeatureEnabled bool     `json:"custom_feature_enabled,omitzero"`
 }
 
 // BaseEvent contains fields common to all WebSocket events.
@@ -104,6 +111,56 @@ type TradeEvent struct {
 	Side      clob.Side `json:"side"`
 	Status    string    `json:"status"`
 	Timestamp string    `json:"timestamp"`
+}
+
+// BestBidAskEvent is emitted when the best bid or ask for a market changes.
+type BestBidAskEvent struct {
+	BaseEvent
+	Market    string `json:"market"`
+	AssetID   string `json:"asset_id"`
+	BestBid   string `json:"best_bid"`
+	BestAsk   string `json:"best_ask"`
+	Spread    string `json:"spread"`
+	Timestamp string `json:"timestamp"`
+}
+
+// EventMessage contains metadata about a market's event.
+type EventMessage struct {
+	ID          string `json:"id"`
+	Ticker      string `json:"ticker"`
+	Slug        string `json:"slug"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+}
+
+// NewMarketEvent is emitted when a new market is created.
+type NewMarketEvent struct {
+	BaseEvent
+	ID           string        `json:"id"`
+	Question     string        `json:"question"`
+	Market       string        `json:"market"`
+	Slug         string        `json:"slug"`
+	Description  string        `json:"description"`
+	AssetIDs     []string      `json:"asset_ids"`
+	Outcomes     []string      `json:"outcomes"`
+	EventMessage *EventMessage `json:"event_message,omitzero"`
+	Timestamp    string        `json:"timestamp"`
+}
+
+// MarketResolvedEvent is emitted when a market is resolved.
+type MarketResolvedEvent struct {
+	BaseEvent
+	ID             string        `json:"id"`
+	Question       string        `json:"question,omitzero"`
+	Market         string        `json:"market"`
+	Slug           string        `json:"slug,omitzero"`
+	Description    string        `json:"description,omitzero"`
+	AssetIDs       []string      `json:"asset_ids"`
+	Outcomes       []string      `json:"outcomes,omitzero"`
+	WinningAssetID string        `json:"winning_asset_id"`
+	WinningOutcome string        `json:"winning_outcome"`
+	EventMessage   *EventMessage `json:"event_message,omitzero"`
+	Timestamp      string        `json:"timestamp"`
 }
 
 // OrderStatus represents the lifecycle state of an order as streamed by the user channel.

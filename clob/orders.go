@@ -301,28 +301,46 @@ func (c *AuthenticatedClient) RevokeBuilderAPIKey(ctx context.Context) error {
 	)
 }
 
+// IterBuilderTrades returns an iterator over builder trades matching the provided filters.
+func (c *AuthenticatedClient) IterBuilderTrades(
+	ctx context.Context,
+	params TradeParams,
+) iter.Seq2[BuilderTrade, error] {
+	return func(yield func(BuilderTrade, error) bool) {
+		cursor := initialCursor
+		for cursor != endCursor {
+			page, err := c.GetBuilderTradesPage(ctx, params, cursor)
+			if err != nil {
+				var zero BuilderTrade
+				yield(zero, err)
+				return
+			}
+			for _, trade := range page.Data {
+				if !yield(trade, nil) {
+					return
+				}
+			}
+			nextCursor, done := nextPageCursor(cursor, page.NextCursor)
+			if done {
+				return
+			}
+			cursor = nextCursor
+		}
+	}
+}
+
 // GetBuilderTrades returns all paginated builder trades that match the provided filters.
 func (c *AuthenticatedClient) GetBuilderTrades(
 	ctx context.Context,
 	params TradeParams,
 ) ([]BuilderTrade, error) {
-	cursor := initialCursor
 	trades := make([]BuilderTrade, 0, 64)
-
-	for cursor != endCursor {
-		page, err := c.GetBuilderTradesPage(ctx, params, cursor)
+	for trade, err := range c.IterBuilderTrades(ctx, params) {
 		if err != nil {
 			return nil, err
 		}
-		trades = append(trades, page.Data...)
-
-		nextCursor, done := nextPageCursor(cursor, page.NextCursor)
-		if done {
-			return trades, nil
-		}
-		cursor = nextCursor
+		trades = append(trades, trade)
 	}
-
 	return trades, nil
 }
 
@@ -397,24 +415,4 @@ func tradesQuery(params TradeParams, nextCursor string) url.Values {
 		query.Set("next_cursor", nextCursor)
 	}
 	return query
-}
-
-func normalizedCursor(nextCursor string) string {
-	if nextCursor == "" {
-		return initialCursor
-	}
-	return nextCursor
-}
-
-func nextPageCursor(currentCursor, nextCursor string) (string, bool) {
-	switch nextCursor {
-	case "":
-		return "", true
-	case currentCursor:
-		return "", true
-	case endCursor:
-		return endCursor, false
-	default:
-		return nextCursor, false
-	}
 }

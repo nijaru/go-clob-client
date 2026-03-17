@@ -53,6 +53,17 @@ type Config struct {
 	HeartbeatInterval time.Duration
 	// DisableAutoHeartbeat prevents the client from starting the background heartbeat loop.
 	DisableAutoHeartbeat bool
+
+	// TickSizeCacheTTL is the duration for which tick sizes are cached.
+	// Defaults to 0 (no expiration).
+	TickSizeCacheTTL time.Duration
+
+	// RetryMax is the maximum number of times to retry a failed request.
+	// Defaults to 0 (no retries).
+	RetryMax int
+	// RetryBackoff is the base duration for exponential backoff between retries.
+	// Defaults to 1 second.
+	RetryBackoff time.Duration
 }
 
 func (c Config) normalized() Config {
@@ -80,6 +91,10 @@ func (c Config) normalized() Config {
 
 	if c.HeartbeatInterval == 0 {
 		c.HeartbeatInterval = 5 * time.Second
+	}
+
+	if c.RetryBackoff == 0 {
+		c.RetryBackoff = 1 * time.Second
 	}
 
 	return c

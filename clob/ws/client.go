@@ -30,6 +30,18 @@ type Client struct {
 	stop   chan struct{}
 	cancel context.CancelFunc
 	closed bool
+
+	autoReconnect bool
+	subsMu        sync.RWMutex
+	marketSubs    []marketSub
+	userSub       *clob.WSAuth
+}
+
+type marketSub struct {
+	assetIDs             []string
+	markets              []string
+	initialDump          bool
+	customFeatureEnabled bool
 }
 
 // NewClient creates a new WebSocket client.
@@ -38,15 +50,27 @@ func NewClient(url string) *Client {
 		url = defaultMarketURL
 	}
 	return &Client{
-		url:    url,
-		events: make(chan any, 100),
-		errs:   make(chan error, 10),
-		stop:   make(chan struct{}),
+		url:           url,
+		events:        make(chan any, 100),
+		errs:          make(chan error, 10),
+		stop:          make(chan struct{}),
+		autoReconnect: true,
 	}
 }
 
 // Connect opens the WebSocket connection and starts the read/heartbeat loops.
 func (c *Client) Connect(ctx context.Context) error {
+	return c.connect(ctx)
+}
+
+func (c *Client) connect(ctx context.Context) error {
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return fmt.Errorf("client closed")
+	}
+	c.mu.Unlock()
+
 	conn, _, err := websocket.Dial(ctx, c.url, nil)
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)
@@ -62,6 +86,23 @@ func (c *Client) Connect(ctx context.Context) error {
 
 	go c.readLoop(loopCtx)
 	go c.heartbeatLoop(loopCtx)
+
+	// Resubscribe if reconnecting
+	c.subsMu.RLock()
+	marketSubs := c.marketSubs
+	userSub := c.userSub
+	c.subsMu.RUnlock()
+
+	for _, sub := range marketSubs {
+		if err := c.SubscribeMarket(ctx, sub.assetIDs, sub.markets, sub.initialDump, sub.customFeatureEnabled); err != nil {
+			// Log error but continue?
+		}
+	}
+	if userSub != nil {
+		if err := c.SubscribeUser(ctx, *userSub); err != nil {
+			// Log error
+		}
+	}
 
 	return nil
 }
@@ -95,11 +136,28 @@ func (c *Client) Close() error {
 }
 
 // SubscribeMarket sends a market subscription message.
-func (c *Client) SubscribeMarket(ctx context.Context, assetIDs []string) error {
+func (c *Client) SubscribeMarket(
+	ctx context.Context,
+	assetIDs, markets []string,
+	initialDump, customFeatureEnabled bool,
+) error {
 	sub := MarketSubscription{
-		Type:     ChannelMarket,
-		AssetIDs: assetIDs,
+		Type:                 ChannelMarket,
+		AssetIDs:             assetIDs,
+		Markets:              markets,
+		InitialDump:          initialDump,
+		CustomFeatureEnabled: customFeatureEnabled,
 	}
+
+	c.subsMu.Lock()
+	c.marketSubs = append(c.marketSubs, marketSub{
+		assetIDs:             assetIDs,
+		markets:              markets,
+		initialDump:          initialDump,
+		customFeatureEnabled: customFeatureEnabled,
+	})
+	c.subsMu.Unlock()
+
 	return c.sendJSON(ctx, sub)
 }
 
@@ -109,6 +167,11 @@ func (c *Client) SubscribeUser(ctx context.Context, auth clob.WSAuth) error {
 		Type: ChannelUser,
 		Auth: auth,
 	}
+
+	c.subsMu.Lock()
+	c.userSub = &auth
+	c.subsMu.Unlock()
+
 	return c.sendJSON(ctx, sub)
 }
 
@@ -132,6 +195,13 @@ func (c *Client) readLoop(ctx context.Context) {
 			if ctx.Err() != nil {
 				return
 			}
+
+			// If auto-reconnect enabled, try to reconnect
+			if c.autoReconnect {
+				go c.attemptReconnect()
+				return
+			}
+
 			select {
 			case c.errs <- fmt.Errorf("read: %w", err):
 			default:
@@ -215,6 +285,12 @@ func (c *Client) handleMessage(ctx context.Context, data []byte) {
 		event = &OrderEvent{}
 	case EventTypeTrade:
 		event = &TradeEvent{}
+	case EventTypeBestBidAsk:
+		event = &BestBidAskEvent{}
+	case EventTypeNewMarket:
+		event = &NewMarketEvent{}
+	case EventTypeMarketResolved:
+		event = &MarketResolvedEvent{}
 	default:
 		// Unknown event type — report so callers can notice new API events.
 		select {
@@ -235,5 +311,37 @@ func (c *Client) handleMessage(ctx context.Context, data []byte) {
 	select {
 	case c.events <- event:
 	case <-ctx.Done():
+	}
+}
+
+func (c *Client) attemptReconnect() {
+	backoff := 1 * time.Second
+	maxBackoff := 60 * time.Second
+
+	for {
+		c.mu.Lock()
+		if c.closed {
+			c.mu.Unlock()
+			return
+		}
+		c.mu.Unlock()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		err := c.connect(ctx)
+		cancel()
+
+		if err == nil {
+			return
+		}
+
+		select {
+		case <-c.stop:
+			return
+		case <-time.After(backoff):
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
+		}
 	}
 }

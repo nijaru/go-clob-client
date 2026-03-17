@@ -21,12 +21,19 @@ type Client struct {
 	http          *polyhttp.Client
 	geoblockHTTP  *polyhttp.Client
 
-	tickSizeMu    *sync.RWMutex
-	tickSizeCache map[string]TickSize
-	negRiskMu     *sync.RWMutex
-	negRiskCache  map[string]bool
-	feeRateMu     *sync.RWMutex
-	feeRateCache  map[string]int64
+	tickSizeMu         *sync.RWMutex
+	tickSizeCache      map[string]TickSize
+	tickSizeTimestamps map[string]time.Time
+	negRiskMu          *sync.RWMutex
+	negRiskCache       map[string]bool
+	negRiskTimestamps  map[string]time.Time
+	feeRateMu          *sync.RWMutex
+	feeRateCache       map[string]int64
+	feeRateTimestamps  map[string]time.Time
+
+	tickSizeTTL  time.Duration
+	retryMax     int
+	retryBackoff time.Duration
 }
 
 // SignerClient extends the base client with methods requiring an Ethereum signer (L1).
@@ -98,12 +105,19 @@ func newBase(config Config) *Client {
 		host:          config.Host,
 		chainID:       config.ChainID,
 		useServerTime: config.UseServerTime,
-		tickSizeMu:    &sync.RWMutex{},
-		tickSizeCache: make(map[string]TickSize),
-		negRiskMu:     &sync.RWMutex{},
-		negRiskCache:  make(map[string]bool),
-		feeRateMu:     &sync.RWMutex{},
-		feeRateCache:  make(map[string]int64),
+		tickSizeMu:         &sync.RWMutex{},
+		tickSizeCache:      make(map[string]TickSize),
+		tickSizeTimestamps: make(map[string]time.Time),
+		negRiskMu:          &sync.RWMutex{},
+		negRiskCache:       make(map[string]bool),
+		negRiskTimestamps:  make(map[string]time.Time),
+		feeRateMu:          &sync.RWMutex{},
+		feeRateCache:       make(map[string]int64),
+		feeRateTimestamps:  make(map[string]time.Time),
+
+		tickSizeTTL:  config.TickSizeCacheTTL,
+		retryMax:     config.RetryMax,
+		retryBackoff: config.RetryBackoff,
 	}
 	base.http = &polyhttp.Client{
 		BaseURL:    config.Host,
@@ -431,7 +445,9 @@ func (c *Client) getJSON(
 	auth polyhttp.AuthLevel,
 	out any,
 ) error {
-	return c.http.GetJSON(ctx, path, query, auth, out)
+	return c.withRetry(ctx, func() error {
+		return c.http.GetJSON(ctx, path, query, auth, out)
+	})
 }
 
 func (c *Client) getGeoblockJSON(
@@ -450,7 +466,9 @@ func (c *Client) postJSON(
 	auth polyhttp.AuthLevel,
 	out any,
 ) error {
-	return c.http.PostJSON(ctx, path, body, auth, out)
+	return c.withRetry(ctx, func() error {
+		return c.http.PostJSON(ctx, path, body, auth, out)
+	})
 }
 
 func (c *Client) deleteJSON(
@@ -460,7 +478,9 @@ func (c *Client) deleteJSON(
 	auth polyhttp.AuthLevel,
 	out any,
 ) error {
-	return c.http.DeleteJSON(ctx, path, body, auth, out)
+	return c.withRetry(ctx, func() error {
+		return c.http.DeleteJSON(ctx, path, body, auth, out)
+	})
 }
 
 func (c *Client) deleteJSONQuery(
@@ -471,7 +491,9 @@ func (c *Client) deleteJSONQuery(
 	auth polyhttp.AuthLevel,
 	out any,
 ) error {
-	return c.http.DeleteJSONQuery(ctx, path, query, body, auth, out)
+	return c.withRetry(ctx, func() error {
+		return c.http.DeleteJSONQuery(ctx, path, query, body, auth, out)
+	})
 }
 
 func (c *Client) getJSONWithNonce(
@@ -482,7 +504,9 @@ func (c *Client) getJSONWithNonce(
 	nonce int64,
 	out any,
 ) error {
-	return c.http.GetJSONWithNonce(ctx, path, query, auth, nonce, out)
+	return c.withRetry(ctx, func() error {
+		return c.http.GetJSONWithNonce(ctx, path, query, auth, nonce, out)
+	})
 }
 
 func (c *Client) postJSONWithNonce(
@@ -493,7 +517,9 @@ func (c *Client) postJSONWithNonce(
 	nonce int64,
 	out any,
 ) error {
-	return c.http.PostJSONWithNonce(ctx, path, body, auth, nonce, out)
+	return c.withRetry(ctx, func() error {
+		return c.http.PostJSONWithNonce(ctx, path, body, auth, nonce, out)
+	})
 }
 
 func (c *Client) doJSON(
@@ -505,7 +531,31 @@ func (c *Client) doJSON(
 	out any,
 	extraHeaders map[string]string,
 ) error {
-	return c.http.DoJSON(ctx, method, path, query, body, auth, nil, extraHeaders, out)
+	return c.withRetry(ctx, func() error {
+		return c.http.DoJSON(ctx, method, path, query, body, auth, nil, extraHeaders, out)
+	})
+}
+
+func (c *Client) withRetry(ctx context.Context, fn func() error) error {
+	var lastErr error
+	for i := 0; i <= c.retryMax; i++ {
+		err := fn()
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+
+		if i < c.retryMax {
+			backoff := c.retryBackoff * time.Duration(1<<i)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(backoff):
+				continue
+			}
+		}
+	}
+	return lastErr
 }
 
 func (c *AuthenticatedClient) builderHeaders(

@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"strconv"
+	"time"
 
 	ethmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
@@ -585,8 +586,10 @@ func (c *Client) resolveTickSize(
 
 	c.tickSizeMu.RLock()
 	cached, ok := c.tickSizeCache[tokenID]
+	ts := c.tickSizeTimestamps[tokenID]
 	c.tickSizeMu.RUnlock()
-	if ok {
+
+	if ok && (c.tickSizeTTL == 0 || time.Since(ts) < c.tickSizeTTL) {
 		return cached, nil
 	}
 
@@ -597,6 +600,7 @@ func (c *Client) resolveTickSize(
 
 	c.tickSizeMu.Lock()
 	c.tickSizeCache[tokenID] = response.MinimumTickSize
+	c.tickSizeTimestamps[tokenID] = time.Now()
 	c.tickSizeMu.Unlock()
 
 	return response.MinimumTickSize, nil
@@ -613,8 +617,10 @@ func (c *Client) resolveNegRisk(
 
 	c.negRiskMu.RLock()
 	cached, ok := c.negRiskCache[tokenID]
+	ts := c.negRiskTimestamps[tokenID]
 	c.negRiskMu.RUnlock()
-	if ok {
+
+	if ok && (c.tickSizeTTL == 0 || time.Since(ts) < c.tickSizeTTL) {
 		return cached, nil
 	}
 
@@ -625,6 +631,7 @@ func (c *Client) resolveNegRisk(
 
 	c.negRiskMu.Lock()
 	c.negRiskCache[tokenID] = response.NegRisk
+	c.negRiskTimestamps[tokenID] = time.Now()
 	c.negRiskMu.Unlock()
 
 	return response.NegRisk, nil
@@ -637,10 +644,11 @@ func (c *Client) resolveFeeRateBps(
 ) (int64, error) {
 	c.feeRateMu.RLock()
 	cached, ok := c.feeRateCache[tokenID]
+	ts := c.feeRateTimestamps[tokenID]
 	c.feeRateMu.RUnlock()
 
 	var marketFeeRateBps int64
-	if ok {
+	if ok && (c.tickSizeTTL == 0 || time.Since(ts) < c.tickSizeTTL) {
 		marketFeeRateBps = cached
 	} else {
 		bps, err := c.GetFeeRateBps(ctx, tokenID)
@@ -649,6 +657,7 @@ func (c *Client) resolveFeeRateBps(
 		}
 		c.feeRateMu.Lock()
 		c.feeRateCache[tokenID] = bps
+		c.feeRateTimestamps[tokenID] = time.Now()
 		c.feeRateMu.Unlock()
 		marketFeeRateBps = bps
 	}
