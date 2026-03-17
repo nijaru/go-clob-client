@@ -13,21 +13,13 @@ import (
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
 )
 
-// Client is the public Polymarket CLOB HTTP client.
-// A Client is safe for concurrent use by multiple goroutines.
+// Client is the base Polymarket CLOB client containing public, unauthenticated methods.
 type Client struct {
 	host          string
 	chainID       int64
 	useServerTime bool
 	http          *polyhttp.Client
 	geoblockHTTP  *polyhttp.Client
-	signer        *polyauth.Signer
-	credsMu       sync.RWMutex
-	creds         *Credentials
-	builderAuth   BuilderAuth
-	signatureType SignatureType
-	funderAddress string
-	saltGenerator func() (uint64, error)
 
 	tickSizeMu    sync.RWMutex
 	tickSizeCache map[string]TickSize
@@ -37,58 +29,172 @@ type Client struct {
 	feeRateCache  map[string]int64
 }
 
-// New constructs a new Polymarket CLOB client from the provided config.
-func New(config Config) (*Client, error) {
+// SignerClient extends the base client with methods requiring an Ethereum signer (L1).
+type SignerClient struct {
+	*Client
+	signer        *polyauth.Signer
+	signatureType SignatureType
+	funderAddress string
+	saltGenerator func() (uint64, error)
+}
+
+// AuthenticatedClient extends the base client with methods requiring API credentials (L2).
+type AuthenticatedClient struct {
+	*SignerClient
+	credsMu           sync.RWMutex
+	creds             *Credentials
+	builderAuth       BuilderAuth
+	heartbeatID       string
+	heartbeatInterval time.Duration
+	heartbeatCancel   context.CancelFunc
+	heartbeatDone     chan struct{}
+}
+
+// New constructs a new Polymarket CLOB client. It returns a base Client if no auth is provided,
+// a SignerClient if only a PrivateKey is provided, or an AuthenticatedClient if both are provided.
+func New(config Config) (any, error) {
 	config = config.normalized()
 
-	client := &Client{
+	base := &Client{
 		host:          config.Host,
 		chainID:       config.ChainID,
 		useServerTime: config.UseServerTime,
-		creds:         config.Credentials,
-		builderAuth:   config.BuilderAuth,
-		signatureType: config.SignatureType,
-		saltGenerator: generateSalt,
+		tickSizeCache: make(map[string]TickSize),
+		negRiskCache:  make(map[string]bool),
+		feeRateCache:  make(map[string]int64),
 	}
 
-	if config.PrivateKey != "" {
-		signer, err := polyauth.ParsePrivateKey(config.PrivateKey)
-		if err != nil {
-			return nil, err
-		}
-		client.signer = signer
-
-		funderAddress, err := normalizeFunderAddress(
-			config.ChainID,
-			signer.Address().Hex(),
-			config.SignatureType,
-			config.FunderAddress,
-		)
-		if err != nil {
-			return nil, err
-		}
-		client.funderAddress = funderAddress
-	} else {
-		client.funderAddress = config.FunderAddress
-	}
-
-	client.http = &polyhttp.Client{
+	base.http = &polyhttp.Client{
 		BaseURL:    config.Host,
 		HTTPClient: config.HTTPClient,
 		UserAgent:  config.UserAgent,
-		Headers:    client.addAuthHeaders,
 	}
-	client.geoblockHTTP = &polyhttp.Client{
+	base.geoblockHTTP = &polyhttp.Client{
 		BaseURL:    config.GeoblockHost,
 		HTTPClient: config.HTTPClient,
 		UserAgent:  config.UserAgent,
 	}
 
-	client.tickSizeCache = make(map[string]TickSize)
-	client.negRiskCache = make(map[string]bool)
-	client.feeRateCache = make(map[string]int64)
+	if config.PrivateKey == "" {
+		return base, nil
+	}
 
-	return client, nil
+	signer, err := polyauth.ParsePrivateKey(config.PrivateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	funderAddress, err := normalizeFunderAddress(
+		config.ChainID,
+		signer.Address().Hex(),
+		config.SignatureType,
+		config.FunderAddress,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	signerClient := &SignerClient{
+		Client:        base,
+		signer:        signer,
+		signatureType: config.SignatureType,
+		funderAddress: funderAddress,
+		saltGenerator: generateSalt,
+	}
+
+	// Update base http handler to support L1 auth signing if needed
+	base.http.Headers = signerClient.addAuthHeaders
+
+	if config.Credentials == nil {
+		return signerClient, nil
+	}
+
+	authClient := &AuthenticatedClient{
+		SignerClient:      signerClient,
+		creds:             config.Credentials,
+		builderAuth:       config.BuilderAuth,
+		heartbeatInterval: config.HeartbeatInterval,
+	}
+
+	// Update base http handler to support L2 auth signing
+	base.http.Headers = authClient.addAuthHeaders
+
+	if !config.DisableAutoHeartbeat {
+		authClient.startHeartbeatLoop()
+	}
+
+	return authClient, nil
+}
+
+// AsSigner upgrades a base client to a SignerClient.
+func (c *Client) AsSigner(privateKey string, sigType SignatureType, funder string) (*SignerClient, error) {
+	signer, err := polyauth.ParsePrivateKey(privateKey)
+	if err != nil {
+		return nil, err
+	}
+	funderAddress, err := normalizeFunderAddress(c.chainID, signer.Address().Hex(), sigType, funder)
+	if err != nil {
+		return nil, err
+	}
+	sc := &SignerClient{
+		Client:        c,
+		signer:        signer,
+		signatureType: sigType,
+		funderAddress: funderAddress,
+		saltGenerator: generateSalt,
+	}
+	c.http.Headers = sc.addAuthHeaders
+	return sc, nil
+}
+
+// AsAuthenticated upgrades a SignerClient to an AuthenticatedClient.
+func (c *SignerClient) AsAuthenticated(creds Credentials, builder BuilderAuth) *AuthenticatedClient {
+	ac := &AuthenticatedClient{
+		SignerClient: c,
+		creds:        &creds,
+		builderAuth:  builder,
+	}
+	c.http.Headers = ac.addAuthHeaders
+	return ac
+}
+
+// IsAuthenticated returns true if the client is an AuthenticatedClient.
+func (c *Client) IsAuthenticated() bool {
+	_, ok := any(c).(*AuthenticatedClient)
+	return ok
+}
+
+// Close stops any background tasks (like heartbeats) and cleans up resources.
+func (c *AuthenticatedClient) Close() error {
+	if c.heartbeatCancel != nil {
+		c.heartbeatCancel()
+		<-c.heartbeatDone
+	}
+	return nil
+}
+
+func (c *AuthenticatedClient) startHeartbeatLoop() {
+	ctx, cancel := context.WithCancel(context.Background())
+	c.heartbeatCancel = cancel
+	c.heartbeatDone = make(chan struct{})
+
+	go func() {
+		defer close(c.heartbeatDone)
+		ticker := time.NewTicker(c.heartbeatInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				resp, err := c.PostHeartbeat(ctx, c.heartbeatID)
+				if err == nil {
+					c.heartbeatID = resp.HeartbeatID
+				}
+			}
+		}
+	}()
 }
 
 // ClearTickSizeCache removes the cached tick size, negative risk flag, and fee rate for a specific token.
@@ -142,14 +248,14 @@ func (c *Client) Host() string {
 
 // SetCredentials updates the API credentials used for authenticated requests.
 // Safe to call concurrently with in-flight requests.
-func (c *Client) SetCredentials(creds Credentials) {
+func (c *AuthenticatedClient) SetCredentials(creds Credentials) {
 	c.credsMu.Lock()
 	c.creds = &creds
 	c.credsMu.Unlock()
 }
 
-// Address returns the signer address backing the client, if configured.
-func (c *Client) Address() string {
+// Address returns the signer address backing the client.
+func (c *SignerClient) Address() string {
 	if c.signer == nil {
 		return ""
 	}
@@ -157,14 +263,14 @@ func (c *Client) Address() string {
 }
 
 // credentials returns the current credentials under a read lock.
-func (c *Client) credentials() *Credentials {
+func (c *AuthenticatedClient) credentials() *Credentials {
 	c.credsMu.RLock()
 	creds := c.creds
 	c.credsMu.RUnlock()
 	return creds
 }
 
-func (c *Client) addAuthHeaders(
+func (c *SignerClient) addAuthHeaders(
 	ctx context.Context,
 	method, path string,
 	body []byte,
@@ -175,9 +281,6 @@ func (c *Client) addAuthHeaders(
 	case polyhttp.AuthNone:
 		return nil, nil
 	case polyhttp.AuthL1:
-		if c.signer == nil {
-			return nil, fmt.Errorf("level 1 auth requires a private key")
-		}
 		timestamp, err := c.timestamp(ctx)
 		if err != nil {
 			return nil, err
@@ -187,11 +290,23 @@ func (c *Client) addAuthHeaders(
 			value = *nonce
 		}
 		return polyauth.L1Headers(c.signer, c.chainID, timestamp, value)
+	default:
+		return nil, fmt.Errorf("this client only supports L1 auth, please upgrade to an AuthenticatedClient")
+	}
+}
+
+func (c *AuthenticatedClient) addAuthHeaders(
+	ctx context.Context,
+	method, path string,
+	body []byte,
+	level polyhttp.AuthLevel,
+	nonce *int64,
+) (map[string]string, error) {
+	switch level {
+	case polyhttp.AuthNone, polyhttp.AuthL1:
+		return c.SignerClient.addAuthHeaders(ctx, method, path, body, level, nonce)
 	case polyhttp.AuthL2:
 		creds := c.credentials()
-		if c.signer == nil {
-			return nil, fmt.Errorf("level 2 auth requires a private key")
-		}
 		if creds == nil {
 			return nil, fmt.Errorf("level 2 auth requires API credentials")
 		}
@@ -211,9 +326,6 @@ func (c *Client) addAuthHeaders(
 		)
 	case polyhttp.AuthL2Builder:
 		creds := c.credentials()
-		if c.signer == nil {
-			return nil, fmt.Errorf("level 2 auth requires a private key")
-		}
 		if creds == nil {
 			return nil, fmt.Errorf("level 2 auth requires API credentials")
 		}
@@ -344,7 +456,7 @@ func (c *Client) doJSON(
 	return c.http.DoJSON(ctx, method, path, query, body, auth, nil, extraHeaders, out)
 }
 
-func (c *Client) builderHeaders(
+func (c *AuthenticatedClient) builderHeaders(
 	ctx context.Context,
 	method, path string,
 	body []byte,
@@ -362,7 +474,7 @@ func (c *Client) builderHeaders(
 	})
 }
 
-func (c *Client) builderOnlyHeaders(
+func (c *AuthenticatedClient) builderOnlyHeaders(
 	ctx context.Context,
 	method, path string,
 	body []byte,
@@ -375,7 +487,7 @@ func (c *Client) builderOnlyHeaders(
 }
 
 // DeriveWSAuth generates credentials for authenticated websocket subscriptions.
-func (c *Client) DeriveWSAuth(ctx context.Context) (WSAuth, error) {
+func (c *AuthenticatedClient) DeriveWSAuth(ctx context.Context) (WSAuth, error) {
 	creds := c.credentials()
 	if creds == nil {
 		return WSAuth{}, fmt.Errorf("derive ws auth requires API credentials")

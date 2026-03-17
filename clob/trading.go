@@ -28,14 +28,11 @@ var roundingConfig = map[TickSize]roundConfig{
 }
 
 // CreateOrder builds and signs a limit order.
-func (c *Client) CreateOrder(
+func (c *SignerClient) CreateOrder(
 	ctx context.Context,
 	userOrder OrderArgs,
 	options *CreateOrderOptions,
 ) (*SignedOrder, error) {
-	if c.signer == nil {
-		return nil, fmt.Errorf("create order requires a private key")
-	}
 	if err := validateLimitOrderArgs(userOrder); err != nil {
 		return nil, err
 	}
@@ -67,14 +64,11 @@ func (c *Client) CreateOrder(
 }
 
 // CreateMarketOrder builds and signs a market order.
-func (c *Client) CreateMarketOrder(
+func (c *SignerClient) CreateMarketOrder(
 	ctx context.Context,
 	userOrder MarketOrderArgs,
 	options *CreateOrderOptions,
 ) (*SignedOrder, error) {
-	if c.signer == nil {
-		return nil, fmt.Errorf("create market order requires a private key")
-	}
 	if err := validateMarketOrderArgs(userOrder); err != nil {
 		return nil, err
 	}
@@ -127,7 +121,7 @@ func (c *Client) CreateMarketOrder(
 }
 
 // CreateAndPostOrder builds, signs, and posts a limit order in one step.
-func (c *Client) CreateAndPostOrder(
+func (c *AuthenticatedClient) CreateAndPostOrder(
 	ctx context.Context,
 	userOrder OrderArgs,
 	options *CreateOrderOptions,
@@ -149,7 +143,7 @@ func (c *Client) CreateAndPostOrder(
 }
 
 // CreateAndPostMarketOrder builds, signs, and posts a market order in one step.
-func (c *Client) CreateAndPostMarketOrder(
+func (c *AuthenticatedClient) CreateAndPostMarketOrder(
 	ctx context.Context,
 	userOrder MarketOrderArgs,
 	options *CreateOrderOptions,
@@ -180,7 +174,7 @@ func (c *Client) CreateAndPostMarketOrder(
 }
 
 // BuildPostOrderRequest wraps a signed order in the authenticated post-order payload.
-func (c *Client) BuildPostOrderRequest(
+func (c *AuthenticatedClient) BuildPostOrderRequest(
 	order SignedOrder,
 	orderType OrderType,
 	deferExec bool,
@@ -199,7 +193,7 @@ func (c *Client) BuildPostOrderRequest(
 	}
 
 	if postOnly && orderType != OrderTypeGTC && orderType != OrderTypeGTD {
-		return PostOrderRequest{}, fmt.Errorf("postOnly is only supported for GTC and GTD orders")
+		return PostOrderRequest{}, fmt.Errorf("postOnly is only supported for GTC and GTD orders (2026 standard)")
 	}
 
 	return PostOrderRequest{
@@ -285,7 +279,7 @@ func (c *Client) CalculateMarketPrice(
 	return firstPrice, nil
 }
 
-func (c *Client) buildSignedLimitOrder(
+func (c *SignerClient) buildSignedLimitOrder(
 	userOrder OrderArgs,
 	options CreateOrderOptions,
 ) (*SignedOrder, error) {
@@ -338,7 +332,7 @@ func (c *Client) buildSignedLimitOrder(
 	})
 }
 
-func (c *Client) buildSignedMarketOrder(
+func (c *SignerClient) buildSignedMarketOrder(
 	userOrder MarketOrderArgs,
 	options CreateOrderOptions,
 ) (*SignedOrder, error) {
@@ -407,7 +401,7 @@ type orderBuildInput struct {
 	SignatureType SignatureType
 }
 
-func (c *Client) signOrder(input orderBuildInput) (*SignedOrder, error) {
+func (c *SignerClient) signOrder(input orderBuildInput) (*SignedOrder, error) {
 	contracts, err := getContractConfig(c.chainID)
 	if err != nil {
 		return nil, err
@@ -719,3 +713,15 @@ func isTickSizeSmaller(a, b TickSize) bool {
 	}
 	return aParsed.Cmp(bParsed) < 0
 }
+
+// AuthenticatedOnly returns an error if the client is not in an authenticated state (2026 Type Guard).
+func (c *Client) AuthenticatedOnly() error {
+	if !c.IsAuthenticated() {
+		return fmt.Errorf("this method requires an authenticated client (signer + API credentials)")
+	}
+	return nil
+}
+
+// PostOrdersBatchLimit is the maximum number of orders allowed in a single batch (2026 limit).
+const PostOrdersBatchLimit = 15
+

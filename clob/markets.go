@@ -3,6 +3,7 @@ package clob
 import (
 	"context"
 	"fmt"
+	"iter"
 	"net/url"
 	"strconv"
 
@@ -25,24 +26,38 @@ func (c *Client) GetServerTime(ctx context.Context) (int64, error) {
 
 // GetSamplingSimplifiedMarkets returns all simplified markets from the sampling endpoint.
 func (c *Client) GetSamplingSimplifiedMarkets(ctx context.Context) ([]SimplifiedMarket, error) {
-	cursor := initialCursor
 	markets := make([]SimplifiedMarket, 0, 64)
-
-	for cursor != endCursor {
-		page, err := c.GetSamplingSimplifiedMarketsPage(ctx, cursor)
+	for market, err := range c.IterSamplingSimplifiedMarkets(ctx) {
 		if err != nil {
 			return nil, err
 		}
-		markets = append(markets, page.Data...)
-
-		nextCursor, done := nextPageCursor(cursor, page.NextCursor)
-		if done {
-			return markets, nil
-		}
-		cursor = nextCursor
+		markets = append(markets, market)
 	}
-
 	return markets, nil
+}
+
+// IterSamplingSimplifiedMarkets returns an iterator over simplified markets from the sampling endpoint.
+func (c *Client) IterSamplingSimplifiedMarkets(ctx context.Context) iter.Seq2[SimplifiedMarket, error] {
+	return func(yield func(SimplifiedMarket, error) bool) {
+		cursor := initialCursor
+		for cursor != endCursor {
+			page, err := c.GetSamplingSimplifiedMarketsPage(ctx, cursor)
+			if err != nil {
+				yield(SimplifiedMarket{}, err)
+				return
+			}
+			for _, market := range page.Data {
+				if !yield(market, nil) {
+					return
+				}
+			}
+			nextCursor, done := nextPageCursor(cursor, page.NextCursor)
+			if done {
+				return
+			}
+			cursor = nextCursor
+		}
+	}
 }
 
 // GetSamplingSimplifiedMarketsPage returns a typed sampling-simplified markets page.

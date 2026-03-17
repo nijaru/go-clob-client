@@ -27,7 +27,8 @@ func TestCalculateMarketPriceBuyFOK(t *testing.T) {
 	}, nil)
 	defer server.Close()
 
-	client, _ := New(Config{Host: server.URL})
+	clientRaw, _ := New(Config{Host: server.URL})
+	client := clientRaw.(*Client)
 	ctx := t.Context()
 
 	// amount=5: 10*0.4=4 < 5, next: 4+20*0.45=13 >= 5, return 0.45
@@ -72,7 +73,8 @@ func TestCalculateMarketPriceSellFOK(t *testing.T) {
 	})
 	defer server.Close()
 
-	client, _ := New(Config{Host: server.URL})
+	clientRaw, _ := New(Config{Host: server.URL})
+	client := clientRaw.(*Client)
 	ctx := t.Context()
 
 	// amount=10: 15 >= 10 (best bid 0.35), return 0.35
@@ -116,7 +118,8 @@ func TestCalculateMarketPriceInsufficientLiquidity(t *testing.T) {
 	}, nil)
 	defer server.Close()
 
-	client, _ := New(Config{Host: server.URL})
+	clientRaw, _ := New(Config{Host: server.URL})
+	client := clientRaw.(*Client)
 	ctx := t.Context()
 
 	// FOK: should fail when total < amount
@@ -153,7 +156,8 @@ func TestCalculateMarketPriceEdgeCases(t *testing.T) {
 	server := newOrderBookServer(t, []OrderSummary{{Price: "0.50", Size: "10"}}, nil)
 	defer server.Close()
 
-	client, _ := New(Config{Host: server.URL})
+	clientRaw, _ := New(Config{Host: server.URL})
+	client := clientRaw.(*Client)
 	ctx := t.Context()
 
 	// Zero amount should error

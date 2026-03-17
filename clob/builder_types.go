@@ -59,9 +59,3 @@ type BuilderTrade struct {
 	CreatedAt       string `json:"createdAt,omitzero"`
 	UpdatedAt       string `json:"updatedAt,omitzero"`
 }
-
-// HeartbeatResponse is the response payload from posting a heartbeat.
-type HeartbeatResponse struct {
-	HeartbeatID string `json:"heartbeat_id"`
-	Error       string `json:"error,omitzero"`
-}

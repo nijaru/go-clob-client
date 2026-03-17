@@ -17,7 +17,7 @@ func TestCTFOperations(t *testing.T) {
 	defer server.Close()
 
 	key, _ := polyauth.GenerateKey()
-	client, _ := New(Config{
+	clientRaw, _ := New(Config{
 		Host:       server.URL,
 		ChainID:    137,
 		PrivateKey: key,
@@ -27,6 +27,7 @@ func TestCTFOperations(t *testing.T) {
 			Passphrase: "pass",
 		},
 	})
+	client := clientRaw.(*AuthenticatedClient)
 
 	ctx := context.Background()
 	conditionID := "0x123"

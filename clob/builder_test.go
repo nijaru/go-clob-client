@@ -231,7 +231,7 @@ func TestBuilderAndHeartbeatEndpoints(t *testing.T) {
 			default:
 				t.Fatalf("unexpected builder trades cursor: %q", r.URL.Query().Get("next_cursor"))
 			}
-		case http.MethodPost + " " + heartbeatEndpoint:
+		case http.MethodPost + " " + heartbeatsEndpoint:
 			if r.Header.Get("POLY_API_KEY") != "api-key" {
 				t.Fatalf("missing L2 api key header on heartbeat")
 			}
@@ -255,7 +255,7 @@ func TestBuilderAndHeartbeatEndpoints(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := New(Config{
+	clientRaw, err := New(Config{
 		Host:       server.URL,
 		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
 		Credentials: &Credentials{
@@ -272,6 +272,7 @@ func TestBuilderAndHeartbeatEndpoints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
+	client := clientRaw.(*AuthenticatedClient)
 
 	if _, err := client.GetOrder(t.Context(), "order-1"); err != nil {
 		t.Fatalf("get order with builder headers: %v", err)
@@ -313,7 +314,7 @@ func TestBuilderAndHeartbeatEndpoints(t *testing.T) {
 		t.Fatalf("unexpected builder trades: %+v", builderTrades)
 	}
 
-	heartbeat, err := client.PostHeartbeat(t.Context(), nil)
+	heartbeat, err := client.PostHeartbeat(t.Context(), "")
 	if err != nil {
 		t.Fatalf("post heartbeat nil: %v", err)
 	}
@@ -322,7 +323,7 @@ func TestBuilderAndHeartbeatEndpoints(t *testing.T) {
 	}
 
 	nextHeartbeatID := heartbeat.HeartbeatID
-	heartbeat, err = client.PostHeartbeat(t.Context(), &nextHeartbeatID)
+	heartbeat, err = client.PostHeartbeat(t.Context(), nextHeartbeatID)
 	if err != nil {
 		t.Fatalf("post heartbeat chained: %v", err)
 	}

@@ -34,10 +34,11 @@ func TestGetOrderBook(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := New(Config{Host: server.URL})
+	clientRaw, err := New(Config{Host: server.URL})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
+	client := clientRaw.(*Client)
 
 	book, err := client.GetOrderBook(t.Context(), "123")
 	if err != nil {
@@ -71,10 +72,11 @@ func TestCreateOrDeriveAPIKeyFallsBackToDerive(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := New(Config{Host: server.URL, PrivateKey: privateKey})
+	clientRaw, err := New(Config{Host: server.URL, PrivateKey: privateKey})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
+	client := clientRaw.(*SignerClient)
 
 	creds, err := client.CreateOrDeriveAPIKey(t.Context(), 0)
 	if err != nil {

@@ -51,7 +51,7 @@ const (
 	openOrdersEndpoint             = "/data/orders"
 	tradesEndpoint                 = "/data/trades"
 	builderTradesEndpoint          = "/builder/trades"
-	heartbeatEndpoint              = "/v1/heartbeats"
+	heartbeatsEndpoint             = "/v1/heartbeats"
 	notificationsEndpoint          = "/notifications"
 	balanceAllowanceEndpoint       = "/balance-allowance"
 	updateBalanceAllowanceEndpoint = "/balance-allowance/update"

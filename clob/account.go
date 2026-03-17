@@ -10,21 +10,21 @@ import (
 )
 
 // CreateReadonlyAPIKey creates a readonly API key for the authenticated account.
-func (c *Client) CreateReadonlyAPIKey(ctx context.Context) (*ReadonlyAPIKeyResponse, error) {
+func (c *AuthenticatedClient) CreateReadonlyAPIKey(ctx context.Context) (*ReadonlyAPIKeyResponse, error) {
 	var out ReadonlyAPIKeyResponse
 	err := c.postJSON(ctx, createReadonlyAPIKeyEndpoint, nil, polyhttp.AuthL2, &out)
 	return &out, err
 }
 
 // GetReadonlyAPIKeys lists readonly API keys for the authenticated account.
-func (c *Client) GetReadonlyAPIKeys(ctx context.Context) ([]string, error) {
+func (c *AuthenticatedClient) GetReadonlyAPIKeys(ctx context.Context) ([]string, error) {
 	var out []string
 	err := c.getJSON(ctx, getReadonlyAPIKeysEndpoint, nil, polyhttp.AuthL2, &out)
 	return out, err
 }
 
 // DeleteReadonlyAPIKey deletes a readonly API key by value.
-func (c *Client) DeleteReadonlyAPIKey(ctx context.Context, key string) (bool, error) {
+func (c *AuthenticatedClient) DeleteReadonlyAPIKey(ctx context.Context, key string) (bool, error) {
 	var out bool
 	err := c.deleteJSON(
 		ctx,
@@ -52,7 +52,7 @@ func (c *Client) ValidateReadonlyAPIKey(
 }
 
 // GetNotifications returns all notifications for the authenticated account.
-func (c *Client) GetNotifications(ctx context.Context) ([]Notification, error) {
+func (c *AuthenticatedClient) GetNotifications(ctx context.Context) ([]Notification, error) {
 	query := url.Values{}
 	query.Set("signature_type", signatureTypeString(c.signatureType))
 
@@ -62,12 +62,12 @@ func (c *Client) GetNotifications(ctx context.Context) ([]Notification, error) {
 }
 
 // DropNotifications is an alias for DeleteNotifications.
-func (c *Client) DropNotifications(ctx context.Context, params DeleteNotificationsParams) error {
+func (c *AuthenticatedClient) DropNotifications(ctx context.Context, params DeleteNotificationsParams) error {
 	return c.DeleteNotifications(ctx, params)
 }
 
 // DeleteNotifications deletes notifications by ID when provided, or all notifications otherwise.
-func (c *Client) DeleteNotifications(
+func (c *AuthenticatedClient) DeleteNotifications(
 	ctx context.Context,
 	params DeleteNotificationsParams,
 ) error {
@@ -80,7 +80,7 @@ func (c *Client) DeleteNotifications(
 }
 
 // GetBalanceAllowance returns the current balance and allowances for the requested asset.
-func (c *Client) GetBalanceAllowance(
+func (c *AuthenticatedClient) GetBalanceAllowance(
 	ctx context.Context,
 	params BalanceAllowanceParams,
 ) (*BalanceAllowanceResponse, error) {
@@ -92,7 +92,7 @@ func (c *Client) GetBalanceAllowance(
 }
 
 // UpdateBalanceAllowance triggers a balance-allowance refresh for the requested asset.
-func (c *Client) UpdateBalanceAllowance(
+func (c *AuthenticatedClient) UpdateBalanceAllowance(
 	ctx context.Context,
 	params BalanceAllowanceParams,
 ) error {
@@ -101,7 +101,7 @@ func (c *Client) UpdateBalanceAllowance(
 }
 
 // IsOrderScoring returns whether a single order is scoring for rewards.
-func (c *Client) IsOrderScoring(
+func (c *AuthenticatedClient) IsOrderScoring(
 	ctx context.Context,
 	params OrderScoringParams,
 ) (*OrderScoringResponse, error) {
@@ -116,7 +116,7 @@ func (c *Client) IsOrderScoring(
 }
 
 // AreOrdersScoring returns the scoring state for a batch of orders.
-func (c *Client) AreOrdersScoring(
+func (c *AuthenticatedClient) AreOrdersScoring(
 	ctx context.Context,
 	params OrdersScoringParams,
 ) (OrdersScoringResponse, error) {
@@ -126,12 +126,33 @@ func (c *Client) AreOrdersScoring(
 }
 
 // CancelMarketOrders cancels orders scoped to a market and/or asset.
-func (c *Client) CancelMarketOrders(
+func (c *AuthenticatedClient) CancelMarketOrders(
 	ctx context.Context,
 	request CancelMarketOrdersRequest,
 ) (*CancelOrdersResponse, error) {
 	var out CancelOrdersResponse
 	err := c.deleteJSON(ctx, cancelMarketOrdersEndpoint, request, polyhttp.AuthL2, &out)
+	return &out, err
+}
+
+// HeartbeatResponse is the response from the /heartbeats endpoint.
+type HeartbeatResponse struct {
+	HeartbeatID string `json:"heartbeat_id"`
+	Error       string `json:"error,omitzero"`
+}
+
+// PostHeartbeat posts a heartbeat to maintain order liveness and maintain priority (2026 feature).
+func (c *AuthenticatedClient) PostHeartbeat(
+	ctx context.Context,
+	heartbeatID string,
+) (*HeartbeatResponse, error) {
+	req := map[string]string{}
+	if heartbeatID != "" {
+		req["heartbeat_id"] = heartbeatID
+	}
+
+	var out HeartbeatResponse
+	err := c.postJSON(ctx, heartbeatsEndpoint, req, polyhttp.AuthL2, &out)
 	return &out, err
 }
 

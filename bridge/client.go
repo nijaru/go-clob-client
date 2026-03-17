@@ -3,7 +3,6 @@ package bridge
 import (
 	"context"
 	"net/http"
-	"net/url"
 	"time"
 
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
@@ -14,9 +13,9 @@ const (
 
 	supportedAssetsEndpoint = "/supported-assets"
 	depositEndpoint         = "/deposit"
-	depositStatusEndpoint   = "/deposit-status"
+	statusEndpoint          = "/status"
 	quoteEndpoint           = "/quote"
-	withdrawalEndpoint      = "/withdrawal"
+	withdrawEndpoint        = "/withdraw"
 )
 
 // Client is a client for the Polymarket Bridge API.
@@ -77,16 +76,13 @@ func (c *Client) CreateDepositAddress(
 	return out, err
 }
 
-// GetDepositStatus checks the status of a bridge deposit transaction.
-func (c *Client) GetDepositStatus(
+// GetStatus checks the status of bridge transactions for an address (2026 standard).
+func (c *Client) GetStatus(
 	ctx context.Context,
-	transactionID string,
-) (*DepositStatusResponse, error) {
-	query := url.Values{}
-	query.Set("transactionId", transactionID)
-
-	var out DepositStatusResponse
-	err := c.http.GetJSON(ctx, depositStatusEndpoint, query, polyhttp.AuthNone, &out)
+	address string,
+) (*StatusResponse, error) {
+	var out StatusResponse
+	err := c.http.GetJSON(ctx, statusEndpoint+"/"+address, nil, polyhttp.AuthNone, &out)
 	return &out, err
 }
 
@@ -97,9 +93,9 @@ func (c *Client) GetQuote(ctx context.Context, req QuoteRequest) (*QuoteResponse
 	return &out, err
 }
 
-// Withdraw initiates a withdrawal from Polygon via the bridge.
-func (c *Client) Withdraw(ctx context.Context, req WithdrawalRequest) (*WithdrawalResponse, error) {
-	var out WithdrawalResponse
-	err := c.http.PostJSON(ctx, withdrawalEndpoint, req, polyhttp.AuthNone, &out)
+// Withdraw initiates a withdrawal via the bridge (2026 standard).
+func (c *Client) Withdraw(ctx context.Context, req WithdrawRequest) (*WithdrawResponse, error) {
+	var out WithdrawResponse
+	err := c.http.PostJSON(ctx, withdrawEndpoint, req, polyhttp.AuthNone, &out)
 	return &out, err
 }

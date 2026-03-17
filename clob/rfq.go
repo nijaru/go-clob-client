@@ -11,7 +11,7 @@ import (
 
 // CreateRFQRequest initiates a new Request for Quote.
 // Level 2 Auth required.
-func (c *Client) CreateRFQRequest(
+func (c *AuthenticatedClient) CreateRFQRequest(
 	ctx context.Context,
 	params CreateRFQRequestParams,
 ) (*RFQRequestResponse, error) {
@@ -24,14 +24,14 @@ func (c *Client) CreateRFQRequest(
 
 // CancelRFQRequest cancels an existing RFQ request.
 // Level 2 Auth required.
-func (c *Client) CancelRFQRequest(ctx context.Context, requestID string) error {
+func (c *AuthenticatedClient) CancelRFQRequest(ctx context.Context, requestID string) error {
 	body := map[string]string{"requestId": requestID}
 	return c.deleteJSON(ctx, rfqRequestEndpoint, body, polyhttp.AuthL2, nil)
 }
 
 // GetRFQRequests retrieves RFQ requests, optionally filtered by state or IDs.
 // Level 2 Auth required.
-func (c *Client) GetRFQRequests(
+func (c *AuthenticatedClient) GetRFQRequests(
 	ctx context.Context,
 	params *RFQRequestFilterParams,
 ) (*RFQRequestsResponse, error) {
@@ -63,7 +63,7 @@ func (c *Client) GetRFQRequests(
 
 // CreateRFQQuote responds to an RFQ request with a quote.
 // Level 2 Auth required.
-func (c *Client) CreateRFQQuote(
+func (c *AuthenticatedClient) CreateRFQQuote(
 	ctx context.Context,
 	params CreateRFQQuoteParams,
 ) (*RFQQuoteResponse, error) {
@@ -76,14 +76,14 @@ func (c *Client) CreateRFQQuote(
 
 // CancelRFQQuote cancels an existing RFQ quote.
 // Level 2 Auth required.
-func (c *Client) CancelRFQQuote(ctx context.Context, quoteID string) error {
+func (c *AuthenticatedClient) CancelRFQQuote(ctx context.Context, quoteID string) error {
 	body := map[string]string{"quoteId": quoteID}
 	return c.deleteJSON(ctx, rfqQuoteEndpoint, body, polyhttp.AuthL2, nil)
 }
 
 // GetRFQRequesterQuotes retrieves quotes on requests created by the authenticated user.
 // Level 2 Auth required.
-func (c *Client) GetRFQRequesterQuotes(
+func (c *AuthenticatedClient) GetRFQRequesterQuotes(
 	ctx context.Context,
 	params *RFQQuoteFilterParams,
 ) (*RFQQuotesResponse, error) {
@@ -112,7 +112,7 @@ func (c *Client) GetRFQRequesterQuotes(
 
 // GetRFQQuoterQuotes retrieves quotes created by the authenticated user.
 // Level 2 Auth required.
-func (c *Client) GetRFQQuoterQuotes(
+func (c *AuthenticatedClient) GetRFQQuoterQuotes(
 	ctx context.Context,
 	params *RFQQuoteFilterParams,
 ) (*RFQQuotesResponse, error) {
@@ -141,7 +141,7 @@ func (c *Client) GetRFQQuoterQuotes(
 
 // GetRFQBestQuote retrieves the current best quote for a specific request.
 // Level 2 Auth required.
-func (c *Client) GetRFQBestQuote(ctx context.Context, requestID string) (*RFQQuote, error) {
+func (c *AuthenticatedClient) GetRFQBestQuote(ctx context.Context, requestID string) (*RFQQuote, error) {
 	query := url.Values{}
 	query.Set("requestId", requestID)
 
@@ -155,7 +155,7 @@ func (c *Client) GetRFQBestQuote(ctx context.Context, requestID string) (*RFQQuo
 // AcceptRFQQuote accepts a specific RFQ quote.
 // Returns an AcceptRFQQuoteResponse containing the resulting trade IDs.
 // Level 2 Auth required.
-func (c *Client) AcceptRFQQuote(
+func (c *AuthenticatedClient) AcceptRFQQuote(
 	ctx context.Context,
 	params AcceptRFQQuoteRequest,
 ) (*AcceptRFQQuoteResponse, error) {
@@ -168,13 +168,13 @@ func (c *Client) AcceptRFQQuote(
 
 // ApproveRFQOrder allows a quoter to approve the final order.
 // Level 2 Auth required.
-func (c *Client) ApproveRFQOrder(ctx context.Context, params ApproveRFQOrderRequest) error {
+func (c *AuthenticatedClient) ApproveRFQOrder(ctx context.Context, params ApproveRFQOrderRequest) error {
 	return c.postJSON(ctx, rfqQuoteApproveEndpoint, params, polyhttp.AuthL2, nil)
 }
 
 // GetRFQConfig retrieves the current RFQ configuration.
 // Level 2 Auth required.
-func (c *Client) GetRFQConfig(ctx context.Context) (jsontext.Value, error) {
+func (c *AuthenticatedClient) GetRFQConfig(ctx context.Context) (jsontext.Value, error) {
 	var resp jsontext.Value
 	if err := c.getJSON(ctx, rfqConfigEndpoint, nil, polyhttp.AuthL2, &resp); err != nil {
 		return nil, err

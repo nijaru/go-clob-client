@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	client, err := clob.New(clob.Config{
+	clientRaw, err := clob.New(clob.Config{
 		ChainID:    clob.PolygonChainID,
 		PrivateKey: os.Getenv("POLYMARKET_PRIVATE_KEY"),
 		Credentials: &clob.Credentials{
@@ -22,6 +22,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	client := clientRaw.(*clob.AuthenticatedClient)
 
 	response, err := client.CreateAndPostMarketOrder(context.Background(), clob.MarketOrderArgs{
 		TokenID: os.Getenv("POLYMARKET_TOKEN_ID"),

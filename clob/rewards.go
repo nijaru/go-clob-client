@@ -8,7 +8,7 @@ import (
 )
 
 // GetEarningsForUserForDay returns all paginated earnings entries for a given day.
-func (c *Client) GetEarningsForUserForDay(
+func (c *AuthenticatedClient) GetEarningsForUserForDay(
 	ctx context.Context,
 	date string,
 ) ([]UserEarning, error) {
@@ -33,7 +33,7 @@ func (c *Client) GetEarningsForUserForDay(
 }
 
 // GetEarningsForUserForDayPage returns a single earnings page for a given day.
-func (c *Client) GetEarningsForUserForDayPage(
+func (c *AuthenticatedClient) GetEarningsForUserForDayPage(
 	ctx context.Context,
 	date string,
 	nextCursor string,
@@ -48,7 +48,7 @@ func (c *Client) GetEarningsForUserForDayPage(
 }
 
 // GetTotalEarningsForUserForDay returns the total earnings rows for a given day.
-func (c *Client) GetTotalEarningsForUserForDay(
+func (c *AuthenticatedClient) GetTotalEarningsForUserForDay(
 	ctx context.Context,
 	date string,
 ) ([]TotalUserEarning, error) {
@@ -62,7 +62,7 @@ func (c *Client) GetTotalEarningsForUserForDay(
 }
 
 // GetUserEarningsAndMarketsConfig returns all paginated user reward-and-market entries.
-func (c *Client) GetUserEarningsAndMarketsConfig(
+func (c *AuthenticatedClient) GetUserEarningsAndMarketsConfig(
 	ctx context.Context,
 	params UserRewardsFilterParams,
 ) ([]UserRewardsEarning, error) {
@@ -87,7 +87,7 @@ func (c *Client) GetUserEarningsAndMarketsConfig(
 }
 
 // GetUserEarningsAndMarketsConfigPage returns a single user reward-and-market page.
-func (c *Client) GetUserEarningsAndMarketsConfigPage(
+func (c *AuthenticatedClient) GetUserEarningsAndMarketsConfigPage(
 	ctx context.Context,
 	params UserRewardsFilterParams,
 	nextCursor string,
@@ -113,7 +113,7 @@ func (c *Client) GetUserEarningsAndMarketsConfigPage(
 }
 
 // GetRewardPercentages returns the liquidity reward percentages for the authenticated user.
-func (c *Client) GetRewardPercentages(ctx context.Context) (RewardsPercentages, error) {
+func (c *AuthenticatedClient) GetRewardPercentages(ctx context.Context) (RewardsPercentages, error) {
 	query := url.Values{}
 	query.Set("signature_type", signatureTypeString(c.signatureType))
 
@@ -123,7 +123,7 @@ func (c *Client) GetRewardPercentages(ctx context.Context) (RewardsPercentages, 
 }
 
 // GetCurrentRewards returns all paginated current reward summaries.
-func (c *Client) GetCurrentRewards(ctx context.Context) ([]CurrentReward, error) {
+func (c *AuthenticatedClient) GetCurrentRewards(ctx context.Context) ([]CurrentReward, error) {
 	cursor := initialCursor
 	rewards := make([]CurrentReward, 0, 64)
 
@@ -145,7 +145,7 @@ func (c *Client) GetCurrentRewards(ctx context.Context) ([]CurrentReward, error)
 }
 
 // GetCurrentRewardsPage returns a single current rewards page.
-func (c *Client) GetCurrentRewardsPage(
+func (c *AuthenticatedClient) GetCurrentRewardsPage(
 	ctx context.Context,
 	nextCursor string,
 ) (*Page[CurrentReward], error) {
@@ -157,7 +157,7 @@ func (c *Client) GetCurrentRewardsPage(
 }
 
 // GetRawRewardsForMarket is an alias for GetRewardsForMarket.
-func (c *Client) GetRawRewardsForMarket(
+func (c *AuthenticatedClient) GetRawRewardsForMarket(
 	ctx context.Context,
 	conditionID string,
 ) ([]MarketReward, error) {
@@ -165,7 +165,7 @@ func (c *Client) GetRawRewardsForMarket(
 }
 
 // GetRewardsForMarket returns all paginated reward rows for a specific market.
-func (c *Client) GetRewardsForMarket(
+func (c *AuthenticatedClient) GetRewardsForMarket(
 	ctx context.Context,
 	conditionID string,
 ) ([]MarketReward, error) {
@@ -190,7 +190,7 @@ func (c *Client) GetRewardsForMarket(
 }
 
 // GetRewardsForMarketPage returns a single reward page for a specific market.
-func (c *Client) GetRewardsForMarketPage(
+func (c *AuthenticatedClient) GetRewardsForMarketPage(
 	ctx context.Context,
 	conditionID string,
 	nextCursor string,

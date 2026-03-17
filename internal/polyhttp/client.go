@@ -253,7 +253,18 @@ func newAPIError(resp *http.Response, body []byte) *APIError {
 		Error any `json:"error"`
 	}
 	if json.Unmarshal(body, &payload) == nil && payload.Error != nil {
-		err.Message = fmt.Sprint(payload.Error)
+		switch e := payload.Error.(type) {
+		case string:
+			err.Message = e
+		case map[string]any:
+			if msg, ok := e["message"].(string); ok {
+				err.Message = msg
+			} else {
+				err.Message = fmt.Sprint(e)
+			}
+		default:
+			err.Message = fmt.Sprint(e)
+		}
 		return err
 	}
 

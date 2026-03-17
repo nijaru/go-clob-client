@@ -30,16 +30,6 @@ type DepositResponse struct {
 	Addresses []DepositAddress `json:"addresses"`
 }
 
-// DepositStatusResponse represents the status of a bridge deposit.
-type DepositStatusResponse struct {
-	TransactionID    string `json:"transactionId"`
-	Status           string `json:"status"` // PENDING, COMPLETED, FAILED
-	Amount           string `json:"amount,omitzero"`
-	Token            string `json:"token,omitzero"`
-	SourceChain      string `json:"sourceChain,omitzero"`
-	DestinationChain string `json:"destinationChain,omitzero"`
-}
-
 // QuoteRequest represents a request for a bridge quote.
 type QuoteRequest struct {
 	FromChain   string  `json:"fromChain"`
@@ -60,16 +50,33 @@ type QuoteResponse struct {
 	EstimatedTime int    `json:"estimatedTime"` // in seconds
 }
 
-// WithdrawalRequest represents a request to withdraw assets via the bridge.
-type WithdrawalRequest struct {
-	Address string `json:"address"` // Destination address
-	Amount  string `json:"amount"`
-	Token   string `json:"token"`
-	Chain   string `json:"chain"`
+// WithdrawRequest represents a request to withdraw assets via the bridge (2026 standard).
+type WithdrawRequest struct {
+	ToAddress string `json:"toAddress"`
+	Amount    string `json:"amount"`
+	FromToken string `json:"fromToken"`
+	ToToken   string `json:"toToken"`
+	ToChain   string `json:"toChain"`
 }
 
-// WithdrawalResponse represents the response from a withdrawal request.
-type WithdrawalResponse struct {
+// WithdrawResponse represents the response from a withdrawal request.
+type WithdrawResponse struct {
 	TransactionID string `json:"transactionId"`
 	Status        string `json:"status"`
+}
+
+// StatusResponse represents the status of bridge transactions for an address.
+type StatusResponse struct {
+	Transactions []BridgeTransaction `json:"transactions"`
+}
+
+// BridgeTransaction represents a single bridge transaction.
+type BridgeTransaction struct {
+	ID                   string `json:"id"`
+	Status               string `json:"status"`
+	FromAmountBaseUnit   string `json:"fromAmountBaseUnit"`
+	FromTokenAddress     string `json:"fromTokenAddress"`
+	FromChainID          string `json:"fromChainId"`
+	ToChainID            string `json:"toChainId"`
+	TransactionHash      string `json:"transactionHash"`
 }

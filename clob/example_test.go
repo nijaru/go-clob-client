@@ -9,34 +9,37 @@ import (
 )
 
 func ExampleNew_readOnly() {
-	client, err := clob.New(clob.Config{})
+	clientRaw, err := clob.New(clob.Config{})
 	if err != nil {
 		log.Fatal(err)
 	}
+	client := clientRaw.(*clob.Client)
 
 	_ = client
 }
 
-func ExampleClient_CreateOrDeriveAPIKey() {
-	client, err := clob.New(clob.Config{
+func ExampleSignerClient_CreateOrDeriveAPIKey() {
+	clientRaw, err := clob.New(clob.Config{
 		ChainID:    clob.PolygonChainID,
 		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
+	client := clientRaw.(*clob.SignerClient)
 
 	if false {
 		creds, err := client.CreateOrDeriveAPIKey(context.Background(), 0)
 		if err != nil {
 			log.Fatal(err)
 		}
-		client.SetCredentials(*creds)
+		authClient := client.AsAuthenticated(*creds, nil)
+		_ = authClient
 	}
 }
 
 func ExampleNewLocalBuilderAuth() {
-	client, err := clob.New(clob.Config{
+	clientRaw, err := clob.New(clob.Config{
 		ChainID:    clob.PolygonChainID,
 		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
 		Credentials: &clob.Credentials{
@@ -53,12 +56,13 @@ func ExampleNewLocalBuilderAuth() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	client := clientRaw.(*clob.AuthenticatedClient)
 
 	_ = client
 }
 
-func ExampleClient_CreateAndPostOrder() {
-	client, err := clob.New(clob.Config{
+func ExampleAuthenticatedClient_CreateAndPostOrder() {
+	clientRaw, err := clob.New(clob.Config{
 		ChainID:    clob.PolygonChainID,
 		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
 		Credentials: &clob.Credentials{
@@ -70,6 +74,7 @@ func ExampleClient_CreateAndPostOrder() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	client := clientRaw.(*clob.AuthenticatedClient)
 
 	if false {
 		_, err := client.CreateAndPostOrder(context.Background(), clob.OrderArgs{

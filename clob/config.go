@@ -47,6 +47,12 @@ type Config struct {
 	HTTPClient    *http.Client
 	UserAgent     string
 	UseServerTime bool
+
+	// HeartbeatInterval is the duration between automatic heartbeats (2026 feature).
+	// Defaults to 5 seconds.
+	HeartbeatInterval time.Duration
+	// DisableAutoHeartbeat prevents the client from starting the background heartbeat loop.
+	DisableAutoHeartbeat bool
 }
 
 func (c Config) normalized() Config {
@@ -70,6 +76,10 @@ func (c Config) normalized() Config {
 
 	if c.UserAgent == "" {
 		c.UserAgent = defaultUA
+	}
+
+	if c.HeartbeatInterval == 0 {
+		c.HeartbeatInterval = 5 * time.Second
 	}
 
 	return c

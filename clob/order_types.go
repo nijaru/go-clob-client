@@ -23,6 +23,8 @@ type PostOrderResponse struct {
 	TakingAmount       string   `json:"takingAmount"`
 	MakingAmount       string   `json:"makingAmount"`
 	TradeIDs           []string `json:"trade_ids"`
+	// RebateEstimated is the projected maker rebate for this order (2026 fee schedule).
+	RebateEstimated string `json:"rebate_estimated,omitzero"`
 }
 
 // CancelOrdersResponse reports which orders were canceled successfully.
@@ -134,6 +136,8 @@ type Trade struct {
 	TransactionHash string       `json:"transaction_hash"`
 	TraderSide      string       `json:"trader_side"`
 	ErrorMsg        string       `json:"error_msg,omitzero"`
+	// RebateEstimated is the projected maker rebate for this trade.
+	RebateEstimated string `json:"rebate_estimated,omitzero"`
 }
 
 // OrderArgs contains the inputs for building a limit order.
@@ -150,7 +154,9 @@ type OrderArgs struct {
 
 // MarketOrderArgs contains the inputs for building a market order.
 type MarketOrderArgs struct {
-	TokenID    string
+	TokenID string
+	// Amount is the quantity to trade. For SideBuy, this is the collateral amount (e.g., USDC).
+	// For SideSell, this is the number of shares.
 	Amount     udecimal.Decimal
 	Side       Side
 	Price      udecimal.Decimal

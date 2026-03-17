@@ -17,13 +17,19 @@ func TestCreateOrderBuildsSignedLimitOrder(t *testing.T) {
 	server := newTradingTestServer(t, nil)
 	defer server.Close()
 
-	client, err := New(Config{
+	clientRaw, err := New(Config{
 		Host:       server.URL,
 		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
+		Credentials: &Credentials{
+			Key:        "api-key",
+			Secret:     "c2VjcmV0",
+			Passphrase: "pass",
+		},
 	})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
+	client := clientRaw.(*AuthenticatedClient)
 	client.saltGenerator = func() (uint64, error) { return 42, nil }
 
 	order, err := client.CreateOrder(t.Context(), OrderArgs{
@@ -76,7 +82,7 @@ func TestCreateAndPostOrderSendsExpectedPayload(t *testing.T) {
 	})
 	defer server.Close()
 
-	client, err := New(Config{
+	clientRaw, err := New(Config{
 		Host:       server.URL,
 		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
 		Credentials: &Credentials{
@@ -88,6 +94,7 @@ func TestCreateAndPostOrderSendsExpectedPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
+	client := clientRaw.(*AuthenticatedClient)
 	client.saltGenerator = func() (uint64, error) { return 42, nil }
 
 	_, err = client.CreateAndPostOrder(t.Context(), OrderArgs{
@@ -133,13 +140,19 @@ func TestCreateMarketOrderDerivesPriceFromBook(t *testing.T) {
 	server := newTradingTestServer(t, nil)
 	defer server.Close()
 
-	client, err := New(Config{
+	clientRaw, err := New(Config{
 		Host:       server.URL,
 		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
+		Credentials: &Credentials{
+			Key:        "api-key",
+			Secret:     "c2VjcmV0",
+			Passphrase: "pass",
+		},
 	})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
+	client := clientRaw.(*AuthenticatedClient)
 	client.saltGenerator = func() (uint64, error) { return 42, nil }
 
 	order, err := client.CreateMarketOrder(t.Context(), MarketOrderArgs{
@@ -166,13 +179,19 @@ func TestCreateOrderReturnsSaltGenerationError(t *testing.T) {
 	server := newTradingTestServer(t, nil)
 	defer server.Close()
 
-	client, err := New(Config{
+	clientRaw, err := New(Config{
 		Host:       server.URL,
 		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
+		Credentials: &Credentials{
+			Key:        "api-key",
+			Secret:     "c2VjcmV0",
+			Passphrase: "pass",
+		},
 	})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
+	client := clientRaw.(*AuthenticatedClient)
 	client.saltGenerator = func() (uint64, error) { return 0, errors.New("entropy unavailable") }
 
 	_, err = client.CreateOrder(t.Context(), OrderArgs{

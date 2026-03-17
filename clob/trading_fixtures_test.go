@@ -86,7 +86,7 @@ func newTradingFixtureServer(t *testing.T) *httptest.Server {
 func TestNewDerivesFunderForProxySignatureTypes(t *testing.T) {
 	t.Parallel()
 
-	client, err := New(Config{
+	clientRaw, err := New(Config{
 		Host:          "https://clob.polymarket.com",
 		ChainID:       PolygonChainID,
 		PrivateKey:    "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
@@ -95,6 +95,7 @@ func TestNewDerivesFunderForProxySignatureTypes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
+	client := clientRaw.(*SignerClient)
 
 	if common.HexToAddress(
 		client.funderAddress,
@@ -114,7 +115,7 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 	type fixture struct {
 		name   string
 		client Config
-		build  func(*Client) (*SignedOrder, error)
+		build  func(*SignerClient) (*SignedOrder, error)
 		expect SignedOrder
 	}
 
@@ -124,8 +125,13 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 			client: Config{
 				Host:       server.URL,
 				PrivateKey: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+				Credentials: &Credentials{
+					Key:        "api-key",
+					Secret:     "c2VjcmV0",
+					Passphrase: "pass",
+				},
 			},
-			build: func(client *Client) (*SignedOrder, error) {
+			build: func(client *SignerClient) (*SignedOrder, error) {
 				return client.CreateOrder(t.Context(), OrderArgs{
 					TokenID: "123",
 					Price:   udecimal.MustParse("0.5"),
@@ -154,8 +160,13 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 			client: Config{
 				Host:       server.URL,
 				PrivateKey: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+				Credentials: &Credentials{
+					Key:        "api-key",
+					Secret:     "c2VjcmV0",
+					Passphrase: "pass",
+				},
 			},
-			build: func(client *Client) (*SignedOrder, error) {
+			build: func(client *SignerClient) (*SignedOrder, error) {
 				return client.CreateOrder(t.Context(), OrderArgs{
 					TokenID: "123",
 					Price:   udecimal.MustParse("0.5"),
@@ -184,8 +195,13 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 			client: Config{
 				Host:       server.URL,
 				PrivateKey: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+				Credentials: &Credentials{
+					Key:        "api-key",
+					Secret:     "c2VjcmV0",
+					Passphrase: "pass",
+				},
 			},
-			build: func(client *Client) (*SignedOrder, error) {
+			build: func(client *SignerClient) (*SignedOrder, error) {
 				return client.CreateMarketOrder(t.Context(), MarketOrderArgs{
 					TokenID:   "123",
 					Price:     udecimal.MustParse("0.56"),
@@ -215,8 +231,13 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 			client: Config{
 				Host:       server.URL,
 				PrivateKey: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+				Credentials: &Credentials{
+					Key:        "api-key",
+					Secret:     "c2VjcmV0",
+					Passphrase: "pass",
+				},
 			},
-			build: func(client *Client) (*SignedOrder, error) {
+			build: func(client *SignerClient) (*SignedOrder, error) {
 				return client.CreateMarketOrder(t.Context(), MarketOrderArgs{
 					TokenID:   "123",
 					Price:     udecimal.MustParse("0.56"),
@@ -249,8 +270,13 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 				PrivateKey:    "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
 				SignatureType: SignatureTypePolyProxy,
 				FunderAddress: "0xaDEFf2158d668f64308C62ef227C5CcaCAAf976D",
+				Credentials: &Credentials{
+					Key:        "api-key",
+					Secret:     "c2VjcmV0",
+					Passphrase: "pass",
+				},
 			},
-			build: func(client *Client) (*SignedOrder, error) {
+			build: func(client *SignerClient) (*SignedOrder, error) {
 				return client.CreateOrder(t.Context(), OrderArgs{
 					TokenID: "123",
 					Price:   udecimal.MustParse("0.512"),
@@ -280,13 +306,14 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 
 	for _, fixture := range fixtures {
 		t.Run(fixture.name, func(t *testing.T) {
-			client, err := New(fixture.client)
+			clientRaw, err := New(fixture.client)
 			if err != nil {
 				t.Fatalf("new client: %v", err)
 			}
+	client := clientRaw.(*AuthenticatedClient)
 			client.saltGenerator = func() (uint64, error) { return 1, nil }
 
-			order, err := fixture.build(client)
+			order, err := fixture.build(client.SignerClient)
 			if err != nil {
 				t.Fatalf("build order: %v", err)
 			}

@@ -1,55 +1,41 @@
 package clob
 
 import (
-	json "encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
 
-func TestSetCredentials(t *testing.T) {
+func TestAsAuthenticated(t *testing.T) {
 	t.Parallel()
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		data, _ := json.Marshal([]Notification{})
-		w.Write(data)
-	}))
-	defer server.Close()
-
 	privateKey := "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c"
-	client, err := New(Config{Host: server.URL, PrivateKey: privateKey})
+	clientRaw, err := New(Config{Host: "http://example.com", PrivateKey: privateKey})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
+	client := clientRaw.(*SignerClient)
 
-	// Initially no credentials — L2 call should fail
-	_, err = client.GetNotifications(t.Context())
-	if err == nil {
-		t.Fatal("expected error without credentials")
-	}
-
-	// Set credentials
-	client.SetCredentials(Credentials{
+	// Upgrade to AuthenticatedClient
+	authClient := client.AsAuthenticated(Credentials{
 		Key:        "new-key",
 		Secret:     "c2VjcmV0",
 		Passphrase: "new-pass",
-	})
+	}, nil)
 
-	// Now L2 call should succeed
-	_, err = client.GetNotifications(t.Context())
-	if err != nil {
-		t.Fatalf("get notifications after SetCredentials: %v", err)
+	if authClient == nil {
+		t.Fatal("expected client to be authenticated")
 	}
 }
 
 func TestHost(t *testing.T) {
 	t.Parallel()
 
-	client, err := New(Config{Host: "https://example.com"})
+	clientRaw, err := New(Config{Host: "https://example.com"})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
+	client := clientRaw.(*Client)
 
 	if got := client.Host(); got != "https://example.com" {
 		t.Errorf("Host() = %q, want %q", got, "https://example.com")
@@ -60,10 +46,11 @@ func TestAddressWithSigner(t *testing.T) {
 	t.Parallel()
 
 	privateKey := "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c"
-	client, err := New(Config{PrivateKey: privateKey})
+	clientRaw, err := New(Config{PrivateKey: privateKey})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
+	client := clientRaw.(*SignerClient)
 
 	addr := client.Address()
 	if addr == "" {
@@ -74,26 +61,14 @@ func TestAddressWithSigner(t *testing.T) {
 	}
 }
 
-func TestAddressWithoutSigner(t *testing.T) {
-	t.Parallel()
-
-	client, err := New(Config{})
-	if err != nil {
-		t.Fatalf("new client: %v", err)
-	}
-
-	if got := client.Address(); got != "" {
-		t.Errorf("Address() = %q, want empty without signer", got)
-	}
-}
-
 func TestClearTickSizeCache(t *testing.T) {
 	t.Parallel()
 
-	client, err := New(Config{})
+	clientRaw, err := New(Config{})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
+	client := clientRaw.(*Client)
 
 	// Populate cache directly (cache is populated by resolveTickSize, not GetTickSize)
 	client.tickSizeMu.Lock()
@@ -122,10 +97,11 @@ func TestClearTickSizeCache(t *testing.T) {
 func TestClearFeeRateCache(t *testing.T) {
 	t.Parallel()
 
-	client, err := New(Config{})
+	clientRaw, err := New(Config{})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
+	client := clientRaw.(*Client)
 
 	// Populate cache directly (cache is populated by resolveFeeRateBps, not GetFeeRateBps)
 	client.feeRateMu.Lock()
@@ -152,10 +128,11 @@ func TestClearFeeRateCache(t *testing.T) {
 func TestClearTickSizeCaches(t *testing.T) {
 	t.Parallel()
 
-	client, err := New(Config{})
+	clientRaw, err := New(Config{})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
+	client := clientRaw.(*Client)
 
 	// Populate all caches directly
 	client.tickSizeMu.Lock()
@@ -208,7 +185,7 @@ func TestDropNotifications(t *testing.T) {
 	defer server.Close()
 
 	privateKey := "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c"
-	client, err := New(Config{
+	clientRaw, err := New(Config{
 		Host:       server.URL,
 		PrivateKey: privateKey,
 		Credentials: &Credentials{
@@ -220,6 +197,7 @@ func TestDropNotifications(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
+	client := clientRaw.(*AuthenticatedClient)
 
 	err = client.DropNotifications(t.Context(), DeleteNotificationsParams{
 		IDs: []string{"n1", "n2"},
@@ -237,7 +215,7 @@ func TestDeriveWSAuth(t *testing.T) {
 	t.Parallel()
 
 	privateKey := "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c"
-	client, err := New(Config{
+	clientRaw, err := New(Config{
 		PrivateKey: privateKey,
 		Credentials: &Credentials{
 			Key:        "my-key",
@@ -248,6 +226,7 @@ func TestDeriveWSAuth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
+	client := clientRaw.(*AuthenticatedClient)
 
 	auth, err := client.DeriveWSAuth(t.Context())
 	if err != nil {
@@ -268,17 +247,3 @@ func TestDeriveWSAuth(t *testing.T) {
 	}
 }
 
-func TestDeriveWSAuthRequiresCredentials(t *testing.T) {
-	t.Parallel()
-
-	privateKey := "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c"
-	client, err := New(Config{PrivateKey: privateKey})
-	if err != nil {
-		t.Fatalf("new client: %v", err)
-	}
-
-	_, err = client.DeriveWSAuth(t.Context())
-	if err == nil {
-		t.Fatal("expected error without credentials")
-	}
-}

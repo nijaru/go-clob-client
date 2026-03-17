@@ -182,7 +182,7 @@ func TestTypedAuthenticatedResponses(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := New(Config{
+	clientRaw, err := New(Config{
 		Host:       server.URL,
 		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
 		Credentials: &Credentials{
@@ -194,6 +194,7 @@ func TestTypedAuthenticatedResponses(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
+	client := clientRaw.(*AuthenticatedClient)
 
 	openOrdersPage, err := client.GetOpenOrdersPage(t.Context(), OpenOrderParams{}, "")
 	if err != nil {

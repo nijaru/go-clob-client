@@ -10,14 +10,20 @@ import (
 )
 
 func main() {
-	// Initialize client with Private Key for signing
-	client, err := clob.New(clob.Config{
+	// Initialize client with Private Key for signing and Credentials for auth
+	clientRaw, err := clob.New(clob.Config{
 		ChainID:    clob.PolygonChainID,
 		PrivateKey: os.Getenv("POLYMARKET_PRIVATE_KEY"),
+		Credentials: &clob.Credentials{
+			Key:        os.Getenv("POLYMARKET_API_KEY"),
+			Secret:     os.Getenv("POLYMARKET_API_SECRET"),
+			Passphrase: os.Getenv("POLYMARKET_API_PASSPHRASE"),
+		},
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
+	client := clientRaw.(*clob.AuthenticatedClient)
 
 	ctx := context.Background()
 	conditionID := "0x..." // Replace with a real market condition ID

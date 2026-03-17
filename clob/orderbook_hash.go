@@ -6,8 +6,10 @@ import (
 	json "encoding/json/v2"
 )
 
-// Field order must match Python SDK for hash compatibility.
-// Python computes SHA1 over JSON with keys in insertion order.
+// orderBookHashPayload represents the payload used for order book hashing.
+// CRITICAL: Field order must match the insertion order in the official TypeScript/Python SDKs
+// because they use SHA1 over JSON-serialized data where keys are in a fixed order.
+// DO NOT reorder these fields or the generated hash will not match the server's expected value.
 type orderBookHashPayload struct {
 	Market         string         `json:"market"`
 	AssetID        string         `json:"asset_id"`
