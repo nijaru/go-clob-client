@@ -59,6 +59,7 @@ type AuthenticatedClient struct {
 	heartbeatInterval time.Duration
 	heartbeatCancel   context.CancelFunc
 	heartbeatDone     chan struct{}
+	shutdownOnce      sync.Once
 }
 
 // NewClient creates a read-only CLOB client. No private key or credentials are required.
@@ -262,12 +263,38 @@ func (c *AuthenticatedClient) NewAuthenticatedRTDSClient() *rtds.Client {
 }
 
 // Close stops any background tasks (like heartbeats) and cleans up resources.
+// It blocks until the heartbeat goroutine exits. To stop with a deadline, use Shutdown.
 func (c *AuthenticatedClient) Close() error {
-	if c.heartbeatCancel != nil {
-		c.heartbeatCancel()
+	c.shutdownOnce.Do(func() {
+		if c.heartbeatCancel != nil {
+			c.heartbeatCancel()
+		}
+	})
+	if c.heartbeatDone != nil {
 		<-c.heartbeatDone
 	}
 	return nil
+}
+
+// Shutdown gracefully stops background tasks with a context deadline.
+// It signals the heartbeat goroutine to stop and waits for it to exit.
+// Returns ctx.Err() if the deadline passes before the goroutine stops.
+// Safe to call multiple times; only the first call sends the stop signal.
+func (c *AuthenticatedClient) Shutdown(ctx context.Context) error {
+	c.shutdownOnce.Do(func() {
+		if c.heartbeatCancel != nil {
+			c.heartbeatCancel()
+		}
+	})
+	if c.heartbeatDone == nil {
+		return nil
+	}
+	select {
+	case <-c.heartbeatDone:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (c *AuthenticatedClient) startHeartbeatLoop() {

@@ -352,17 +352,33 @@ func (c *SignerClient) buildSignedMarketOrder(
 
 	switch userOrder.Side {
 	case SideBuy:
-		rawMakerAmount = roundDown(amount, roundConfig.Size)
-		val, err := rawMakerAmount.Div(price)
-		if err != nil {
-			return nil, fmt.Errorf("calculation error: %w", err)
-		}
-		rawTakerAmount = val
-		if decimalPlaces(rawTakerAmount) > roundConfig.Amount {
-			rawTakerAmount = roundUp(rawTakerAmount, roundConfig.Amount+4)
-			if decimalPlaces(rawTakerAmount) > roundConfig.Amount {
-				rawTakerAmount = roundDown(rawTakerAmount, roundConfig.Amount)
+		switch userOrder.AmountKind {
+		case AmountUSDC:
+			// Spend exactly Amount USDC; compute shares from price.
+			rawMakerAmount = roundDown(amount, roundConfig.Size)
+			val, err := rawMakerAmount.Div(price)
+			if err != nil {
+				return nil, fmt.Errorf("calculation error: %w", err)
 			}
+			rawTakerAmount = val
+			if decimalPlaces(rawTakerAmount) > roundConfig.Amount {
+				rawTakerAmount = roundUp(rawTakerAmount, roundConfig.Amount+4)
+				if decimalPlaces(rawTakerAmount) > roundConfig.Amount {
+					rawTakerAmount = roundDown(rawTakerAmount, roundConfig.Amount)
+				}
+			}
+		case AmountShares:
+			// Buy exactly Amount shares; compute USDC cost from price.
+			rawTakerAmount = roundDown(amount, roundConfig.Size)
+			rawMakerAmount = rawTakerAmount.Mul(price)
+			if decimalPlaces(rawMakerAmount) > roundConfig.Amount {
+				rawMakerAmount = roundUp(rawMakerAmount, roundConfig.Amount+4)
+				if decimalPlaces(rawMakerAmount) > roundConfig.Amount {
+					rawMakerAmount = roundDown(rawMakerAmount, roundConfig.Amount)
+				}
+			}
+		default:
+			return nil, fmt.Errorf("invalid amount kind %d", userOrder.AmountKind)
 		}
 	case SideSell:
 		rawMakerAmount = roundDown(amount, roundConfig.Size)
@@ -603,6 +619,7 @@ func (c *Client) resolveTickSize(
 
 	return marketTickSize, nil
 }
+
 func (c *Client) resolveNegRisk(
 	ctx context.Context,
 	tokenID string,

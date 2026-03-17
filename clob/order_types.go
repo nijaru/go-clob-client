@@ -34,6 +34,20 @@ type CancelOrdersResponse struct {
 	NotCanceled map[string]string `json:"notCanceled"`
 }
 
+// AmountKind specifies how Amount is interpreted in a market order.
+type AmountKind uint8
+
+const (
+	// AmountUSDC treats Amount as a USDC value to spend (buys only).
+	// The number of shares purchased is computed from the market price.
+	// This is the default (zero value) and matches the current behavior for SideBuy.
+	AmountUSDC AmountKind = iota
+	// AmountShares treats Amount as a number of shares.
+	// For SideSell: always use this. For SideBuy: buy exactly Amount shares,
+	// spending Amount * price USDC.
+	AmountShares
+)
+
 // Side is the taker or maker side for an order or trade.
 type Side string
 
@@ -156,9 +170,12 @@ type OrderArgs struct {
 // MarketOrderArgs contains the inputs for building a market order.
 type MarketOrderArgs struct {
 	TokenID string
-	// Amount is the quantity to trade. For SideBuy, this is the collateral amount (e.g., USDC).
-	// For SideSell, this is the number of shares.
+	// Amount is the quantity to trade. Its interpretation depends on AmountKind:
+	// AmountUSDC (default): for SideBuy, spend exactly Amount USDC; shares are derived from price.
+	// AmountShares: for SideBuy, buy exactly Amount shares, spending Amount*price USDC;
+	//               for SideSell, sell exactly Amount shares.
 	Amount     udecimal.Decimal
+	AmountKind AmountKind
 	Side       Side
 	Price      udecimal.Decimal
 	FeeRateBps int64

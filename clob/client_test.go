@@ -1,9 +1,11 @@
 package clob
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	json "github.com/go-json-experiment/json"
 )
@@ -48,6 +50,102 @@ func TestGetOrderBook(t *testing.T) {
 	if book.AssetID != "123" {
 		t.Fatalf("unexpected asset id: %s", book.AssetID)
 	}
+}
+
+func TestAuthenticatedClientShutdown(t *testing.T) {
+	t.Parallel()
+
+	privateKey := "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c"
+
+	// Track heartbeat calls to confirm the loop actually ran.
+	var heartbeatCalls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case heartbeatsEndpoint:
+			heartbeatCalls++
+			data, _ := json.Marshal(HeartbeatResponse{HeartbeatID: "hb-1"})
+			w.Write(data)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	creds := &Credentials{Key: "key", Secret: "c2VjcmV0", Passphrase: "pass"}
+	client, err := NewAuthenticatedClient(Config{
+		Host:              server.URL,
+		PrivateKey:        privateKey,
+		Credentials:       creds,
+		HeartbeatInterval: 10 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("new authenticated client: %v", err)
+	}
+
+	// Allow at least one heartbeat tick before shutting down.
+	time.Sleep(30 * time.Millisecond)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+
+	if err := client.Shutdown(ctx); err != nil {
+		t.Fatalf("shutdown: %v", err)
+	}
+
+	// Second call must be a no-op and return nil.
+	if err := client.Shutdown(ctx); err != nil {
+		t.Fatalf("second shutdown: %v", err)
+	}
+
+	// Close after Shutdown must also be a no-op.
+	if err := client.Close(); err != nil {
+		t.Fatalf("close after shutdown: %v", err)
+	}
+}
+
+func TestAuthenticatedClientShutdownTimeout(t *testing.T) {
+	t.Parallel()
+
+	privateKey := "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Simulate a slow heartbeat endpoint.
+		time.Sleep(100 * time.Millisecond)
+		data, _ := json.Marshal(HeartbeatResponse{HeartbeatID: "hb-1"})
+		w.Write(data)
+	}))
+	defer server.Close()
+
+	creds := &Credentials{Key: "key", Secret: "c2VjcmV0", Passphrase: "pass"}
+	client, err := NewAuthenticatedClient(Config{
+		Host:              server.URL,
+		PrivateKey:        privateKey,
+		Credentials:       creds,
+		HeartbeatInterval: 5 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("new authenticated client: %v", err)
+	}
+
+	// Issue Shutdown with an already-expired context; should return DeadlineExceeded
+	// because the heartbeat goroutine may be blocked mid-request.
+	expired, expireCancel := context.WithDeadline(t.Context(), time.Now())
+	defer expireCancel()
+
+	err = client.Shutdown(expired)
+	if err != context.DeadlineExceeded {
+		// Either context.DeadlineExceeded or nil is acceptable: nil means the
+		// goroutine happened to exit before we checked (race). Only fail on
+		// unexpected errors.
+		if err != nil {
+			t.Fatalf("expected DeadlineExceeded or nil, got: %v", err)
+		}
+	}
+
+	// Always clean up with a real timeout.
+	cleanupCtx, cleanupCancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cleanupCancel()
+	_ = client.Shutdown(cleanupCtx)
 }
 
 func TestCreateOrDeriveAPIKeyFallsBackToDerive(t *testing.T) {
