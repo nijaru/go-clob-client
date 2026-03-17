@@ -25,7 +25,7 @@ func TestHandleMessageBookEvent(t *testing.T) {
 		Timestamp: "1710000000",
 	})
 
-	c.handleMessage(data)
+	c.handleMessage(t.Context(), data)
 
 	select {
 	case ev := <-c.Events():
@@ -60,7 +60,7 @@ func TestHandleMessagePriceChangeEvent(t *testing.T) {
 		Side:      clob.SideBuy,
 	})
 
-	c.handleMessage(data)
+	c.handleMessage(t.Context(), data)
 
 	select {
 	case ev := <-c.Events():
@@ -131,7 +131,7 @@ func TestHandleMessageAllEventTypes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c := NewClient("")
 			data, _ := json.Marshal(tt.event)
-			c.handleMessage(data)
+			c.handleMessage(t.Context(), data)
 
 			select {
 			case <-c.Events():
@@ -149,7 +149,7 @@ func TestHandleMessageUnknownEventType(t *testing.T) {
 	t.Parallel()
 
 	c := NewClient("")
-	c.handleMessage([]byte(`{"event_type":"future_event","data":"x"}`))
+	c.handleMessage(t.Context(), []byte(`{"event_type":"future_event","data":"x"}`))
 
 	select {
 	case err := <-c.Errors():
@@ -168,7 +168,7 @@ func TestHandleMessageMalformedEventJSON(t *testing.T) {
 
 	c := NewClient("")
 	// Valid event_type but invalid inner fields
-	c.handleMessage([]byte(`{"event_type":"book","bids":"not-an-array"}`))
+	c.handleMessage(t.Context(), []byte(`{"event_type":"book","bids":"not-an-array"}`))
 
 	select {
 	case err := <-c.Errors():
@@ -187,7 +187,7 @@ func TestHandleMessageNonJSON(t *testing.T) {
 
 	c := NewClient("")
 	// Text like "PONG" should not produce errors or events
-	c.handleMessage([]byte("PONG"))
+	c.handleMessage(t.Context(), []byte("PONG"))
 
 	select {
 	case err := <-c.Errors():

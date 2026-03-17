@@ -724,4 +724,3 @@ func (c *Client) AuthenticatedOnly() error {
 
 // PostOrdersBatchLimit is the maximum number of orders allowed in a single batch (2026 limit).
 const PostOrdersBatchLimit = 15
-

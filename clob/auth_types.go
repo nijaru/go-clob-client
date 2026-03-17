@@ -15,7 +15,7 @@ type apiKeyRaw struct {
 
 // WSAuth contains the derived credentials for authenticated websocket subscriptions.
 type WSAuth struct {
-	Key        string `json:"api_key"`
+	Key        string `json:"apiKey"`
 	Passphrase string `json:"passphrase"`
 	Timestamp  string `json:"timestamp"`
 	Signature  string `json:"signature"`

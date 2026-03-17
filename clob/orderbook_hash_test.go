@@ -114,10 +114,11 @@ func TestGetOrderBookHashNilSlices(t *testing.T) {
 	}
 }
 
-func TestOrderBookHashMatchesPython(t *testing.T) {
+func TestOrderBookHashMatchesOfficialReference(t *testing.T) {
 	t.Parallel()
 
-	// Computed by Python SDK for the same payload:
+	// Computed by official SDKs (Rust/TS/Python) for the same payload:
+	// Example calculation using Python as verification:
 	// python3 -c "import hashlib,json; p={'market':'0x123','asset_id':'456','timestamp':'789','hash':'',
 	//   'bids':[{'price':'0.45','size':'10'}],'asks':[{'price':'0.55','size':'20'}],
 	//   'min_order_size':'5','tick_size':'0.01','neg_risk':False,'last_trade_price':'0.50'};
@@ -146,6 +147,6 @@ func TestOrderBookHashMatchesPython(t *testing.T) {
 	}
 
 	if hash != expectedHash {
-		t.Errorf("hash mismatch with Python SDK:\n  got:  %s\n  want: %s", hash, expectedHash)
+		t.Errorf("hash mismatch with official reference:\n  got:  %s\n  want: %s", hash, expectedHash)
 	}
 }

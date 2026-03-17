@@ -144,7 +144,7 @@ func (c *Client) readLoop(ctx context.Context) {
 		}
 
 		// Decode event
-		c.handleMessage(data)
+		c.handleMessage(ctx, data)
 	}
 }
 
@@ -193,7 +193,7 @@ func (c *Client) sendJSON(ctx context.Context, v any) error {
 	return c.conn.Write(ctx, websocket.MessageText, data)
 }
 
-func (c *Client) handleMessage(data []byte) {
+func (c *Client) handleMessage(ctx context.Context, data []byte) {
 	var base BaseEvent
 	if err := json.Unmarshal(data, &base); err != nil {
 		// Non-JSON message (text heartbeat, etc.) — not an error.
@@ -231,5 +231,8 @@ func (c *Client) handleMessage(data []byte) {
 		return
 	}
 
-	c.events <- event
+	select {
+	case c.events <- event:
+	case <-ctx.Done():
+	}
 }
