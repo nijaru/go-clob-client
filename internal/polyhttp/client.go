@@ -168,9 +168,6 @@ func (c *Client) doJSON(
 	req.Header.Set("Connection", "keep-alive")
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", c.UserAgent)
-	if method == http.MethodGet {
-		req.Header.Set("Accept-Encoding", "gzip")
-	}
 
 	if c.Headers != nil {
 		headers, err := c.Headers(ctx, method, path, requestBody, auth, nonce)
