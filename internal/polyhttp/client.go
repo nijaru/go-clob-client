@@ -51,6 +51,18 @@ func (e *APIError) Error() string {
 	return fmt.Errorf("polymarket API error: status %d: %s", e.StatusCode, e.Message).Error()
 }
 
+// HTTPStatus returns the HTTP status code of the error.
+// It is used by errors.Is matching in the clob package via the HTTPStatuser interface.
+func (e *APIError) HTTPStatus() int { return e.StatusCode }
+
+func (e *APIError) Is(target error) bool {
+	type HTTPStatuser interface{ HTTPStatus() int }
+	if ts, ok := target.(HTTPStatuser); ok {
+		return e.StatusCode == ts.HTTPStatus()
+	}
+	return false
+}
+
 func (c *Client) GetJSON(
 	ctx context.Context,
 	path string,
