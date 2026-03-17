@@ -240,7 +240,13 @@ func (c *SignerClient) AsAuthenticated(
 
 // NewAuthenticatedRTDSClient creates a new RTDS client that can also subscribe to authenticated topics.
 func (c *AuthenticatedClient) NewAuthenticatedRTDSClient() *rtds.Client {
-	return rtds.NewClient(c.rtdsHost, nil)
+	creds := c.credentials()
+	rtdsCreds := &rtds.Credentials{
+		Key:        creds.Key,
+		Secret:     creds.Secret,
+		Passphrase: creds.Passphrase,
+	}
+	return rtds.NewClient(c.rtdsHost, nil).WithCredentials(rtdsCreds)
 }
 
 // Close stops any background tasks (like heartbeats) and cleans up resources.

@@ -36,6 +36,7 @@ type Client struct {
 	autoReconnect bool
 	subsMu        sync.RWMutex
 	subs          []Subscription
+	creds         *Credentials
 }
 
 // NewClient creates a new RTDS client.
@@ -54,6 +55,14 @@ func NewClient(url string, logger *slog.Logger) *Client {
 		stop:          make(chan struct{}),
 		autoReconnect: true,
 	}
+}
+
+// WithCredentials sets the credentials for authenticated subscriptions.
+func (c *Client) WithCredentials(creds *Credentials) *Client {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.creds = creds
+	return c
 }
 
 // Connect opens the WebSocket connection and starts the read/heartbeat loops.
@@ -184,6 +193,11 @@ func (c *Client) SubscribeComments(ctx context.Context, commentType CommentType,
 	msgType := string(commentType)
 	if msgType == "" {
 		msgType = "*"
+	}
+	if auth == nil {
+		c.mu.Lock()
+		auth = c.creds
+		c.mu.Unlock()
 	}
 	sub := Subscription{
 		Topic:    "comments",

@@ -3,6 +3,7 @@ package gamma
 import (
 	"context"
 	"fmt"
+	"iter"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -138,6 +139,40 @@ func (c *Client) GetMarkets(ctx context.Context, params MarketFilterParams) ([]M
 	return out, err
 }
 
+// IterMarkets returns an iterator for markets based on the provided filters.
+func (c *Client) IterMarkets(ctx context.Context, params MarketFilterParams) iter.Seq2[Market, error] {
+	return func(yield func(Market, error) bool) {
+		offset := params.Offset
+		limit := params.Limit
+		if limit <= 0 {
+			limit = 100
+		}
+
+		for {
+			p := params
+			p.Limit = limit
+			p.Offset = offset
+			markets, err := c.GetMarkets(ctx, p)
+			if err != nil {
+				yield(Market{}, err)
+				return
+			}
+			if len(markets) == 0 {
+				return
+			}
+			for _, m := range markets {
+				if !yield(m, nil) {
+					return
+				}
+			}
+			if len(markets) < limit {
+				return
+			}
+			offset += len(markets)
+		}
+	}
+}
+
 // GetEvent returns a single event by its ID.
 func (c *Client) GetEvent(ctx context.Context, id string) (*Event, error) {
 	var out Event
@@ -188,6 +223,40 @@ func (c *Client) GetEvents(ctx context.Context, params EventFilterParams) ([]Eve
 	return out, err
 }
 
+// IterEvents returns an iterator for events based on the provided filters.
+func (c *Client) IterEvents(ctx context.Context, params EventFilterParams) iter.Seq2[Event, error] {
+	return func(yield func(Event, error) bool) {
+		offset := params.Offset
+		limit := params.Limit
+		if limit <= 0 {
+			limit = 100
+		}
+
+		for {
+			p := params
+			p.Limit = limit
+			p.Offset = offset
+			events, err := c.GetEvents(ctx, p)
+			if err != nil {
+				yield(Event{}, err)
+				return
+			}
+			if len(events) == 0 {
+				return
+			}
+			for _, e := range events {
+				if !yield(e, nil) {
+					return
+				}
+			}
+			if len(events) < limit {
+				return
+			}
+			offset += len(events)
+		}
+	}
+}
+
 // Search returns search results matching the query.
 func (c *Client) Search(ctx context.Context, query string) ([]Market, error) {
 	params := url.Values{}
@@ -219,10 +288,52 @@ func (c *Client) GetTagBySlug(ctx context.Context, slug string) (*Tag, error) {
 	return &out, err
 }
 
+// GetRelatedTags returns tags related to a specific tag.
+func (c *Client) GetRelatedTags(ctx context.Context, tagID string) ([]RelatedTag, error) {
+	var out []RelatedTag
+	err := c.http.GetJSON(ctx, tagsEndpoint+"/"+tagID+"/related-tags", nil, polyhttp.AuthNone, &out)
+	return out, err
+}
+
+// GetRelatedTagsBySlug returns tags related to a specific tag by slug.
+func (c *Client) GetRelatedTagsBySlug(ctx context.Context, slug string) ([]RelatedTag, error) {
+	var out []RelatedTag
+	err := c.http.GetJSON(ctx, tagsEndpoint+"/slug/"+slug+"/related-tags", nil, polyhttp.AuthNone, &out)
+	return out, err
+}
+
+// GetTagsRelatedToTag returns tags related to a specific tag.
+func (c *Client) GetTagsRelatedToTag(ctx context.Context, tagID string) ([]Tag, error) {
+	var out []Tag
+	err := c.http.GetJSON(ctx, tagsEndpoint+"/"+tagID+"/related-tags/tags", nil, polyhttp.AuthNone, &out)
+	return out, err
+}
+
+// GetTagsRelatedToTagBySlug returns tags related to a specific tag by slug.
+func (c *Client) GetTagsRelatedToTagBySlug(ctx context.Context, slug string) ([]Tag, error) {
+	var out []Tag
+	err := c.http.GetJSON(ctx, tagsEndpoint+"/slug/"+slug+"/related-tags/tags", nil, polyhttp.AuthNone, &out)
+	return out, err
+}
+
 // GetTags returns all tags.
 func (c *Client) GetTags(ctx context.Context) ([]Tag, error) {
 	var out []Tag
 	err := c.http.GetJSON(ctx, tagsEndpoint, nil, polyhttp.AuthNone, &out)
+	return out, err
+}
+
+// GetEventTags returns all tags associated with an event.
+func (c *Client) GetEventTags(ctx context.Context, eventID string) ([]Tag, error) {
+	var out []Tag
+	err := c.http.GetJSON(ctx, eventsEndpoint+"/"+eventID+"/tags", nil, polyhttp.AuthNone, &out)
+	return out, err
+}
+
+// GetMarketTags returns all tags associated with a market.
+func (c *Client) GetMarketTags(ctx context.Context, marketID string) ([]Tag, error) {
+	var out []Tag
+	err := c.http.GetJSON(ctx, marketsEndpoint+"/"+marketID+"/tags", nil, polyhttp.AuthNone, &out)
 	return out, err
 }
 
@@ -262,6 +373,54 @@ func (c *Client) GetComments(ctx context.Context, params CommentFilterParams) ([
 
 	var out []Comment
 	err := c.http.GetJSON(ctx, commentsEndpoint, query, polyhttp.AuthNone, &out)
+	return out, err
+}
+
+// IterComments returns an iterator for comments based on the provided filters.
+func (c *Client) IterComments(ctx context.Context, params CommentFilterParams) iter.Seq2[Comment, error] {
+	return func(yield func(Comment, error) bool) {
+		offset := params.Offset
+		limit := params.Limit
+		if limit <= 0 {
+			limit = 100
+		}
+
+		for {
+			p := params
+			p.Limit = limit
+			p.Offset = offset
+			comments, err := c.GetComments(ctx, p)
+			if err != nil {
+				yield(Comment{}, err)
+				return
+			}
+			if len(comments) == 0 {
+				return
+			}
+			for _, c := range comments {
+				if !yield(c, nil) {
+					return
+				}
+			}
+			if len(comments) < limit {
+				return
+			}
+			offset += len(comments)
+		}
+	}
+}
+
+// GetComment returns comments by their ID.
+func (c *Client) GetComment(ctx context.Context, id string) ([]Comment, error) {
+	var out []Comment
+	err := c.http.GetJSON(ctx, commentsEndpoint+"/"+id, nil, polyhttp.AuthNone, &out)
+	return out, err
+}
+
+// GetCommentsByUserAddress returns comments posted by a wallet address.
+func (c *Client) GetCommentsByUserAddress(ctx context.Context, address string) ([]Comment, error) {
+	var out []Comment
+	err := c.http.GetJSON(ctx, commentsEndpoint+"/user_address/"+address, nil, polyhttp.AuthNone, &out)
 	return out, err
 }
 

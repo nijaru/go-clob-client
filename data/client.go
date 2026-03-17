@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"iter"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -110,6 +111,40 @@ func (c *Client) GetPositions(ctx context.Context, params PositionParams) ([]Pos
 	return out, err
 }
 
+// IterPositions returns an iterator for positions based on the provided filters.
+func (c *Client) IterPositions(ctx context.Context, params PositionParams) iter.Seq2[Position, error] {
+	return func(yield func(Position, error) bool) {
+		offset := params.Offset
+		limit := params.Limit
+		if limit <= 0 {
+			limit = 100
+		}
+
+		for {
+			p := params
+			p.Limit = limit
+			p.Offset = offset
+			positions, err := c.GetPositions(ctx, p)
+			if err != nil {
+				yield(Position{}, err)
+				return
+			}
+			if len(positions) == 0 {
+				return
+			}
+			for _, pos := range positions {
+				if !yield(pos, nil) {
+					return
+				}
+			}
+			if len(positions) < limit {
+				return
+			}
+			offset += len(positions)
+		}
+	}
+}
+
 // GetClosedPositions returns the closed positions for a user.
 func (c *Client) GetClosedPositions(ctx context.Context, params ClosedPositionParams) ([]ClosedPosition, error) {
 	query := url.Values{}
@@ -139,6 +174,40 @@ func (c *Client) GetClosedPositions(ctx context.Context, params ClosedPositionPa
 	var out []ClosedPosition
 	err := c.http.GetJSON(ctx, closedPositionsEndpoint, query, polyhttp.AuthNone, &out)
 	return out, err
+}
+
+// IterClosedPositions returns an iterator for closed positions based on the provided filters.
+func (c *Client) IterClosedPositions(ctx context.Context, params ClosedPositionParams) iter.Seq2[ClosedPosition, error] {
+	return func(yield func(ClosedPosition, error) bool) {
+		offset := params.Offset
+		limit := params.Limit
+		if limit <= 0 {
+			limit = 100
+		}
+
+		for {
+			p := params
+			p.Limit = limit
+			p.Offset = offset
+			positions, err := c.GetClosedPositions(ctx, p)
+			if err != nil {
+				yield(ClosedPosition{}, err)
+				return
+			}
+			if len(positions) == 0 {
+				return
+			}
+			for _, pos := range positions {
+				if !yield(pos, nil) {
+					return
+				}
+			}
+			if len(positions) < limit {
+				return
+			}
+			offset += len(positions)
+		}
+	}
 }
 
 // GetTotalValue returns the total current value of a user's positions in USDC.
@@ -184,6 +253,40 @@ func (c *Client) GetTrades(ctx context.Context, params TradeParams) ([]DataTrade
 	return out, err
 }
 
+// IterTrades returns an iterator for trades based on the provided filters.
+func (c *Client) IterTrades(ctx context.Context, params TradeParams) iter.Seq2[DataTrade, error] {
+	return func(yield func(DataTrade, error) bool) {
+		offset := params.Offset
+		limit := params.Limit
+		if limit <= 0 {
+			limit = 100
+		}
+
+		for {
+			p := params
+			p.Limit = limit
+			p.Offset = offset
+			trades, err := c.GetTrades(ctx, p)
+			if err != nil {
+				yield(DataTrade{}, err)
+				return
+			}
+			if len(trades) == 0 {
+				return
+			}
+			for _, t := range trades {
+				if !yield(t, nil) {
+					return
+				}
+			}
+			if len(trades) < limit {
+				return
+			}
+			offset += len(trades)
+		}
+	}
+}
+
 // GetActivity returns on-chain activity logs based on the provided filters.
 func (c *Client) GetActivity(ctx context.Context, params ActivityParams) ([]Activity, error) {
 	query := url.Values{}
@@ -222,6 +325,40 @@ func (c *Client) GetActivity(ctx context.Context, params ActivityParams) ([]Acti
 	var out []Activity
 	err := c.http.GetJSON(ctx, activityEndpoint, query, polyhttp.AuthNone, &out)
 	return out, err
+}
+
+// IterActivity returns an iterator for activity logs based on the provided filters.
+func (c *Client) IterActivity(ctx context.Context, params ActivityParams) iter.Seq2[Activity, error] {
+	return func(yield func(Activity, error) bool) {
+		offset := params.Offset
+		limit := params.Limit
+		if limit <= 0 {
+			limit = 100
+		}
+
+		for {
+			p := params
+			p.Limit = limit
+			p.Offset = offset
+			activity, err := c.GetActivity(ctx, p)
+			if err != nil {
+				yield(Activity{}, err)
+				return
+			}
+			if len(activity) == 0 {
+				return
+			}
+			for _, a := range activity {
+				if !yield(a, nil) {
+					return
+				}
+			}
+			if len(activity) < limit {
+				return
+			}
+			offset += len(activity)
+		}
+	}
 }
 
 // GetHolders returns top token holders for the specified markets.
@@ -304,6 +441,40 @@ func (c *Client) GetLeaderboard(ctx context.Context, params LeaderboardParams) (
 	return out, err
 }
 
+// IterLeaderboard returns an iterator for the trader leaderboard based on the provided filters.
+func (c *Client) IterLeaderboard(ctx context.Context, params LeaderboardParams) iter.Seq2[TraderLeaderboardEntry, error] {
+	return func(yield func(TraderLeaderboardEntry, error) bool) {
+		offset := params.Offset
+		limit := params.Limit
+		if limit <= 0 {
+			limit = 100
+		}
+
+		for {
+			p := params
+			p.Limit = limit
+			p.Offset = offset
+			entries, err := c.GetLeaderboard(ctx, p)
+			if err != nil {
+				yield(TraderLeaderboardEntry{}, err)
+				return
+			}
+			if len(entries) == 0 {
+				return
+			}
+			for _, entry := range entries {
+				if !yield(entry, nil) {
+					return
+				}
+			}
+			if len(entries) < limit {
+				return
+			}
+			offset += len(entries)
+		}
+	}
+}
+
 // GetBuilderLeaderboard returns aggregated performance rankings for builders.
 func (c *Client) GetBuilderLeaderboard(ctx context.Context, params BuilderLeaderboardParams) ([]BuilderLeaderboardEntry, error) {
 	query := url.Values{}
@@ -320,6 +491,40 @@ func (c *Client) GetBuilderLeaderboard(ctx context.Context, params BuilderLeader
 	var out []BuilderLeaderboardEntry
 	err := c.http.GetJSON(ctx, builderLeaderboardEndpoint, query, polyhttp.AuthNone, &out)
 	return out, err
+}
+
+// IterBuilderLeaderboard returns an iterator for the builder leaderboard based on the provided filters.
+func (c *Client) IterBuilderLeaderboard(ctx context.Context, params BuilderLeaderboardParams) iter.Seq2[BuilderLeaderboardEntry, error] {
+	return func(yield func(BuilderLeaderboardEntry, error) bool) {
+		offset := params.Offset
+		limit := params.Limit
+		if limit <= 0 {
+			limit = 100
+		}
+
+		for {
+			p := params
+			p.Limit = limit
+			p.Offset = offset
+			entries, err := c.GetBuilderLeaderboard(ctx, p)
+			if err != nil {
+				yield(BuilderLeaderboardEntry{}, err)
+				return
+			}
+			if len(entries) == 0 {
+				return
+			}
+			for _, entry := range entries {
+				if !yield(entry, nil) {
+					return
+				}
+			}
+			if len(entries) < limit {
+				return
+			}
+			offset += len(entries)
+		}
+	}
 }
 
 // GetBuilderVolume returns daily volume data points for builders.
