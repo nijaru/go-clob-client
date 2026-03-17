@@ -9,6 +9,8 @@ import (
 const (
 	// DefaultHost is the production Polymarket CLOB base URL.
 	DefaultHost = "https://clob.polymarket.com"
+	// DefaultRTDSHost is the production Polymarket RTDS WebSocket URL.
+	DefaultRTDSHost = "wss://rtds.polymarket.com"
 	// DefaultGeoblockHost is the production Polymarket site host for geoblock checks.
 	DefaultGeoblockHost = "https://polymarket.com"
 	// PolygonChainID is the Polygon mainnet chain ID used by Polymarket.
@@ -36,6 +38,8 @@ const (
 // Config configures a Polymarket CLOB client.
 type Config struct {
 	Host string
+	// RTDSHost overrides the host used for RTDS WebSocket connections.
+	RTDSHost string
 	// GeoblockHost overrides the host used for geoblock checks.
 	GeoblockHost  string
 	ChainID       int64
@@ -71,6 +75,11 @@ func (c Config) normalized() Config {
 		c.Host = DefaultHost
 	}
 	c.Host = strings.TrimRight(c.Host, "/")
+
+	if c.RTDSHost == "" {
+		c.RTDSHost = DefaultRTDSHost
+	}
+	c.RTDSHost = strings.TrimRight(c.RTDSHost, "/")
 
 	if c.GeoblockHost == "" {
 		c.GeoblockHost = DefaultGeoblockHost

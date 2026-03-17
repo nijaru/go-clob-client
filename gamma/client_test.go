@@ -33,10 +33,10 @@ func TestClient_GetMarket(t *testing.T) {
 	}
 }
 
-func TestClient_GetSearch(t *testing.T) {
+func TestClient_Search(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/search" {
-			t.Errorf("expected path /search, got %s", r.URL.Path)
+		if r.URL.Path != "/public-search" {
+			t.Errorf("expected path /public-search, got %s", r.URL.Path)
 		}
 		if r.URL.Query().Get("query") != "rain" {
 			t.Errorf("expected query rain, got %s", r.URL.Query().Get("query"))
@@ -50,7 +50,7 @@ func TestClient_GetSearch(t *testing.T) {
 	defer server.Close()
 
 	client := New(Config{Host: server.URL})
-	markets, err := client.GetSearch(t.Context(), "rain")
+	markets, err := client.Search(t.Context(), "rain")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -14,7 +14,7 @@ func main() {
 
 	// 1. Search for a market
 	fmt.Println("Searching for 'Bitcoin' markets...")
-	markets, err := client.GetSearch(ctx, "Bitcoin")
+	markets, err := client.Search(ctx, "Bitcoin")
 	if err != nil {
 		log.Fatalf("Search failed: %v", err)
 	}

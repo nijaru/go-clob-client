@@ -8,7 +8,7 @@ import (
 )
 
 // orderBookHashPayload represents the payload used for order book hashing.
-// CRITICAL: Field order must match the insertion order in the official Rust/TypeScript SDKs
+// CRITICAL: Field order must match the insertion order in the official SDKs
 // because they use SHA1 over JSON-serialized data where keys are in a fixed order.
 // DO NOT reorder these fields or the generated hash will not match the server's expected value.
 type orderBookHashPayload struct {

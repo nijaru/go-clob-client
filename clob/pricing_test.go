@@ -11,7 +11,7 @@ import (
 )
 
 // These tests verify CalculateMarketPrice matches the official SDKs'
-// (Rust/TypeScript/Python) logic:
+// logic:
 //   - For BUY: accumulate size*price across asks (descending), return price when sum >= amount
 //   - For SELL: accumulate size across bids (ascending), return price when sum >= amount
 //   - On FOK with insufficient liquidity, return error

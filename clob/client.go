@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nijaru/go-clob-client/clob/ws/rtds"
 	"github.com/nijaru/go-clob-client/internal/polyauth"
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
 )
@@ -18,6 +19,7 @@ import (
 // Client is the base Polymarket CLOB client containing public, unauthenticated methods.
 type Client struct {
 	host          string
+	rtdsHost      string
 	chainID       int64
 	useServerTime bool
 	http          *polyhttp.Client
@@ -105,6 +107,7 @@ func NewAuthenticatedClient(config Config) (*AuthenticatedClient, error) {
 func newBase(config Config) *Client {
 	base := &Client{
 		host:          config.Host,
+		rtdsHost:      config.RTDSHost,
 		chainID:       config.ChainID,
 		useServerTime: config.UseServerTime,
 		tickSizeMu:         &sync.RWMutex{},
@@ -157,6 +160,11 @@ func newSignerFrom(base *Client, config Config) (*SignerClient, error) {
 	}
 	base.http.Headers = sc.addAuthHeaders
 	return sc, nil
+}
+
+// NewRTDSClient creates a new RTDS (Real-Time Data Stream) WebSocket client.
+func (c *Client) NewRTDSClient() *rtds.Client {
+	return rtds.NewClient(c.rtdsHost, nil)
 }
 
 // AsSigner upgrades a base client to a SignerClient.
@@ -228,6 +236,11 @@ func (c *SignerClient) AsAuthenticated(
 	}
 	ac.http.Headers = ac.addAuthHeaders
 	return ac
+}
+
+// NewAuthenticatedRTDSClient creates a new RTDS client that can also subscribe to authenticated topics.
+func (c *AuthenticatedClient) NewAuthenticatedRTDSClient() *rtds.Client {
+	return rtds.NewClient(c.rtdsHost, nil)
 }
 
 // Close stops any background tasks (like heartbeats) and cleans up resources.

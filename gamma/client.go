@@ -2,6 +2,7 @@ package gamma
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -18,8 +19,10 @@ const (
 	seriesEndpoint   = "/series"
 	tagsEndpoint     = "/tags"
 	sportsEndpoint   = "/sports"
+	teamsEndpoint    = "/teams"
 	commentsEndpoint = "/comments"
 	profileEndpoint  = "/public-profile"
+	searchEndpoint   = "/public-search"
 )
 
 // Client is a read-only client for the Polymarket Gamma API.
@@ -54,7 +57,9 @@ func (c Config) normalized() Config {
 		c.Host = DefaultHost
 	}
 	if c.HTTPClient == nil {
-		c.HTTPClient = &http.Client{Timeout: 15 * time.Second}
+		httpClient := http.DefaultClient
+		httpClient.Timeout = 15 * time.Second
+		c.HTTPClient = httpClient
 	}
 	if c.UserAgent == "" {
 		c.UserAgent = "go-clob-client/gamma"
@@ -69,6 +74,22 @@ func (c *Client) GetMarket(ctx context.Context, id string) (*Market, error) {
 	return &out, err
 }
 
+// GetMarketBySlug returns a single market by its slug.
+func (c *Client) GetMarketBySlug(ctx context.Context, slug string) (*Market, error) {
+	query := url.Values{}
+	query.Set("slug", slug)
+
+	var out []Market
+	err := c.http.GetJSON(ctx, marketsEndpoint, query, polyhttp.AuthNone, &out)
+	if err != nil {
+		return nil, err
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("market not found")
+	}
+	return &out[0], nil
+}
+
 // GetMarkets returns a list of markets based on the provided filters.
 func (c *Client) GetMarkets(ctx context.Context, params MarketFilterParams) ([]Market, error) {
 	query := url.Values{}
@@ -80,6 +101,9 @@ func (c *Client) GetMarkets(ctx context.Context, params MarketFilterParams) ([]M
 	}
 	if params.Archived != nil {
 		query.Set("archived", strconv.FormatBool(*params.Archived))
+	}
+	if params.Resolved != nil {
+		query.Set("resolved", strconv.FormatBool(*params.Resolved))
 	}
 	if params.Limit > 0 {
 		query.Set("limit", strconv.Itoa(params.Limit))
@@ -98,6 +122,15 @@ func (c *Client) GetMarkets(ctx context.Context, params MarketFilterParams) ([]M
 	}
 	if params.EventID != "" {
 		query.Set("event_id", params.EventID)
+	}
+	if params.Slug != "" {
+		query.Set("slug", params.Slug)
+	}
+	if params.NegativeRisk != nil {
+		query.Set("negative_risk", strconv.FormatBool(*params.NegativeRisk))
+	}
+	if params.AcceptingOrders != nil {
+		query.Set("accepting_orders", strconv.FormatBool(*params.AcceptingOrders))
 	}
 
 	var out []Market
@@ -128,6 +161,12 @@ func (c *Client) GetEvents(ctx context.Context, params EventFilterParams) ([]Eve
 	if params.Closed != nil {
 		query.Set("closed", strconv.FormatBool(*params.Closed))
 	}
+	if params.Archived != nil {
+		query.Set("archived", strconv.FormatBool(*params.Archived))
+	}
+	if params.Resolved != nil {
+		query.Set("resolved", strconv.FormatBool(*params.Resolved))
+	}
 	if params.TagID != "" {
 		query.Set("tag_id", params.TagID)
 	}
@@ -140,19 +179,22 @@ func (c *Client) GetEvents(ctx context.Context, params EventFilterParams) ([]Eve
 	if params.Offset > 0 {
 		query.Set("offset", strconv.Itoa(params.Offset))
 	}
+	if params.NegativeRisk != nil {
+		query.Set("negative_risk", strconv.FormatBool(*params.NegativeRisk))
+	}
 
 	var out []Event
 	err := c.http.GetJSON(ctx, eventsEndpoint, query, polyhttp.AuthNone, &out)
 	return out, err
 }
 
-// GetSearch returns markets matching the query.
-func (c *Client) GetSearch(ctx context.Context, query string) ([]Market, error) {
+// Search returns search results matching the query.
+func (c *Client) Search(ctx context.Context, query string) ([]Market, error) {
 	params := url.Values{}
 	params.Set("query", query)
 
 	var out []Market
-	err := c.http.GetJSON(ctx, "/search", params, polyhttp.AuthNone, &out)
+	err := c.http.GetJSON(ctx, searchEndpoint, params, polyhttp.AuthNone, &out)
 	return out, err
 }
 
@@ -161,13 +203,6 @@ func (c *Client) GetSeries(ctx context.Context, id string) (*Series, error) {
 	var out Series
 	err := c.http.GetJSON(ctx, seriesEndpoint+"/"+id, nil, polyhttp.AuthNone, &out)
 	return &out, err
-}
-
-// GetAllSeries returns all series.
-func (c *Client) GetAllSeries(ctx context.Context) ([]Series, error) {
-	var out []Series
-	err := c.http.GetJSON(ctx, seriesEndpoint, nil, polyhttp.AuthNone, &out)
-	return out, err
 }
 
 // GetTag returns a single tag by its ID.
@@ -191,17 +226,17 @@ func (c *Client) GetTags(ctx context.Context) ([]Tag, error) {
 	return out, err
 }
 
-// GetMarketTags returns tags for a specific market.
-func (c *Client) GetMarketTags(ctx context.Context, marketID string) ([]Tag, error) {
-	var out []Tag
-	err := c.http.GetJSON(ctx, marketsEndpoint+"/"+marketID+"/tags", nil, polyhttp.AuthNone, &out)
-	return out, err
-}
-
 // GetSports returns all sports metadata.
 func (c *Client) GetSports(ctx context.Context) ([]Sport, error) {
 	var out []Sport
 	err := c.http.GetJSON(ctx, sportsEndpoint, nil, polyhttp.AuthNone, &out)
+	return out, err
+}
+
+// GetTeams returns all sports teams.
+func (c *Client) GetTeams(ctx context.Context) ([]Team, error) {
+	var out []Team
+	err := c.http.GetJSON(ctx, teamsEndpoint, nil, polyhttp.AuthNone, &out)
 	return out, err
 }
 
