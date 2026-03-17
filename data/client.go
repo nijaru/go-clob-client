@@ -112,7 +112,10 @@ func (c *Client) GetPositions(ctx context.Context, params PositionParams) ([]Pos
 }
 
 // IterPositions returns an iterator for positions based on the provided filters.
-func (c *Client) IterPositions(ctx context.Context, params PositionParams) iter.Seq2[Position, error] {
+func (c *Client) IterPositions(
+	ctx context.Context,
+	params PositionParams,
+) iter.Seq2[Position, error] {
 	return func(yield func(Position, error) bool) {
 		offset := params.Offset
 		limit := params.Limit
@@ -146,7 +149,10 @@ func (c *Client) IterPositions(ctx context.Context, params PositionParams) iter.
 }
 
 // GetClosedPositions returns the closed positions for a user.
-func (c *Client) GetClosedPositions(ctx context.Context, params ClosedPositionParams) ([]ClosedPosition, error) {
+func (c *Client) GetClosedPositions(
+	ctx context.Context,
+	params ClosedPositionParams,
+) ([]ClosedPosition, error) {
 	query := url.Values{}
 	query.Set("user", params.User)
 	if len(params.Markets) > 0 {
@@ -177,7 +183,10 @@ func (c *Client) GetClosedPositions(ctx context.Context, params ClosedPositionPa
 }
 
 // IterClosedPositions returns an iterator for closed positions based on the provided filters.
-func (c *Client) IterClosedPositions(ctx context.Context, params ClosedPositionParams) iter.Seq2[ClosedPosition, error] {
+func (c *Client) IterClosedPositions(
+	ctx context.Context,
+	params ClosedPositionParams,
+) iter.Seq2[ClosedPosition, error] {
 	return func(yield func(ClosedPosition, error) bool) {
 		offset := params.Offset
 		limit := params.Limit
@@ -328,7 +337,10 @@ func (c *Client) GetActivity(ctx context.Context, params ActivityParams) ([]Acti
 }
 
 // IterActivity returns an iterator for activity logs based on the provided filters.
-func (c *Client) IterActivity(ctx context.Context, params ActivityParams) iter.Seq2[Activity, error] {
+func (c *Client) IterActivity(
+	ctx context.Context,
+	params ActivityParams,
+) iter.Seq2[Activity, error] {
 	return func(yield func(Activity, error) bool) {
 		offset := params.Offset
 		limit := params.Limit
@@ -390,7 +402,10 @@ func (c *Client) GetTradedCount(ctx context.Context, user string) (int, error) {
 }
 
 // GetOpenInterest returns open interest for one or more markets.
-func (c *Client) GetOpenInterest(ctx context.Context, params OpenInterestParams) ([]OpenInterest, error) {
+func (c *Client) GetOpenInterest(
+	ctx context.Context,
+	params OpenInterestParams,
+) ([]OpenInterest, error) {
 	query := url.Values{}
 	if len(params.Markets) > 0 {
 		query.Set("market", strings.Join(params.Markets, ","))
@@ -412,7 +427,10 @@ func (c *Client) GetLiveVolume(ctx context.Context, eventID int64) (*LiveVolume,
 }
 
 // GetLeaderboard returns rankings from the trader leaderboard.
-func (c *Client) GetLeaderboard(ctx context.Context, params LeaderboardParams) ([]TraderLeaderboardEntry, error) {
+func (c *Client) GetLeaderboard(
+	ctx context.Context,
+	params LeaderboardParams,
+) ([]TraderLeaderboardEntry, error) {
 	query := url.Values{}
 	if params.Category != "" {
 		query.Set("category", params.Category)
@@ -442,7 +460,10 @@ func (c *Client) GetLeaderboard(ctx context.Context, params LeaderboardParams) (
 }
 
 // IterLeaderboard returns an iterator for the trader leaderboard based on the provided filters.
-func (c *Client) IterLeaderboard(ctx context.Context, params LeaderboardParams) iter.Seq2[TraderLeaderboardEntry, error] {
+func (c *Client) IterLeaderboard(
+	ctx context.Context,
+	params LeaderboardParams,
+) iter.Seq2[TraderLeaderboardEntry, error] {
 	return func(yield func(TraderLeaderboardEntry, error) bool) {
 		offset := params.Offset
 		limit := params.Limit
@@ -476,7 +497,10 @@ func (c *Client) IterLeaderboard(ctx context.Context, params LeaderboardParams) 
 }
 
 // GetBuilderLeaderboard returns aggregated performance rankings for builders.
-func (c *Client) GetBuilderLeaderboard(ctx context.Context, params BuilderLeaderboardParams) ([]BuilderLeaderboardEntry, error) {
+func (c *Client) GetBuilderLeaderboard(
+	ctx context.Context,
+	params BuilderLeaderboardParams,
+) ([]BuilderLeaderboardEntry, error) {
 	query := url.Values{}
 	if params.TimePeriod != "" {
 		query.Set("timePeriod", params.TimePeriod)
@@ -494,7 +518,10 @@ func (c *Client) GetBuilderLeaderboard(ctx context.Context, params BuilderLeader
 }
 
 // IterBuilderLeaderboard returns an iterator for the builder leaderboard based on the provided filters.
-func (c *Client) IterBuilderLeaderboard(ctx context.Context, params BuilderLeaderboardParams) iter.Seq2[BuilderLeaderboardEntry, error] {
+func (c *Client) IterBuilderLeaderboard(
+	ctx context.Context,
+	params BuilderLeaderboardParams,
+) iter.Seq2[BuilderLeaderboardEntry, error] {
 	return func(yield func(BuilderLeaderboardEntry, error) bool) {
 		offset := params.Offset
 		limit := params.Limit
@@ -528,7 +555,10 @@ func (c *Client) IterBuilderLeaderboard(ctx context.Context, params BuilderLeade
 }
 
 // GetBuilderVolume returns daily volume data points for builders.
-func (c *Client) GetBuilderVolume(ctx context.Context, params BuilderVolumeParams) ([]BuilderVolumeEntry, error) {
+func (c *Client) GetBuilderVolume(
+	ctx context.Context,
+	params BuilderVolumeParams,
+) ([]BuilderVolumeEntry, error) {
 	query := url.Values{}
 	if params.TimePeriod != "" {
 		query.Set("timePeriod", params.TimePeriod)

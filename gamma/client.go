@@ -140,7 +140,10 @@ func (c *Client) GetMarkets(ctx context.Context, params MarketFilterParams) ([]M
 }
 
 // IterMarkets returns an iterator for markets based on the provided filters.
-func (c *Client) IterMarkets(ctx context.Context, params MarketFilterParams) iter.Seq2[Market, error] {
+func (c *Client) IterMarkets(
+	ctx context.Context,
+	params MarketFilterParams,
+) iter.Seq2[Market, error] {
 	return func(yield func(Market, error) bool) {
 		offset := params.Offset
 		limit := params.Limit
@@ -298,21 +301,39 @@ func (c *Client) GetRelatedTags(ctx context.Context, tagID string) ([]RelatedTag
 // GetRelatedTagsBySlug returns tags related to a specific tag by slug.
 func (c *Client) GetRelatedTagsBySlug(ctx context.Context, slug string) ([]RelatedTag, error) {
 	var out []RelatedTag
-	err := c.http.GetJSON(ctx, tagsEndpoint+"/slug/"+slug+"/related-tags", nil, polyhttp.AuthNone, &out)
+	err := c.http.GetJSON(
+		ctx,
+		tagsEndpoint+"/slug/"+slug+"/related-tags",
+		nil,
+		polyhttp.AuthNone,
+		&out,
+	)
 	return out, err
 }
 
 // GetTagsRelatedToTag returns tags related to a specific tag.
 func (c *Client) GetTagsRelatedToTag(ctx context.Context, tagID string) ([]Tag, error) {
 	var out []Tag
-	err := c.http.GetJSON(ctx, tagsEndpoint+"/"+tagID+"/related-tags/tags", nil, polyhttp.AuthNone, &out)
+	err := c.http.GetJSON(
+		ctx,
+		tagsEndpoint+"/"+tagID+"/related-tags/tags",
+		nil,
+		polyhttp.AuthNone,
+		&out,
+	)
 	return out, err
 }
 
 // GetTagsRelatedToTagBySlug returns tags related to a specific tag by slug.
 func (c *Client) GetTagsRelatedToTagBySlug(ctx context.Context, slug string) ([]Tag, error) {
 	var out []Tag
-	err := c.http.GetJSON(ctx, tagsEndpoint+"/slug/"+slug+"/related-tags/tags", nil, polyhttp.AuthNone, &out)
+	err := c.http.GetJSON(
+		ctx,
+		tagsEndpoint+"/slug/"+slug+"/related-tags/tags",
+		nil,
+		polyhttp.AuthNone,
+		&out,
+	)
 	return out, err
 }
 
@@ -377,7 +398,10 @@ func (c *Client) GetComments(ctx context.Context, params CommentFilterParams) ([
 }
 
 // IterComments returns an iterator for comments based on the provided filters.
-func (c *Client) IterComments(ctx context.Context, params CommentFilterParams) iter.Seq2[Comment, error] {
+func (c *Client) IterComments(
+	ctx context.Context,
+	params CommentFilterParams,
+) iter.Seq2[Comment, error] {
 	return func(yield func(Comment, error) bool) {
 		offset := params.Offset
 		limit := params.Limit
@@ -420,7 +444,13 @@ func (c *Client) GetComment(ctx context.Context, id string) ([]Comment, error) {
 // GetCommentsByUserAddress returns comments posted by a wallet address.
 func (c *Client) GetCommentsByUserAddress(ctx context.Context, address string) ([]Comment, error) {
 	var out []Comment
-	err := c.http.GetJSON(ctx, commentsEndpoint+"/user_address/"+address, nil, polyhttp.AuthNone, &out)
+	err := c.http.GetJSON(
+		ctx,
+		commentsEndpoint+"/user_address/"+address,
+		nil,
+		polyhttp.AuthNone,
+		&out,
+	)
 	return out, err
 }
 
