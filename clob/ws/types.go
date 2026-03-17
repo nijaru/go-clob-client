@@ -25,6 +25,34 @@ const (
 	EventTypeMarketResolved EventType = "market_resolved"
 )
 
+// Event is implemented by all WebSocket event types.
+// Use a type switch to handle specific event kinds:
+//
+//	switch ev := event.(type) {
+//	case *BookEvent:           ...
+//	case *PriceChangeEvent:    ...
+//	case *TickSizeChangeEvent: ...
+//	case *LastTradePriceEvent: ...
+//	case *OrderEvent:          ...
+//	case *TradeEvent:          ...
+//	case *BestBidAskEvent:     ...
+//	case *NewMarketEvent:      ...
+//	case *MarketResolvedEvent: ...
+//	}
+type Event interface {
+	isEvent()
+}
+
+func (*BookEvent) isEvent()           {}
+func (*PriceChangeEvent) isEvent()    {}
+func (*TickSizeChangeEvent) isEvent() {}
+func (*LastTradePriceEvent) isEvent() {}
+func (*OrderEvent) isEvent()          {}
+func (*TradeEvent) isEvent()          {}
+func (*BestBidAskEvent) isEvent()     {}
+func (*NewMarketEvent) isEvent()      {}
+func (*MarketResolvedEvent) isEvent() {}
+
 // UserSubscription is the message sent to subscribe to user updates.
 type UserSubscription struct {
 	Type Channel     `json:"type"`

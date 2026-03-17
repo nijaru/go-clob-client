@@ -25,7 +25,7 @@ type Client struct {
 	conn     *websocket.Conn
 	connDone chan struct{} // closed when conn.Close() completes
 
-	events chan any
+	events chan Event
 	errs   chan error
 	stop   chan struct{}
 	cancel context.CancelFunc
@@ -51,7 +51,7 @@ func NewClient(url string) *Client {
 	}
 	return &Client{
 		url:           url,
-		events:        make(chan any, 100),
+		events:        make(chan Event, 100),
 		errs:          make(chan error, 10),
 		stop:          make(chan struct{}),
 		autoReconnect: true,
@@ -176,7 +176,7 @@ func (c *Client) SubscribeUser(ctx context.Context, auth clob.WSAuth) error {
 }
 
 // Events returns a channel of decoded events.
-func (c *Client) Events() <-chan any {
+func (c *Client) Events() <-chan Event {
 	return c.events
 }
 
@@ -271,7 +271,7 @@ func (c *Client) handleMessage(ctx context.Context, data []byte) {
 		return
 	}
 
-	var event any
+	var event Event
 	switch base.EventType {
 	case EventTypeBook:
 		event = &BookEvent{}
