@@ -2,11 +2,9 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
 
 permissions:
   contents: read
@@ -16,11 +14,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  go-ci:
+  ci:
+    name: CI
     runs-on: ubuntu-latest
-
     steps:
-      - name: Check out code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Go
@@ -28,6 +26,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - name: Download dependencies
+        run: go mod download
 
       - name: Install formatters
         run: |
@@ -40,8 +41,8 @@ jobs:
           make fmt
           git diff --exit-code
 
-      - name: Run tests
-        run: make test
-
       - name: Build
         run: make build
+
+      - name: Test
+        run: make test
