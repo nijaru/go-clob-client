@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+        "golang.org/x/time/rate"
 
 	"github.com/nijaru/go-clob-client/clob/ws/rtds"
 	"github.com/nijaru/go-clob-client/internal/polyauth"
@@ -38,6 +39,7 @@ type Client struct {
 	tickSizeTTL  time.Duration
 	retryMax     int
 	retryBackoff time.Duration
+        rateLimiter  *rate.Limiter
 }
 
 // SignerClient extends the base client with methods requiring an Ethereum signer (L1).
@@ -136,6 +138,7 @@ func newBase(config Config) *Client {
 		tickSizeTTL:  config.TickSizeCacheTTL,
 		retryMax:     config.RetryMax,
 		retryBackoff: config.RetryBackoff,
+                rateLimiter:  newLimiter(config.RateLimit, config.RateBurst),
 	}
 	base.http = &polyhttp.Client{
 		BaseURL:    config.Host,
@@ -631,6 +634,11 @@ func (c *Client) doJSON(
 func (c *Client) withRetry(ctx context.Context, fn func() error) error {
 	var lastErr error
 	for i := 0; i <= c.retryMax; i++ {
+                if c.rateLimiter != nil {
+                        if err := c.rateLimiter.Wait(ctx); err != nil {
+                                return err
+                        }
+                }
 		err := fn()
 		if err == nil {
 			return nil
@@ -723,4 +731,14 @@ func (c *AuthenticatedClient) DeriveWSAuth(ctx context.Context) (WSAuth, error) 
 		Timestamp:  strconv.FormatInt(timestamp, 10),
 		Signature:  signature,
 	}, nil
+}
+
+func newLimiter(r float64, b int) *rate.Limiter {
+        if r <= 0 {
+                return rate.NewLimiter(rate.Inf, 0)
+        }
+        if b <= 0 {
+                b = 1
+        }
+        return rate.NewLimiter(rate.Limit(r), b)
 }
