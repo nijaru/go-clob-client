@@ -70,24 +70,38 @@ func (c *Client) GetSamplingSimplifiedMarketsPage(
 
 // GetSamplingMarkets returns all markets from the sampling endpoint.
 func (c *Client) GetSamplingMarkets(ctx context.Context) ([]Market, error) {
-	cursor := initialCursor
 	markets := make([]Market, 0, 64)
-
-	for cursor != endCursor {
-		page, err := c.GetSamplingMarketsPage(ctx, cursor)
+	for market, err := range c.IterSamplingMarkets(ctx) {
 		if err != nil {
 			return nil, err
 		}
-		markets = append(markets, page.Data...)
-
-		nextCursor, done := nextPageCursor(cursor, page.NextCursor)
-		if done {
-			return markets, nil
-		}
-		cursor = nextCursor
+		markets = append(markets, market)
 	}
-
 	return markets, nil
+}
+
+// IterSamplingMarkets returns an iterator over markets from the sampling endpoint.
+func (c *Client) IterSamplingMarkets(ctx context.Context) iter.Seq2[Market, error] {
+	return func(yield func(Market, error) bool) {
+		cursor := initialCursor
+		for cursor != endCursor {
+			page, err := c.GetSamplingMarketsPage(ctx, cursor)
+			if err != nil {
+				yield(Market{}, err)
+				return
+			}
+			for _, market := range page.Data {
+				if !yield(market, nil) {
+					return
+				}
+			}
+			nextCursor, done := nextPageCursor(cursor, page.NextCursor)
+			if done {
+				return
+			}
+			cursor = nextCursor
+		}
+	}
 }
 
 // GetSamplingMarketsPage returns a typed sampling markets page.
@@ -100,24 +114,38 @@ func (c *Client) GetSamplingMarketsPage(
 
 // GetSimplifiedMarkets returns all simplified markets.
 func (c *Client) GetSimplifiedMarkets(ctx context.Context) ([]SimplifiedMarket, error) {
-	cursor := initialCursor
 	markets := make([]SimplifiedMarket, 0, 64)
-
-	for cursor != endCursor {
-		page, err := c.GetSimplifiedMarketsPage(ctx, cursor)
+	for market, err := range c.IterSimplifiedMarkets(ctx) {
 		if err != nil {
 			return nil, err
 		}
-		markets = append(markets, page.Data...)
-
-		nextCursor, done := nextPageCursor(cursor, page.NextCursor)
-		if done {
-			return markets, nil
-		}
-		cursor = nextCursor
+		markets = append(markets, market)
 	}
-
 	return markets, nil
+}
+
+// IterSimplifiedMarkets returns an iterator over all simplified markets.
+func (c *Client) IterSimplifiedMarkets(ctx context.Context) iter.Seq2[SimplifiedMarket, error] {
+	return func(yield func(SimplifiedMarket, error) bool) {
+		cursor := initialCursor
+		for cursor != endCursor {
+			page, err := c.GetSimplifiedMarketsPage(ctx, cursor)
+			if err != nil {
+				yield(SimplifiedMarket{}, err)
+				return
+			}
+			for _, market := range page.Data {
+				if !yield(market, nil) {
+					return
+				}
+			}
+			nextCursor, done := nextPageCursor(cursor, page.NextCursor)
+			if done {
+				return
+			}
+			cursor = nextCursor
+		}
+	}
 }
 
 // GetSimplifiedMarketsPage returns a typed simplified markets page.
@@ -130,24 +158,38 @@ func (c *Client) GetSimplifiedMarketsPage(
 
 // GetMarkets returns all markets.
 func (c *Client) GetMarkets(ctx context.Context) ([]Market, error) {
-	cursor := initialCursor
 	markets := make([]Market, 0, 64)
-
-	for cursor != endCursor {
-		page, err := c.GetMarketsPage(ctx, cursor)
+	for market, err := range c.IterMarkets(ctx) {
 		if err != nil {
 			return nil, err
 		}
-		markets = append(markets, page.Data...)
-
-		nextCursor, done := nextPageCursor(cursor, page.NextCursor)
-		if done {
-			return markets, nil
-		}
-		cursor = nextCursor
+		markets = append(markets, market)
 	}
-
 	return markets, nil
+}
+
+// IterMarkets returns an iterator over all markets.
+func (c *Client) IterMarkets(ctx context.Context) iter.Seq2[Market, error] {
+	return func(yield func(Market, error) bool) {
+		cursor := initialCursor
+		for cursor != endCursor {
+			page, err := c.GetMarketsPage(ctx, cursor)
+			if err != nil {
+				yield(Market{}, err)
+				return
+			}
+			for _, market := range page.Data {
+				if !yield(market, nil) {
+					return
+				}
+			}
+			nextCursor, done := nextPageCursor(cursor, page.NextCursor)
+			if done {
+				return
+			}
+			cursor = nextCursor
+		}
+	}
 }
 
 // GetMarketsPage returns a typed markets page.

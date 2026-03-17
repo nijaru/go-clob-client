@@ -1,24 +1,19 @@
 # go-clob-client
 
 > [!NOTE]
-> This SDK is feature-complete for the core CLOB flows (including RFQ and WebSockets) and market metadata (Gamma). Use with confidence for building Polymarket applications in Go.
+> This SDK is feature-complete for the core CLOB flows (including RFQ and WebSockets) and market metadata (Gamma). It implements the **March 2026 Polymarket Technical Standards**, including Type-Level Auth Guards, automated Heartbeats, and 15-order batch limits.
 
 Go SDK for the Polymarket CLOB.
 
-- Full parity for CLOB endpoints (REST + WS) including RFQ.
-- Gamma implemented for market discovery and metadata.
-- Data implemented for user analytics and leaderboards.
-- Bridge and CTF packages implemented for cross-chain and on-chain operations.
-
-If you need complete Polymarket SDK coverage today, use an official SDK. If you want a Go-native client that is actively moving toward parity, this repo is meant for that.
+- **Full 2026 Parity**: Implements Heartbeats API, 15-order batch limits, and the new Bridge withdrawal endpoints.
+- **Type-Level Auth Guards**: Strict client tiers (`Client`, `SignerClient`, `AuthenticatedClient`) prevent accidental unauthenticated calls to trading endpoints.
+- **Modern Go 1.26**: Built for Go 1.26 with experimental `jsonv2` support, iterators for pagination, and type-safe error handling.
+- **Comprehensive Coverage**: CLOB (REST + WS), RFQ, Gamma (Metadata), Data (User Stats), Bridge (Cross-chain), and CTF (On-chain operations).
 
 ## Install
 
 ```bash
 go get github.com/nijaru/go-clob-client/clob
-go get github.com/nijaru/go-clob-client/gamma
-go get github.com/nijaru/go-clob-client/data
-go get github.com/nijaru/go-clob-client/bridge
 ```
 
 Import path:
@@ -27,184 +22,86 @@ Import path:
 import "github.com/nijaru/go-clob-client/clob"
 ```
 
+## Architecture: Type-Level Auth Guards
+
+The SDK uses a three-tiered client structure to ensure safety. You cannot call trading methods on a base client; you must "upgrade" it by providing the necessary credentials.
+
+1. **`clob.Client`**: Public methods only (`GetOrderBook`, `GetMarkets`).
+2. **`clob.SignerClient`**: Extends base with L1 methods (`CreateOrder`, `CreateAPIKey`). Requires `PrivateKey`.
+3. **`clob.AuthenticatedClient`**: Extends signer with L2/L3 methods (`PostOrder`, `PostHeartbeat`, `SplitTokens`). Requires `API Credentials`.
+
 ## Quickstart
 
-Read-only example:
+### Read-Only Access
 
 ```go
-package main
+clientRaw, _ := clob.New(clob.Config{})
+client := clientRaw.(*clob.Client)
 
-import (
-	"context"
-	"fmt"
-	"log"
-
-	"github.com/nijaru/go-clob-client/clob"
-)
-
-func main() {
-	client, err := clob.New(clob.Config{})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	serverTime, err := client.GetServerTime(context.Background())
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	book, err := client.GetOrderBook(context.Background(), "<token-id>")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Printf("server time: %d\n", serverTime)
-	fmt.Printf("best bid levels: %d\n", len(book.Bids))
-}
+book, _ := client.GetOrderBook(ctx, "<token-id>")
+fmt.Printf("Best bid: %s\n", book.Bids[len(book.Bids)-1].Price)
 ```
 
-Authenticated setup:
+### Full Authenticated Trading
+
+Providing both a `PrivateKey` and `Credentials` to `New()` returns an `*AuthenticatedClient` which automatically starts the background **Heartbeat loop** to maintain order liveness and priority.
 
 ```go
-package main
-
-import (
-	"context"
-	"log"
-	"os"
-
-	"github.com/nijaru/go-clob-client/clob"
-)
-
-func main() {
-	client, err := clob.New(clob.Config{
-		ChainID:    clob.PolygonChainID,
-		PrivateKey: os.Getenv("POLYMARKET_PRIVATE_KEY"),
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	creds, err := client.CreateOrDeriveAPIKey(context.Background(), 0)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	client.SetCredentials(*creds)
-	log.Printf("derived API key %s", creds.Key)
-}
-```
-
-Optional builder auth:
-
-```go
-client, err := clob.New(clob.Config{
-	ChainID:    clob.PolygonChainID,
-	PrivateKey: os.Getenv("POLYMARKET_PRIVATE_KEY"),
-	Credentials: &clob.Credentials{
-		Key:        os.Getenv("POLYMARKET_API_KEY"),
-		Secret:     os.Getenv("POLYMARKET_API_SECRET"),
-		Passphrase: os.Getenv("POLYMARKET_API_PASSPHRASE"),
-	},
-	BuilderAuth: clob.NewLocalBuilderAuth(clob.Credentials{
-		Key:        os.Getenv("POLYMARKET_BUILDER_KEY"),
-		Secret:     os.Getenv("POLYMARKET_BUILDER_SECRET"),
-		Passphrase: os.Getenv("POLYMARKET_BUILDER_PASSPHRASE"),
-	}),
+clientRaw, _ := clob.New(clob.Config{
+    PrivateKey:  os.Getenv("PK"),
+    Credentials: &clob.Credentials{...},
 })
+client := clientRaw.(*clob.AuthenticatedClient)
+
+// Automatic heartbeats are now running in the background.
+// Batch up to 15 orders (2026 standard)
+resp, _ := client.PostOrders(ctx, orders)
 ```
 
-For remote builder signing, use `clob.NewRemoteBuilderAuth(...)` and handle the returned error during setup.
+### Modern Pagination (Iterators)
 
-## Current Support
+All list methods support Go 1.23+ iterators for clean, memory-efficient processing:
 
-Available now:
+```go
+for order, err := range client.IterOpenOrders(ctx, clob.OpenOrderParams{}) {
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("Order ID: %s\n", order.ID)
+}
+```
 
-- read-only health, market data, orderbook, price history, and live activity queries
-- typed midpoint, price, spread, last-trade, all-prices, and geoblock helpers
-- typed orderbook helper coverage including local orderbook hash generation
-- chain-aware contract address helpers for collateral, conditional tokens, and exchange addresses
-- API key bootstrap plus readonly API key management
-- paginated authenticated order and trade helpers plus flattened convenience methods
-- typed limit and market order construction/signing
-- order posting, cancel flows, balance/allowance, notifications, scoring, rewards, builder-key, builder-trade, and heartbeat flows
-- RFQ API surface parity with TypeScript SDK
-- WebSocket streaming (market and user channels) in `clob/ws`
-- Market discovery and metadata in `gamma/`
-- User positions, trades, and leaderboards in `data/`
-- Cross-chain deposits and withdrawals in `bridge/`
-- On-chain split, merge, and redeem operations in `clob/` (CTF)
+## Features
 
-## Trading Notes
-
-This repo now includes a usable trading core, but it is still not a complete “official SDK parity” trading SDK.
-
-In practice:
-
-- creating and signing orders works
-- bootstrapping auth and posting signed orders works
-- authenticated orders and trades now expose explicit page helpers and flattened convenience methods
-- builder auth can be layered onto the same client when you need builder headers or builder-only endpoints
-- market-order and proxy/funder behavior now has deterministic fixture coverage
-- full feature parity with TypeScript SDK v5.8.0
+- **CLOB**: Full REST + WebSocket (Market & User channels) support.
+- **2026 Standards**: 
+    - Automated **Heartbeats** with ID rotation.
+    - **Batch Order Limits** increased to 15.
+    - **Post-Only** validation for GTC/GTD orders.
+    - **Maker Rebates** (`rebate_estimated`) in responses.
+- **Bridge**: Updated Jan 2026 API for `/withdraw` and `/status`.
+- **CTF**: On-chain `Split`, `Merge`, and `Redeem` operations.
+- **Gamma/Data**: Full market discovery and user analytics.
 
 ## Examples
 
 - `examples/clob/read_only/main.go`
 - `examples/clob/auth_bootstrap/main.go`
 - `examples/clob/limit_order/main.go`
-- `examples/clob/market_order/main.go`
 - `examples/ws/main.go`
-- `examples/gamma/main.go`
-- `examples/data/main.go`
-- `examples/bridge/main.go`
 - `examples/clob/ctf_operations/main.go`
-
-## Versioning and Parity Goals
-
-The goal of this repo is to track the official SDKs over time while keeping the Go API idiomatic. That means:
-
-- matching official endpoint behavior and auth semantics
-- not copying TypeScript/Python class structure directly
-- growing coverage in milestones instead of claiming full parity early
-
-The next major milestones are:
-
-- Release v1.0 stabilization and full API audit
-- Performance profiling and optimization
-
-## Project Structure
-
-User-facing packages:
-
-- `clob/` for the CLOB SDK (including CTF)
-- `gamma/` for market discovery and metadata
-- `data/` for user positions and leaderboards
-- `bridge/` for cross-chain transfers
-
-Internal shared packages:
-
-- `internal/polyauth/` for Polymarket signing and auth-header logic
-- `internal/polyhttp/` for HTTP transport and JSON decoding
-
-Future Polymarket families such as `gamma/`, `data/`, `bridge/`, and `ctf/` are intended to live beside `clob/`.
-
-CLOB websocket streaming is planned under `clob/ws/`, with any reusable socket internals kept private until another public package needs them.
 
 ## Development
 
 ```bash
+# Modern Go 1.26 formatting
 make fmt
+
+# Test with jsonv2 experiment
 make test
+
+# Build with jsonv2 experiment
 make build
 ```
 
-The intended local smoke-check flow is:
-
-```bash
-make fmt && make test && make build
-```
-
-Local `make fmt` expects `golines` and `gofumpt` on your `PATH`.
-
-GitHub Actions now runs the same formatting, test, and build flow on pushes to `main` and pull requests targeting `main`.
+Requires Go 1.26.1+ and `GOEXPERIMENT=jsonv2`.
