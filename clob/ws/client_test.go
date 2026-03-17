@@ -250,7 +250,7 @@ func TestSendJSONNotConnected(t *testing.T) {
 	t.Parallel()
 
 	client := NewClient("")
-	err := client.SubscribeMarket(t.Context(), []string{"asset-1"}, nil, true, true)
+	err := client.SubscribeOrderBook(t.Context(), []string{"asset-1"})
 	if err == nil {
 		t.Fatal("expected error when not connected")
 	}

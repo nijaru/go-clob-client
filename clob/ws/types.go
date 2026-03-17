@@ -55,8 +55,10 @@ func (*MarketResolvedEvent) isEvent() {}
 
 // UserSubscription is the message sent to subscribe to user updates.
 type UserSubscription struct {
-	Type Channel     `json:"type"`
-	Auth clob.WSAuth `json:"auth"`
+	Type      Channel     `json:"type"`
+	Auth      clob.WSAuth `json:"auth"`
+	Markets   []string    `json:"markets,omitzero"`
+	Operation string      `json:"operation,omitzero"`
 }
 
 // MarketSubscription is the message sent to subscribe to market updates.
