@@ -27,9 +27,9 @@ type Client struct {
 	conn     *websocket.Conn
 	connDone chan struct{}
 
-	msgs chan *RtdsMessage
-	errs chan error
-	stop chan struct{}
+	msgs   chan *RtdsMessage
+	errs   chan error
+	stop   chan struct{}
 	cancel context.CancelFunc
 	closed bool
 
@@ -189,7 +189,11 @@ func (c *Client) SubscribeChainlinkPrices(ctx context.Context, symbol string) er
 }
 
 // SubscribeComments subscribes to comment events.
-func (c *Client) SubscribeComments(ctx context.Context, commentType CommentType, auth *Credentials) error {
+func (c *Client) SubscribeComments(
+	ctx context.Context,
+	commentType CommentType,
+	auth *Credentials,
+) error {
 	msgType := string(commentType)
 	if msgType == "" {
 		msgType = "*"
@@ -299,7 +303,7 @@ func (c *Client) heartbeatLoop(ctx context.Context) {
 				return
 			}
 
-			// RTDS expects plain text " " or "PING" usually, 
+			// RTDS expects plain text " " or "PING" usually,
 			// the Rust SDK sends " " by default in some cases but here we follow clob pattern if unsure.
 			// Actually let's just send a space as it is common for simple keepalives if not specified.
 			if err := conn.Write(ctx, websocket.MessageText, []byte(" ")); err != nil {
@@ -311,6 +315,61 @@ func (c *Client) heartbeatLoop(ctx context.Context) {
 			}
 		}
 	}
+}
+
+// UnsubscribeCryptoPrices unsubscribes from Binance crypto price updates.
+func (c *Client) UnsubscribeCryptoPrices(ctx context.Context) error {
+	return c.unsubscribe(ctx, "crypto_prices")
+}
+
+// UnsubscribeChainlinkPrices unsubscribes from Chainlink price feed updates.
+func (c *Client) UnsubscribeChainlinkPrices(ctx context.Context) error {
+	return c.unsubscribe(ctx, "crypto_prices_chainlink")
+}
+
+// UnsubscribeComments unsubscribes from comment events.
+func (c *Client) UnsubscribeComments(ctx context.Context) error {
+	return c.unsubscribe(ctx, "comments")
+}
+
+// unsubscribe sends an unsubscribe request for the given topic and removes it from the tracked subs.
+func (c *Client) unsubscribe(ctx context.Context, topic string) error {
+	c.subsMu.Lock()
+	var remaining []Subscription
+	var removed []Subscription
+	for _, s := range c.subs {
+		if s.Topic == topic {
+			removed = append(removed, s)
+		} else {
+			remaining = append(remaining, s)
+		}
+	}
+	c.subs = remaining
+	c.subsMu.Unlock()
+
+	if len(removed) == 0 {
+		return nil
+	}
+
+	req := SubscriptionRequest{
+		Action:        ActionUnsubscribe,
+		Subscriptions: removed,
+	}
+	return c.sendJSON(ctx, req)
+}
+
+// IsConnected reports whether the client has an active WebSocket connection.
+func (c *Client) IsConnected() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.conn != nil && !c.closed
+}
+
+// SubscriptionCount returns the number of active subscriptions.
+func (c *Client) SubscriptionCount() int {
+	c.subsMu.RLock()
+	defer c.subsMu.RUnlock()
+	return len(c.subs)
 }
 
 func (c *Client) sendJSON(ctx context.Context, v any) error {
