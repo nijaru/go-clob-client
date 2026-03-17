@@ -136,25 +136,57 @@ func (c *Client) AsSigner(privateKey string, sigType SignatureType, funder strin
 	if err != nil {
 		return nil, err
 	}
+
+	// Deep copy the base client to prevent mutating the shared http transport
+	baseCopy := *c
+	baseCopy.http = &polyhttp.Client{
+		BaseURL:    c.http.BaseURL,
+		HTTPClient: c.http.HTTPClient,
+		UserAgent:  c.http.UserAgent,
+		Headers:    nil, // Will be set below
+	}
+	baseCopy.geoblockHTTP = &polyhttp.Client{
+		BaseURL:    c.geoblockHTTP.BaseURL,
+		HTTPClient: c.geoblockHTTP.HTTPClient,
+		UserAgent:  c.geoblockHTTP.UserAgent,
+	}
+
 	sc := &SignerClient{
-		Client:        c,
+		Client:        &baseCopy,
 		signer:        signer,
 		signatureType: sigType,
 		funderAddress: funderAddress,
 		saltGenerator: generateSalt,
 	}
-	c.http.Headers = sc.addAuthHeaders
+	sc.http.Headers = sc.addAuthHeaders
 	return sc, nil
 }
 
 // AsAuthenticated upgrades a SignerClient to an AuthenticatedClient.
 func (c *SignerClient) AsAuthenticated(creds Credentials, builder BuilderAuth) *AuthenticatedClient {
+	// Deep copy the base client to prevent mutating the shared http transport
+	baseCopy := *(c.Client)
+	baseCopy.http = &polyhttp.Client{
+		BaseURL:    c.http.BaseURL,
+		HTTPClient: c.http.HTTPClient,
+		UserAgent:  c.http.UserAgent,
+		Headers:    nil, // Will be set below
+	}
+	baseCopy.geoblockHTTP = &polyhttp.Client{
+		BaseURL:    c.geoblockHTTP.BaseURL,
+		HTTPClient: c.geoblockHTTP.HTTPClient,
+		UserAgent:  c.geoblockHTTP.UserAgent,
+	}
+
+	signerCopy := *c
+	signerCopy.Client = &baseCopy
+
 	ac := &AuthenticatedClient{
-		SignerClient: c,
+		SignerClient: &signerCopy,
 		creds:        &creds,
 		builderAuth:  builder,
 	}
-	c.http.Headers = ac.addAuthHeaders
+	ac.http.Headers = ac.addAuthHeaders
 	return ac
 }
 
