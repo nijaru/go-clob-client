@@ -36,7 +36,7 @@ func main() {
 			err,
 		)
 	} else {
-		for _, a := range addrs {
+		for _, a := range addrs.Addresses {
 			fmt.Printf("- %s: %s\n", a.Network, a.Address)
 		}
 	}

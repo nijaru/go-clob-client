@@ -69,11 +69,11 @@ func (c *Client) GetSupportedAssets(ctx context.Context) ([]SupportedAsset, erro
 func (c *Client) CreateDepositAddress(
 	ctx context.Context,
 	address string,
-) ([]DepositAddress, error) {
+) (*DepositResponse, error) {
 	req := DepositRequest{Address: address}
-	var out []DepositAddress
+	var out DepositResponse
 	err := c.http.PostJSON(ctx, depositEndpoint, req, polyhttp.AuthNone, &out)
-	return out, err
+	return &out, err
 }
 
 // GetStatus checks the status of bridge transactions for an address (2026 standard).

@@ -41,7 +41,7 @@ func TestCreateDepositAddress(t *testing.T) {
 			t.Errorf("expected POST, got %s", r.Method)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`[{"network":"ethereum","address":"0xabc"}]`))
+		w.Write([]byte(`{"addresses":[{"network":"ethereum","address":"0xabc"}]}`))
 	}))
 	defer server.Close()
 
@@ -51,11 +51,11 @@ func TestCreateDepositAddress(t *testing.T) {
 		t.Fatalf("failed to create deposit address: %v", err)
 	}
 
-	if len(addrs) != 1 {
-		t.Errorf("expected 1 address, got %d", len(addrs))
+	if len(addrs.Addresses) != 1 {
+		t.Errorf("expected 1 address, got %d", len(addrs.Addresses))
 	}
-	if addrs[0].Network != "ethereum" {
-		t.Errorf("expected network ethereum, got %s", addrs[0].Network)
+	if addrs.Addresses[0].Network != "ethereum" {
+		t.Errorf("expected network ethereum, got %s", addrs.Addresses[0].Network)
 	}
 }
 
