@@ -2,9 +2,11 @@ package clob
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 
 	json "github.com/go-json-experiment/json"
+	"github.com/go-json-experiment/json/jsontext"
 
 	"github.com/quagmt/udecimal"
 )
@@ -26,6 +28,105 @@ type PostOrderResponse struct {
 	TradeIDs           []string `json:"trade_ids"`
 	// RebateEstimated is the projected maker rebate for this order (2026 fee schedule).
 	RebateEstimated string `json:"rebate_estimated,omitzero"`
+}
+
+// UnmarshalJSON accepts the field name variants the live API returns for post-order responses.
+func (r *PostOrderResponse) UnmarshalJSON(data []byte) error {
+	type wirePostOrderResponse struct {
+		Success         bool     `json:"success"`
+		OrderID         string   `json:"orderID"`
+		Status          string   `json:"status"`
+		TakingAmount    string   `json:"takingAmount"`
+		MakingAmount    string   `json:"makingAmount"`
+		TradeIDs        []string `json:"trade_ids"`
+		RebateEstimated string   `json:"rebate_estimated"`
+	}
+
+	var wire wirePostOrderResponse
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+
+	var fields map[string]jsontext.Value
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+
+	*r = PostOrderResponse{
+		Success:            wire.Success,
+		OrderID:            wire.OrderID,
+		TransactionsHashes: []string{},
+		Status:             wire.Status,
+		TakingAmount:       wire.TakingAmount,
+		MakingAmount:       wire.MakingAmount,
+		TradeIDs:           []string{},
+		RebateEstimated:    wire.RebateEstimated,
+	}
+
+	if message, ok, err := decodeStringAlias(fields, "error_msg", "errorMsg"); err != nil {
+		return err
+	} else if ok {
+		r.ErrorMsg = message
+	}
+
+	if hashes, ok, err := decodeStringSliceAlias(
+		fields,
+		"transaction_hashes",
+		"transactionsHashes",
+	); err != nil {
+		return err
+	} else if ok {
+		r.TransactionsHashes = hashes
+	}
+
+	if len(wire.TradeIDs) > 0 {
+		r.TradeIDs = slices.Clone(wire.TradeIDs)
+	}
+
+	return nil
+}
+
+func decodeStringAlias(fields map[string]jsontext.Value, keys ...string) (string, bool, error) {
+	for _, key := range keys {
+		value, ok := fields[key]
+		if !ok {
+			continue
+		}
+		if string(value) == "null" {
+			return "", true, nil
+		}
+
+		var out string
+		if err := json.Unmarshal(value, &out); err != nil {
+			return "", false, fmt.Errorf("decode %s: %w", key, err)
+		}
+		return out, true, nil
+	}
+
+	return "", false, nil
+}
+
+func decodeStringSliceAlias(
+	fields map[string]jsontext.Value,
+	keys ...string,
+) ([]string, bool, error) {
+	for _, key := range keys {
+		value, ok := fields[key]
+		if !ok {
+			continue
+		}
+		if string(value) == "null" {
+			return []string{}, true, nil
+		}
+
+		var out []string
+		if err := json.Unmarshal(value, &out); err != nil {
+			return nil, false, fmt.Errorf("decode %s: %w", key, err)
+		}
+		return out, true, nil
+	}
+
+	return nil, false, nil
 }
 
 // CancelOrdersResponse reports which orders were canceled successfully.

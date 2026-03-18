@@ -133,6 +133,116 @@ func TestCreateAndPostOrderSendsExpectedPayload(t *testing.T) {
 	}
 }
 
+func TestCreateAndPostOrderDecodesLiveFOKResponse(t *testing.T) {
+	t.Parallel()
+
+	server := newTradingTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"error_msg": "",
+			"makingAmount": "",
+			"orderID": "order-live",
+			"status": "live",
+			"success": true,
+			"takingAmount": ""
+		}`))
+	})
+	defer server.Close()
+
+	client, err := NewAuthenticatedClient(Config{
+		Host:       server.URL,
+		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
+		Credentials: &Credentials{
+			Key:        "api-key",
+			Secret:     "c2VjcmV0",
+			Passphrase: "pass",
+		},
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	client.saltGenerator = func() (uint64, error) { return 42, nil }
+
+	response, err := client.CreateAndPostOrder(t.Context(), OrderArgs{
+		TokenID: "100",
+		Price:   udecimal.MustParse("0.45"),
+		Size:    udecimal.MustParse("10"),
+		Side:    SideBuy,
+	}, nil, OrderTypeFOK, false, false)
+	if err != nil {
+		t.Fatalf("create and post order: %v", err)
+	}
+
+	if !response.Success || response.OrderID != "order-live" {
+		t.Fatalf("unexpected response: %#v", response)
+	}
+	if response.Status != "live" {
+		t.Fatalf("unexpected status: %q", response.Status)
+	}
+	if response.ErrorMsg != "" {
+		t.Fatalf("unexpected error message: %q", response.ErrorMsg)
+	}
+	if len(response.TransactionsHashes) != 0 {
+		t.Fatalf("expected no transaction hashes, got %#v", response.TransactionsHashes)
+	}
+}
+
+func TestCreateAndPostOrderDecodesMatchedFAKResponse(t *testing.T) {
+	t.Parallel()
+
+	server := newTradingTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"error_msg": "",
+			"makingAmount": "100",
+			"orderID": "order-matched",
+			"status": "matched",
+			"success": true,
+			"takingAmount": "50",
+			"transaction_hashes": ["0xhash-snake"],
+			"trade_ids": ["trade-1"]
+		}`))
+	})
+	defer server.Close()
+
+	client, err := NewAuthenticatedClient(Config{
+		Host:       server.URL,
+		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
+		Credentials: &Credentials{
+			Key:        "api-key",
+			Secret:     "c2VjcmV0",
+			Passphrase: "pass",
+		},
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	client.saltGenerator = func() (uint64, error) { return 42, nil }
+
+	response, err := client.CreateAndPostOrder(t.Context(), OrderArgs{
+		TokenID: "100",
+		Price:   udecimal.MustParse("0.45"),
+		Size:    udecimal.MustParse("10"),
+		Side:    SideBuy,
+	}, nil, OrderTypeFAK, false, false)
+	if err != nil {
+		t.Fatalf("create and post order: %v", err)
+	}
+
+	if !response.Success || response.OrderID != "order-matched" {
+		t.Fatalf("unexpected response: %#v", response)
+	}
+	if response.Status != "matched" {
+		t.Fatalf("unexpected status: %q", response.Status)
+	}
+	if len(response.TransactionsHashes) != 1 || response.TransactionsHashes[0] != "0xhash-snake" {
+		t.Fatalf("unexpected transaction hashes: %#v", response.TransactionsHashes)
+	}
+	if len(response.TradeIDs) != 1 || response.TradeIDs[0] != "trade-1" {
+		t.Fatalf("unexpected trade ids: %#v", response.TradeIDs)
+	}
+}
+
 func TestCreateMarketOrderDerivesPriceFromBook(t *testing.T) {
 	t.Parallel()
 
