@@ -68,6 +68,8 @@ type Config struct {
 	// RetryBackoff is the base duration for exponential backoff between retries.
 	// Defaults to 1 second.
 	RetryBackoff time.Duration
+        RateLimit    float64
+        RateBurst    int
 }
 
 func (c Config) normalized() Config {
@@ -104,6 +106,13 @@ func (c Config) normalized() Config {
 
 	if c.RetryBackoff == 0 {
 		c.RetryBackoff = 1 * time.Second
+        }
+
+        if c.RateLimit == 0 {
+                c.RateLimit = 5
+        }
+        if c.RateBurst == 0 {
+                c.RateBurst = 10
 	}
 
 	return c
