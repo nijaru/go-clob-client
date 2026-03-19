@@ -300,3 +300,204 @@ func TestHeartbeatPingPong(t *testing.T) {
 		t.Fatal("timed out waiting for PING")
 	}
 }
+
+func TestUserSubscriptionsRefcountAndScopedUnsubscribe(t *testing.T) {
+	t.Parallel()
+
+	server, messages := newSubscriptionTestServer(t)
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+	client := NewAuthenticatedClient(wsURL, clob.Credentials{
+		Key:        "key",
+		Secret:     "secret",
+		Passphrase: "pass",
+	})
+	if err := client.Connect(t.Context()); err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer client.Close()
+
+	if err := client.SubscribeOrders(t.Context(), []string{"market-1"}); err != nil {
+		t.Fatalf("subscribe orders: %v", err)
+	}
+	msg := mustReceiveSubscriptionMessage(t, messages)
+	if got := msg["type"]; got != "user" {
+		t.Fatalf("type = %v, want user", got)
+	}
+	if got := messageStrings(msg["markets"]); len(got) != 1 || got[0] != "market-1" {
+		t.Fatalf("markets = %#v, want [market-1]", got)
+	}
+
+	if err := client.SubscribeTrades(t.Context(), []string{"market-1"}); err != nil {
+		t.Fatalf("subscribe trades: %v", err)
+	}
+	assertNoSubscriptionMessage(t, messages)
+	if got := client.SubscriptionCount(); got != 2 {
+		t.Fatalf("subscription count = %d, want 2", got)
+	}
+
+	if err := client.UnsubscribeOrders(t.Context(), []string{"market-1"}); err != nil {
+		t.Fatalf("unsubscribe orders: %v", err)
+	}
+	assertNoSubscriptionMessage(t, messages)
+	if got := client.SubscriptionCount(); got != 1 {
+		t.Fatalf("subscription count = %d, want 1", got)
+	}
+
+	if err := client.UnsubscribeTrades(t.Context(), []string{"market-1"}); err != nil {
+		t.Fatalf("unsubscribe trades: %v", err)
+	}
+	msg = mustReceiveSubscriptionMessage(t, messages)
+	if got := msg["operation"]; got != "unsubscribe" {
+		t.Fatalf("operation = %v, want unsubscribe", got)
+	}
+	if got := messageStrings(msg["markets"]); len(got) != 1 || got[0] != "market-1" {
+		t.Fatalf("markets = %#v, want [market-1]", got)
+	}
+	if got := client.SubscriptionCount(); got != 0 {
+		t.Fatalf("subscription count = %d, want 0", got)
+	}
+}
+
+func TestMarketSubscriptionsRefcountAndCustomFeatureFlag(t *testing.T) {
+	t.Parallel()
+
+	server, messages := newSubscriptionTestServer(t)
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+	client := NewClient(wsURL)
+	if err := client.Connect(t.Context()); err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer client.Close()
+
+	if err := client.SubscribeOrderBook(t.Context(), []string{"asset-1"}); err != nil {
+		t.Fatalf("subscribe order book: %v", err)
+	}
+	msg := mustReceiveSubscriptionMessage(t, messages)
+	if got := msg["type"]; got != "market" {
+		t.Fatalf("type = %v, want market", got)
+	}
+	if got := messageStrings(msg["asset_ids"]); len(got) != 1 || got[0] != "asset-1" {
+		t.Fatalf("asset_ids = %#v, want [asset-1]", got)
+	}
+	if got := msg["initial_dump"]; got != true {
+		t.Fatalf("initial_dump = %v, want true", got)
+	}
+
+	if err := client.SubscribePrices(t.Context(), []string{"asset-1"}); err != nil {
+		t.Fatalf("subscribe prices: %v", err)
+	}
+	assertNoSubscriptionMessage(t, messages)
+
+	if err := client.SubscribeBestBidAsk(t.Context(), []string{"asset-1"}); err != nil {
+		t.Fatalf("subscribe best bid ask: %v", err)
+	}
+	msg = mustReceiveSubscriptionMessage(t, messages)
+	if got := msg["custom_feature_enabled"]; got != true {
+		t.Fatalf("custom_feature_enabled = %v, want true", got)
+	}
+	if got := messageStrings(msg["asset_ids"]); len(got) != 1 || got[0] != "asset-1" {
+		t.Fatalf("asset_ids = %#v, want [asset-1]", got)
+	}
+
+	if err := client.UnsubscribeOrderBook(t.Context(), []string{"asset-1"}); err != nil {
+		t.Fatalf("unsubscribe order book: %v", err)
+	}
+	assertNoSubscriptionMessage(t, messages)
+
+	if err := client.UnsubscribePrices(t.Context(), []string{"asset-1"}); err != nil {
+		t.Fatalf("unsubscribe prices: %v", err)
+	}
+	assertNoSubscriptionMessage(t, messages)
+
+	if err := client.UnsubscribeOrderBook(t.Context(), []string{"asset-1"}); err != nil {
+		t.Fatalf("unsubscribe remaining market ref: %v", err)
+	}
+	msg = mustReceiveSubscriptionMessage(t, messages)
+	if got := msg["operation"]; got != "unsubscribe" {
+		t.Fatalf("operation = %v, want unsubscribe", got)
+	}
+	if got := messageStrings(msg["asset_ids"]); len(got) != 1 || got[0] != "asset-1" {
+		t.Fatalf("asset_ids = %#v, want [asset-1]", got)
+	}
+}
+
+func newSubscriptionTestServer(
+	t *testing.T,
+) (*httptest.Server, <-chan map[string]any) {
+	t.Helper()
+
+	messages := make(chan map[string]any, 16)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			t.Logf("accept: %v", err)
+			return
+		}
+		defer c.Close(websocket.StatusNormalClosure, "")
+
+		for {
+			_, data, err := c.Read(r.Context())
+			if err != nil {
+				return
+			}
+			if string(data) == "PING" {
+				_ = c.Write(r.Context(), websocket.MessageText, []byte("PONG"))
+				continue
+			}
+
+			var msg map[string]any
+			if err := json.Unmarshal(data, &msg); err != nil {
+				t.Logf("decode ws message: %v", err)
+				continue
+			}
+			select {
+			case messages <- msg:
+			default:
+				t.Log("dropping ws test message")
+			}
+		}
+	}))
+
+	return server, messages
+}
+
+func mustReceiveSubscriptionMessage(t *testing.T, messages <-chan map[string]any) map[string]any {
+	t.Helper()
+
+	select {
+	case msg := <-messages:
+		return msg
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for websocket message")
+		return nil
+	}
+}
+
+func assertNoSubscriptionMessage(t *testing.T, messages <-chan map[string]any) {
+	t.Helper()
+
+	select {
+	case msg := <-messages:
+		t.Fatalf("unexpected websocket message: %#v", msg)
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+func messageStrings(value any) []string {
+	items, ok := value.([]any)
+	if !ok {
+		return nil
+	}
+
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		if s, ok := item.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
+}

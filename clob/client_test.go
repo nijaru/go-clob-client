@@ -184,3 +184,94 @@ func TestCreateOrDeriveAPIKeyFallsBackToDerive(t *testing.T) {
 		t.Fatalf("unexpected api key: %s", creds.Key)
 	}
 }
+
+func TestPostJSONDoesNotRetryDecodeFailures(t *testing.T) {
+	t.Parallel()
+
+	var calls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != heartbeatsEndpoint {
+			http.NotFound(w, r)
+			return
+		}
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"heartbeat_id":`))
+	}))
+	defer server.Close()
+
+	client, err := NewAuthenticatedClient(Config{
+		Host:       server.URL,
+		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
+		Credentials: &Credentials{
+			Key:        "key",
+			Secret:     "c2VjcmV0",
+			Passphrase: "pass",
+		},
+		RetryMax:             3,
+		DisableAutoHeartbeat: true,
+	})
+	if err != nil {
+		t.Fatalf("new authenticated client: %v", err)
+	}
+
+	_, err = client.PostHeartbeat(t.Context(), "")
+	if err == nil {
+		t.Fatal("expected decode error")
+	}
+	if calls != 1 {
+		t.Fatalf("post heartbeat retried %d times, want 1", calls)
+	}
+}
+
+func TestGetJSONRetriesTransientServerFailures(t *testing.T) {
+	t.Parallel()
+
+	var calls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != orderBookEndpoint {
+			http.NotFound(w, r)
+			return
+		}
+		calls++
+		if calls == 1 {
+			http.Error(w, `{"error":"temporary"}`, http.StatusInternalServerError)
+			return
+		}
+
+		data, _ := json.Marshal(OrderBookSummary{
+			Market:         "market-1",
+			AssetID:        "123",
+			Timestamp:      "1710000000",
+			Bids:           []OrderSummary{{Price: "0.45", Size: "10"}},
+			Asks:           []OrderSummary{{Price: "0.55", Size: "12"}},
+			MinOrderSize:   "5",
+			TickSize:       "0.01",
+			NegRisk:        false,
+			LastTradePrice: "0.50",
+			Hash:           "abc",
+		})
+		w.Write(data)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Config{
+		Host:         server.URL,
+		RetryMax:     1,
+		RetryBackoff: time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+
+	book, err := client.GetOrderBook(t.Context(), "123")
+	if err != nil {
+		t.Fatalf("get order book: %v", err)
+	}
+	if book.AssetID != "123" {
+		t.Fatalf("unexpected asset id: %s", book.AssetID)
+	}
+	if calls != 2 {
+		t.Fatalf("get order book calls = %d, want 2", calls)
+	}
+}

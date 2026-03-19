@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -50,18 +52,33 @@ type Client struct {
 	autoReconnect bool
 	subsMu        sync.RWMutex
 	subs          []subscription
+	marketRefs    map[string]int
+	userRefs      map[string]int
+	customFeature bool
 }
 
-// subscription tracks a single channel subscription for reconnect replay.
+type subscriptionTarget uint8
+
+const (
+	subscriptionTargetMarket subscriptionTarget = iota
+	subscriptionTargetUser
+)
+
+func (t subscriptionTarget) isUser() bool {
+	return t == subscriptionTargetUser
+}
+
+// subscription tracks a single logical subscription for refcounting and reconnect replay.
 type subscription struct {
-	// channelType is an internal identifier (e.g. "order_book", "user_events").
-	channelType string
+	target subscriptionTarget
+	key    string
 	// assetIDs is set for asset-scoped market channel subscriptions.
 	assetIDs []string
 	// markets is set for market-scoped user channel subscriptions.
 	markets []string
 	// initialDump requests a full book snapshot on subscribe (order_book only).
-	initialDump bool
+	initialDump          bool
+	customFeatureEnabled bool
 }
 
 // NewClient creates a new unauthenticated WebSocket client.
@@ -85,6 +102,8 @@ func newClient(url string, creds *clob.Credentials) *Client {
 		errs:          make(chan error, 10),
 		stop:          make(chan struct{}),
 		autoReconnect: true,
+		marketRefs:    make(map[string]int),
+		userRefs:      make(map[string]int),
 	}
 }
 
@@ -126,20 +145,7 @@ func (c *Client) connect(ctx context.Context) error {
 	go c.readLoop(loopCtx)
 	go c.heartbeatLoop(loopCtx)
 
-	// Resubscribe if reconnecting.
-	c.subsMu.RLock()
-	subs := make([]subscription, len(c.subs))
-	copy(subs, c.subs)
-	c.subsMu.RUnlock()
-
-	for _, sub := range subs {
-		if err := c.replaySub(ctx, sub); err != nil {
-			select {
-			case c.errs <- fmt.Errorf("resubscribe %s: %w", sub.channelType, err):
-			default:
-			}
-		}
-	}
+	c.replayTrackedSubscriptions(ctx)
 
 	return nil
 }
@@ -199,12 +205,7 @@ func (c *Client) Errors() <-chan error {
 // SubscribeOrderBook subscribes to order book snapshots and incremental updates for the given asset IDs.
 // A full book snapshot (initial_dump) is requested on subscribe.
 func (c *Client) SubscribeOrderBook(ctx context.Context, assetIDs []string) error {
-	sub := subscription{
-		channelType: channelTypeOrderBook,
-		assetIDs:    assetIDs,
-		initialDump: true,
-	}
-	return c.addAndSend(ctx, sub)
+	return c.addAndSend(ctx, newMarketSubscription(assetIDs, true, false))
 }
 
 // UnsubscribeOrderBook unsubscribes from order book updates for the given asset IDs.
@@ -214,14 +215,12 @@ func (c *Client) UnsubscribeOrderBook(ctx context.Context, assetIDs []string) er
 
 // SubscribeLastTradePrice subscribes to last trade price events for the given asset IDs.
 func (c *Client) SubscribeLastTradePrice(ctx context.Context, assetIDs []string) error {
-	sub := subscription{channelType: channelTypeLastTradePrice, assetIDs: assetIDs}
-	return c.addAndSend(ctx, sub)
+	return c.addAndSend(ctx, newMarketSubscription(assetIDs, false, false))
 }
 
 // SubscribePrices subscribes to price change (incremental order book) events for the given asset IDs.
 func (c *Client) SubscribePrices(ctx context.Context, assetIDs []string) error {
-	sub := subscription{channelType: channelTypePrices, assetIDs: assetIDs}
-	return c.addAndSend(ctx, sub)
+	return c.addAndSend(ctx, newMarketSubscription(assetIDs, false, false))
 }
 
 // UnsubscribePrices unsubscribes from price change events for the given asset IDs.
@@ -231,8 +230,7 @@ func (c *Client) UnsubscribePrices(ctx context.Context, assetIDs []string) error
 
 // SubscribeTickSizeChange subscribes to tick size change events for the given asset IDs.
 func (c *Client) SubscribeTickSizeChange(ctx context.Context, assetIDs []string) error {
-	sub := subscription{channelType: channelTypeTickSizeChange, assetIDs: assetIDs}
-	return c.addAndSend(ctx, sub)
+	return c.addAndSend(ctx, newMarketSubscription(assetIDs, false, false))
 }
 
 // UnsubscribeTickSizeChange unsubscribes from tick size change events for the given asset IDs.
@@ -242,8 +240,7 @@ func (c *Client) UnsubscribeTickSizeChange(ctx context.Context, assetIDs []strin
 
 // SubscribeMidpoints subscribes to midpoint events for the given asset IDs.
 func (c *Client) SubscribeMidpoints(ctx context.Context, assetIDs []string) error {
-	sub := subscription{channelType: channelTypeMidpoints, assetIDs: assetIDs}
-	return c.addAndSend(ctx, sub)
+	return c.addAndSend(ctx, newMarketSubscription(assetIDs, false, false))
 }
 
 // UnsubscribeMidpoints unsubscribes from midpoint events for the given asset IDs.
@@ -253,27 +250,23 @@ func (c *Client) UnsubscribeMidpoints(ctx context.Context, assetIDs []string) er
 
 // SubscribeBestBidAsk subscribes to best bid/ask events for the given asset IDs.
 func (c *Client) SubscribeBestBidAsk(ctx context.Context, assetIDs []string) error {
-	sub := subscription{channelType: channelTypeBestBidAsk, assetIDs: assetIDs}
-	return c.addAndSend(ctx, sub)
+	return c.addAndSend(ctx, newMarketSubscription(assetIDs, false, true))
 }
 
 // SubscribeNewMarkets subscribes to new market creation events.
 func (c *Client) SubscribeNewMarkets(ctx context.Context) error {
-	sub := subscription{channelType: channelTypeNewMarkets}
-	return c.addAndSend(ctx, sub)
+	return c.addAndSend(ctx, newMarketSubscription(nil, false, true))
 }
 
 // SubscribeMarketResolutions subscribes to market resolution events.
 func (c *Client) SubscribeMarketResolutions(ctx context.Context) error {
-	sub := subscription{channelType: channelTypeMarketRes}
-	return c.addAndSend(ctx, sub)
+	return c.addAndSend(ctx, newMarketSubscription(nil, false, true))
 }
 
 // SubscribeUserEvents subscribes to all user events (orders and trades) for the given markets.
 // Requires credentials set via NewAuthenticatedClient or WithCredentials.
 func (c *Client) SubscribeUserEvents(ctx context.Context, markets []string) error {
-	sub := subscription{channelType: channelTypeUserEvents, markets: markets}
-	return c.addAndSend(ctx, sub)
+	return c.addAndSend(ctx, newUserSubscription(markets))
 }
 
 // UnsubscribeUserEvents unsubscribes from user events for the given markets.
@@ -284,8 +277,7 @@ func (c *Client) UnsubscribeUserEvents(ctx context.Context, markets []string) er
 // SubscribeOrders subscribes to order status events for the given markets.
 // Requires credentials set via NewAuthenticatedClient or WithCredentials.
 func (c *Client) SubscribeOrders(ctx context.Context, markets []string) error {
-	sub := subscription{channelType: channelTypeOrders, markets: markets}
-	return c.addAndSend(ctx, sub)
+	return c.addAndSend(ctx, newUserSubscription(markets))
 }
 
 // UnsubscribeOrders unsubscribes from order events for the given markets.
@@ -296,8 +288,7 @@ func (c *Client) UnsubscribeOrders(ctx context.Context, markets []string) error 
 // SubscribeTrades subscribes to trade fill events for the given markets.
 // Requires credentials set via NewAuthenticatedClient or WithCredentials.
 func (c *Client) SubscribeTrades(ctx context.Context, markets []string) error {
-	sub := subscription{channelType: channelTypeTrades, markets: markets}
-	return c.addAndSend(ctx, sub)
+	return c.addAndSend(ctx, newUserSubscription(markets))
 }
 
 // UnsubscribeTrades unsubscribes from trade events for the given markets.
@@ -307,33 +298,39 @@ func (c *Client) UnsubscribeTrades(ctx context.Context, markets []string) error 
 
 // addAndSend records the subscription and sends the subscribe message.
 func (c *Client) addAndSend(ctx context.Context, sub subscription) error {
-	c.subsMu.Lock()
-	c.subs = append(c.subs, sub)
-	c.subsMu.Unlock()
-
-	return c.replaySub(ctx, sub)
+	sendSub, shouldSend := c.recordSubscription(sub)
+	if !shouldSend {
+		return nil
+	}
+	if err := c.replaySub(ctx, sendSub); err != nil {
+		c.rollbackRecordedSubscription(sub)
+		return err
+	}
+	return nil
 }
 
 // removeAndSend removes matching subscriptions and sends the unsubscribe message.
 func (c *Client) removeAndSend(ctx context.Context, channelType string, ids []string) error {
-	c.subsMu.Lock()
-	var remaining []subscription
-	for _, s := range c.subs {
-		if s.channelType == channelType {
-			continue
-		}
-		remaining = append(remaining, s)
+	target := subscriptionTargetMarket
+	if isUserChannel(channelType) {
+		target = subscriptionTargetUser
 	}
-	c.subs = remaining
-	c.subsMu.Unlock()
 
-	return c.sendUnsubscribeMessage(ctx, channelType, ids)
+	removedSub, toUnsubscribe, ok := c.removeRecordedSubscription(target, ids)
+	if !ok || len(toUnsubscribe) == 0 {
+		return nil
+	}
+	if err := c.sendUnsubscribeMessage(ctx, target, toUnsubscribe); err != nil {
+		c.rollbackRemovedSubscription(removedSub)
+		return err
+	}
+	return nil
 }
 
 // replaySub sends the subscribe wire message for a stored subscription.
 // Called both on initial subscribe and on reconnect replay.
 func (c *Client) replaySub(ctx context.Context, sub subscription) error {
-	if isUserChannel(sub.channelType) {
+	if sub.target.isUser() {
 		return c.sendUserSubscribeMessage(ctx, sub)
 	}
 	return c.sendMarketSubscribeMessage(ctx, sub)
@@ -350,9 +347,10 @@ func isUserChannel(channelType string) bool {
 // sendMarketSubscribeMessage sends a market channel subscribe message.
 func (c *Client) sendMarketSubscribeMessage(ctx context.Context, sub subscription) error {
 	msg := MarketSubscription{
-		Type:        ChannelMarket,
-		AssetIDs:    sub.assetIDs,
-		InitialDump: sub.initialDump,
+		Type:                 ChannelMarket,
+		AssetIDs:             sub.assetIDs,
+		InitialDump:          sub.initialDump,
+		CustomFeatureEnabled: sub.customFeatureEnabled,
 	}
 	return c.sendJSON(ctx, msg)
 }
@@ -360,10 +358,10 @@ func (c *Client) sendMarketSubscribeMessage(ctx context.Context, sub subscriptio
 // sendUnsubscribeMessage sends an unsubscribe message for a channel.
 func (c *Client) sendUnsubscribeMessage(
 	ctx context.Context,
-	channelType string,
+	target subscriptionTarget,
 	ids []string,
 ) error {
-	if isUserChannel(channelType) {
+	if target.isUser() {
 		auth, err := c.deriveWSAuth(ctx)
 		if err != nil {
 			return err
@@ -371,6 +369,7 @@ func (c *Client) sendUnsubscribeMessage(
 		msg := UserSubscription{
 			Type:      ChannelUser,
 			Auth:      auth,
+			Markets:   ids,
 			Operation: "unsubscribe",
 		}
 		return c.sendJSON(ctx, msg)
@@ -421,6 +420,233 @@ func (c *Client) deriveWSAuth(ctx context.Context) (clob.WSAuth, error) {
 		Timestamp:  strconv.FormatInt(timestamp, 10),
 		Signature:  sig,
 	}, nil
+}
+
+func newMarketSubscription(
+	assetIDs []string,
+	initialDump bool,
+	customFeatureEnabled bool,
+) subscription {
+	assetIDs = slices.Clone(assetIDs)
+	return subscription{
+		target:               subscriptionTargetMarket,
+		key:                  subscriptionKey(subscriptionTargetMarket, assetIDs),
+		assetIDs:             assetIDs,
+		initialDump:          initialDump,
+		customFeatureEnabled: customFeatureEnabled,
+	}
+}
+
+func newUserSubscription(markets []string) subscription {
+	markets = slices.Clone(markets)
+	return subscription{
+		target:  subscriptionTargetUser,
+		key:     subscriptionKey(subscriptionTargetUser, markets),
+		markets: markets,
+	}
+}
+
+func subscriptionKey(target subscriptionTarget, ids []string) string {
+	normalized := slices.Clone(ids)
+	slices.Sort(normalized)
+	prefix := "market"
+	if target.isUser() {
+		prefix = "user"
+	}
+	return prefix + ":" + strings.Join(normalized, ",")
+}
+
+func (c *Client) replayTrackedSubscriptions(ctx context.Context) {
+	c.subsMu.RLock()
+	if len(c.subs) == 0 {
+		c.subsMu.RUnlock()
+		return
+	}
+
+	marketActive := false
+	userActive := false
+	initialDump := false
+	customFeature := c.customFeature
+	marketAssets := make([]string, 0, len(c.marketRefs))
+	for assetID := range c.marketRefs {
+		marketAssets = append(marketAssets, assetID)
+	}
+	userMarkets := make([]string, 0, len(c.userRefs))
+	for market := range c.userRefs {
+		userMarkets = append(userMarkets, market)
+	}
+	for _, sub := range c.subs {
+		if sub.target.isUser() {
+			userActive = true
+			continue
+		}
+		marketActive = true
+		initialDump = initialDump || sub.initialDump
+	}
+	c.subsMu.RUnlock()
+
+	slices.Sort(marketAssets)
+	slices.Sort(userMarkets)
+
+	if marketActive {
+		if err := c.replaySub(ctx, subscription{
+			target:               subscriptionTargetMarket,
+			assetIDs:             marketAssets,
+			initialDump:          initialDump,
+			customFeatureEnabled: customFeature,
+		}); err != nil {
+			select {
+			case c.errs <- fmt.Errorf("resubscribe market: %w", err):
+			default:
+			}
+		}
+	}
+	if userActive {
+		if err := c.replaySub(ctx, subscription{
+			target:  subscriptionTargetUser,
+			markets: userMarkets,
+		}); err != nil {
+			select {
+			case c.errs <- fmt.Errorf("resubscribe user: %w", err):
+			default:
+			}
+		}
+	}
+}
+
+func (c *Client) recordSubscription(sub subscription) (subscription, bool) {
+	c.subsMu.Lock()
+	defer c.subsMu.Unlock()
+
+	c.subs = append(c.subs, sub)
+	sendSub := sub
+	if sub.target.isUser() {
+		if len(sub.markets) == 0 {
+			return sendSub, true
+		}
+		sendSub.markets = sendSub.markets[:0]
+		for _, market := range sub.markets {
+			if c.userRefs[market] == 0 {
+				sendSub.markets = append(sendSub.markets, market)
+			}
+			c.userRefs[market]++
+		}
+		return sendSub, len(sendSub.markets) > 0
+	}
+
+	if len(sub.assetIDs) == 0 {
+		c.customFeature = c.customFeature || sub.customFeatureEnabled
+		return sendSub, true
+	}
+
+	sendSub.assetIDs = sendSub.assetIDs[:0]
+	for _, assetID := range sub.assetIDs {
+		if c.marketRefs[assetID] == 0 {
+			sendSub.assetIDs = append(sendSub.assetIDs, assetID)
+		}
+		c.marketRefs[assetID]++
+	}
+	if sub.customFeatureEnabled {
+		c.customFeature = true
+		if len(sendSub.assetIDs) == 0 {
+			sendSub.assetIDs = slices.Clone(sub.assetIDs)
+		}
+		return sendSub, true
+	}
+	return sendSub, len(sendSub.assetIDs) > 0
+}
+
+func (c *Client) rollbackRecordedSubscription(sub subscription) {
+	c.subsMu.Lock()
+	defer c.subsMu.Unlock()
+
+	c.removeOneSubscriptionLocked(sub)
+	c.decrementSubscriptionRefsLocked(sub)
+	c.recomputeCustomFeatureLocked()
+}
+
+func (c *Client) removeRecordedSubscription(
+	target subscriptionTarget,
+	ids []string,
+) (subscription, []string, bool) {
+	c.subsMu.Lock()
+	defer c.subsMu.Unlock()
+
+	key := subscriptionKey(target, ids)
+	for idx, sub := range c.subs {
+		if sub.target != target || sub.key != key {
+			continue
+		}
+		c.subs = append(c.subs[:idx], c.subs[idx+1:]...)
+		toUnsubscribe := c.decrementSubscriptionRefsLocked(sub)
+		c.recomputeCustomFeatureLocked()
+		return sub, toUnsubscribe, true
+	}
+	return subscription{}, nil, false
+}
+
+func (c *Client) rollbackRemovedSubscription(sub subscription) {
+	c.subsMu.Lock()
+	defer c.subsMu.Unlock()
+
+	c.subs = append(c.subs, sub)
+	if sub.target.isUser() {
+		for _, market := range sub.markets {
+			c.userRefs[market]++
+		}
+	} else {
+		for _, assetID := range sub.assetIDs {
+			c.marketRefs[assetID]++
+		}
+	}
+	c.recomputeCustomFeatureLocked()
+}
+
+func (c *Client) removeOneSubscriptionLocked(sub subscription) {
+	for idx, existing := range c.subs {
+		if existing.target != sub.target || existing.key != sub.key {
+			continue
+		}
+		c.subs = append(c.subs[:idx], c.subs[idx+1:]...)
+		return
+	}
+}
+
+func (c *Client) decrementSubscriptionRefsLocked(sub subscription) []string {
+	toUnsubscribe := make([]string, 0, len(sub.assetIDs)+len(sub.markets))
+	if sub.target.isUser() {
+		for _, market := range sub.markets {
+			switch count := c.userRefs[market]; {
+			case count <= 1:
+				delete(c.userRefs, market)
+				toUnsubscribe = append(toUnsubscribe, market)
+			default:
+				c.userRefs[market] = count - 1
+			}
+		}
+		return toUnsubscribe
+	}
+
+	for _, assetID := range sub.assetIDs {
+		switch count := c.marketRefs[assetID]; {
+		case count <= 1:
+			delete(c.marketRefs, assetID)
+			toUnsubscribe = append(toUnsubscribe, assetID)
+		default:
+			c.marketRefs[assetID] = count - 1
+		}
+	}
+	return toUnsubscribe
+}
+
+func (c *Client) recomputeCustomFeatureLocked() {
+	c.customFeature = false
+	for _, sub := range c.subs {
+		if !sub.target.isUser() && sub.customFeatureEnabled {
+			c.customFeature = true
+			return
+		}
+	}
 }
 
 func (c *Client) readLoop(ctx context.Context) {

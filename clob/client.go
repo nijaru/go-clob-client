@@ -107,7 +107,13 @@ func NewAuthenticatedClient(config Config) (*AuthenticatedClient, error) {
 
 // Credentials returns the current API credentials.
 func (c *AuthenticatedClient) Credentials() *Credentials {
-	return c.credentials()
+	c.authMu.RLock()
+	defer c.authMu.RUnlock()
+	if c.creds == nil {
+		return nil
+	}
+	creds := *c.creds
+	return &creds
 }
 
 // PromoteToBuilder upgrades the client with builder credentials, enabling builder-authenticated requests.
@@ -325,14 +331,17 @@ func (c *AuthenticatedClient) startHeartbeatLoop() {
 func (c *Client) ClearTickSizeCache(tokenID string) {
 	c.tickSizeMu.Lock()
 	delete(c.tickSizeCache, tokenID)
+	delete(c.tickSizeTimestamps, tokenID)
 	c.tickSizeMu.Unlock()
 
 	c.negRiskMu.Lock()
 	delete(c.negRiskCache, tokenID)
+	delete(c.negRiskTimestamps, tokenID)
 	c.negRiskMu.Unlock()
 
 	c.feeRateMu.Lock()
 	delete(c.feeRateCache, tokenID)
+	delete(c.feeRateTimestamps, tokenID)
 	c.feeRateMu.Unlock()
 }
 
@@ -340,14 +349,17 @@ func (c *Client) ClearTickSizeCache(tokenID string) {
 func (c *Client) ClearTickSizeCaches() {
 	c.tickSizeMu.Lock()
 	c.tickSizeCache = make(map[string]TickSize)
+	c.tickSizeTimestamps = make(map[string]time.Time)
 	c.tickSizeMu.Unlock()
 
 	c.negRiskMu.Lock()
 	c.negRiskCache = make(map[string]bool)
+	c.negRiskTimestamps = make(map[string]time.Time)
 	c.negRiskMu.Unlock()
 
 	c.feeRateMu.Lock()
 	c.feeRateCache = make(map[string]int64)
+	c.feeRateTimestamps = make(map[string]time.Time)
 	c.feeRateMu.Unlock()
 }
 
@@ -355,6 +367,7 @@ func (c *Client) ClearTickSizeCaches() {
 func (c *Client) ClearFeeRateCache(tokenID string) {
 	c.feeRateMu.Lock()
 	delete(c.feeRateCache, tokenID)
+	delete(c.feeRateTimestamps, tokenID)
 	c.feeRateMu.Unlock()
 }
 
@@ -362,27 +375,34 @@ func (c *Client) ClearFeeRateCache(tokenID string) {
 func (c *Client) ClearNegRiskCache(tokenID string) {
 	c.negRiskMu.Lock()
 	delete(c.negRiskCache, tokenID)
+	delete(c.negRiskTimestamps, tokenID)
 	c.negRiskMu.Unlock()
 }
 
 // SetTickSize pre-populates the tick size cache for tokenID, bypassing the HTTP fetch.
 func (c *Client) SetTickSize(tokenID string, size TickSize) {
+	now := time.Now()
 	c.tickSizeMu.Lock()
 	c.tickSizeCache[tokenID] = size
+	c.tickSizeTimestamps[tokenID] = now
 	c.tickSizeMu.Unlock()
 }
 
 // SetNegRisk pre-populates the neg risk cache for tokenID.
 func (c *Client) SetNegRisk(tokenID string, negRisk bool) {
+	now := time.Now()
 	c.negRiskMu.Lock()
 	c.negRiskCache[tokenID] = negRisk
+	c.negRiskTimestamps[tokenID] = now
 	c.negRiskMu.Unlock()
 }
 
 // SetFeeRateBps pre-populates the fee rate cache for tokenID.
 func (c *Client) SetFeeRateBps(tokenID string, bps int64) {
+	now := time.Now()
 	c.feeRateMu.Lock()
 	c.feeRateCache[tokenID] = bps
+	c.feeRateTimestamps[tokenID] = now
 	c.feeRateMu.Unlock()
 }
 
@@ -537,7 +557,7 @@ func (c *Client) getJSON(
 	auth polyhttp.AuthLevel,
 	out any,
 ) error {
-	return c.withRetry(ctx, func() error {
+	return c.withRetry(ctx, true, func() error {
 		return c.http.GetJSON(ctx, path, query, auth, out)
 	})
 }
@@ -558,7 +578,7 @@ func (c *Client) postJSON(
 	auth polyhttp.AuthLevel,
 	out any,
 ) error {
-	return c.withRetry(ctx, func() error {
+	return c.withRetry(ctx, false, func() error {
 		return c.http.PostJSON(ctx, path, body, auth, out)
 	})
 }
@@ -570,7 +590,7 @@ func (c *Client) deleteJSON(
 	auth polyhttp.AuthLevel,
 	out any,
 ) error {
-	return c.withRetry(ctx, func() error {
+	return c.withRetry(ctx, false, func() error {
 		return c.http.DeleteJSON(ctx, path, body, auth, out)
 	})
 }
@@ -583,7 +603,7 @@ func (c *Client) deleteJSONQuery(
 	auth polyhttp.AuthLevel,
 	out any,
 ) error {
-	return c.withRetry(ctx, func() error {
+	return c.withRetry(ctx, false, func() error {
 		return c.http.DeleteJSONQuery(ctx, path, query, body, auth, out)
 	})
 }
@@ -596,7 +616,7 @@ func (c *Client) getJSONWithNonce(
 	nonce int64,
 	out any,
 ) error {
-	return c.withRetry(ctx, func() error {
+	return c.withRetry(ctx, false, func() error {
 		return c.http.GetJSONWithNonce(ctx, path, query, auth, nonce, out)
 	})
 }
@@ -609,7 +629,7 @@ func (c *Client) postJSONWithNonce(
 	nonce int64,
 	out any,
 ) error {
-	return c.withRetry(ctx, func() error {
+	return c.withRetry(ctx, false, func() error {
 		return c.http.PostJSONWithNonce(ctx, path, body, auth, nonce, out)
 	})
 }
@@ -623,12 +643,16 @@ func (c *Client) doJSON(
 	out any,
 	extraHeaders map[string]string,
 ) error {
-	return c.withRetry(ctx, func() error {
+	return c.withRetry(ctx, method == http.MethodGet, func() error {
 		return c.http.DoJSON(ctx, method, path, query, body, auth, nil, extraHeaders, out)
 	})
 }
 
-func (c *Client) withRetry(ctx context.Context, fn func() error) error {
+func (c *Client) withRetry(ctx context.Context, retryable bool, fn func() error) error {
+	if !retryable {
+		return fn()
+	}
+
 	var lastErr error
 	for i := 0; i <= c.retryMax; i++ {
 		err := fn()

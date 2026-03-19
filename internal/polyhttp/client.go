@@ -39,16 +39,18 @@ type Client struct {
 }
 
 type APIError struct {
-	StatusCode int
-	Message    string
-	Body       []byte
+	StatusCode  int
+	Message     string
+	Body        []byte // Response body
+	RequestBody []byte // Original request body
 }
 
 func (e *APIError) Error() string {
-	if e.Message == "" {
-		return fmt.Errorf("polymarket API error: status %d", e.StatusCode).Error()
+	msg := fmt.Sprintf("polymarket API error: status %d", e.StatusCode)
+	if e.Message != "" {
+		msg += ": " + e.Message
 	}
-	return fmt.Errorf("polymarket API error: status %d: %s", e.StatusCode, e.Message).Error()
+	return msg
 }
 
 // HTTPStatus returns the HTTP status code of the error.
@@ -195,9 +197,8 @@ func (c *Client) doJSON(
 	}
 
 	if resp.StatusCode >= http.StatusBadRequest {
-		return newAPIError(resp, payload)
+		return newAPIError(resp, payload, requestBody)
 	}
-
 	if out == nil || len(payload) == 0 {
 		return nil
 	}
@@ -253,12 +254,12 @@ func marshalBody(body any) ([]byte, error) {
 	}
 }
 
-func newAPIError(resp *http.Response, body []byte) *APIError {
+func newAPIError(resp *http.Response, body, requestBody []byte) *APIError {
 	err := &APIError{
-		StatusCode: resp.StatusCode,
-		Body:       bytes.Clone(body),
+		StatusCode:  resp.StatusCode,
+		Body:        bytes.Clone(body),
+		RequestBody: bytes.Clone(requestBody),
 	}
-
 	var payload struct {
 		Error any `json:"error"`
 	}
