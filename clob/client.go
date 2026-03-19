@@ -10,7 +10,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
-        "golang.org/x/time/rate"
+
+	"golang.org/x/time/rate"
 
 	"github.com/nijaru/go-clob-client/clob/ws/rtds"
 	"github.com/nijaru/go-clob-client/internal/polyauth"
@@ -39,7 +40,7 @@ type Client struct {
 	tickSizeTTL  time.Duration
 	retryMax     int
 	retryBackoff time.Duration
-        rateLimiter  *rate.Limiter
+	rateLimiter  *rate.Limiter
 }
 
 // SignerClient extends the base client with methods requiring an Ethereum signer (L1).
@@ -144,7 +145,7 @@ func newBase(config Config) *Client {
 		tickSizeTTL:  config.TickSizeCacheTTL,
 		retryMax:     config.RetryMax,
 		retryBackoff: config.RetryBackoff,
-                rateLimiter:  newLimiter(config.RateLimit, config.RateBurst),
+		rateLimiter:  newLimiter(config.RateLimit, config.RateBurst),
 	}
 	base.http = &polyhttp.Client{
 		BaseURL:    config.Host,
@@ -449,7 +450,7 @@ func (c *AuthenticatedClient) getBuilderAuth() BuilderAuth {
 	return c.builderAuth
 }
 
-func (c *AuthenticatedClient) addAuthHeaders(
+func (c *SignerClient) addAuthHeaders(
 	ctx context.Context,
 	method, path string,
 	body []byte,
@@ -457,60 +458,22 @@ func (c *AuthenticatedClient) addAuthHeaders(
 	nonce *int64,
 ) (map[string]string, error) {
 	switch level {
-	case polyhttp.AuthNone, polyhttp.AuthL1:
-		return c.SignerClient.addAuthHeaders(ctx, method, path, body, level, nonce)
-	case polyhttp.AuthL2:
-		creds := c.credentials()
-		if creds == nil {
-			return nil, fmt.Errorf("level 2 auth requires API credentials")
-		}
+	case polyhttp.AuthNone:
+		return nil, nil
+	case polyhttp.AuthL1:
 		timestamp, err := c.timestamp(ctx)
 		if err != nil {
 			return nil, err
 		}
-		return polyauth.L2Headers(
-			c.signer,
-			creds.Key,
-			creds.Secret,
-			creds.Passphrase,
-			timestamp,
-			method,
-			path,
-			body,
-		)
-	case polyhttp.AuthL2Builder:
-		creds := c.credentials()
-		if creds == nil {
-			return nil, fmt.Errorf("level 2 auth requires API credentials")
+		value := int64(0)
+		if nonce != nil {
+			value = *nonce
 		}
-		timestamp, err := c.timestamp(ctx)
-		if err != nil {
-			return nil, err
-		}
-		headers, err := polyauth.L2Headers(
-			c.signer,
-			creds.Key,
-			creds.Secret,
-			creds.Passphrase,
-			timestamp,
-			method,
-			path,
-			body,
-		)
-		if err != nil {
-			return nil, err
-		}
-		if c.getBuilderAuth() == nil {
-			return headers, nil
-		}
-		builderHeaders, err := c.builderHeaders(ctx, method, path, body, timestamp)
-		if err != nil {
-			return nil, err
-		}
-		maps.Copy(headers, builderHeaders)
-		return headers, nil
+		return polyauth.L1Headers(c.signer, c.chainID, timestamp, value)
 	default:
-		return nil, fmt.Errorf("unknown auth level %d", level)
+		return nil, fmt.Errorf(
+			"this client only supports L1 auth, please upgrade to an AuthenticatedClient",
+		)
 	}
 }
 
@@ -696,11 +659,11 @@ func (c *Client) withRetry(ctx context.Context, retryable bool, fn func() error)
 
 	var lastErr error
 	for i := 0; i <= c.retryMax; i++ {
-                if c.rateLimiter != nil {
-                        if err := c.rateLimiter.Wait(ctx); err != nil {
-                                return err
-                        }
-                }
+		if c.rateLimiter != nil {
+			if err := c.rateLimiter.Wait(ctx); err != nil {
+				return err
+			}
+		}
 		err := fn()
 		if err == nil {
 			return nil
@@ -796,11 +759,11 @@ func (c *AuthenticatedClient) DeriveWSAuth(ctx context.Context) (WSAuth, error) 
 }
 
 func newLimiter(r float64, b int) *rate.Limiter {
-        if r <= 0 {
-                return rate.NewLimiter(rate.Inf, 0)
-        }
-        if b <= 0 {
-                b = 1
-        }
-        return rate.NewLimiter(rate.Limit(r), b)
+	if r <= 0 {
+		return rate.NewLimiter(rate.Inf, 0)
+	}
+	if b <= 0 {
+		b = 1
+	}
+	return rate.NewLimiter(rate.Limit(r), b)
 }
