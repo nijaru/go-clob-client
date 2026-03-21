@@ -17,7 +17,7 @@ func (c *AuthenticatedClient) CreateRFQRequest(
 	params CreateRFQRequestParams,
 ) (*RFQRequestResponse, error) {
 	var resp RFQRequestResponse
-	if err := c.postJSON(ctx, rfqRequestEndpoint, params, polyhttp.AuthL2, &resp); err != nil {
+	if err := c.postJSON(ctx, rfqRequestEndpoint, params, polyhttp.AuthL2Builder, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -27,7 +27,7 @@ func (c *AuthenticatedClient) CreateRFQRequest(
 // Level 2 Auth required.
 func (c *AuthenticatedClient) CancelRFQRequest(ctx context.Context, requestID string) error {
 	body := map[string]string{"requestId": requestID}
-	return c.deleteJSON(ctx, rfqRequestEndpoint, body, polyhttp.AuthL2, nil)
+	return c.deleteJSON(ctx, rfqRequestEndpoint, body, polyhttp.AuthL2Builder, nil)
 }
 
 // GetRFQRequests retrieves RFQ requests, optionally filtered by state or IDs.
@@ -56,7 +56,7 @@ func (c *AuthenticatedClient) GetRFQRequests(
 	}
 
 	var resp RFQRequestsResponse
-	if err := c.getJSON(ctx, rfqDataRequestsEndpoint, query, polyhttp.AuthL2, &resp); err != nil {
+	if err := c.getJSON(ctx, rfqDataRequestsEndpoint, query, polyhttp.AuthL2Builder, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -69,7 +69,7 @@ func (c *AuthenticatedClient) CreateRFQQuote(
 	params CreateRFQQuoteParams,
 ) (*RFQQuoteResponse, error) {
 	var resp RFQQuoteResponse
-	if err := c.postJSON(ctx, rfqQuoteEndpoint, params, polyhttp.AuthL2, &resp); err != nil {
+	if err := c.postJSON(ctx, rfqQuoteEndpoint, params, polyhttp.AuthL2Builder, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -79,7 +79,7 @@ func (c *AuthenticatedClient) CreateRFQQuote(
 // Level 2 Auth required.
 func (c *AuthenticatedClient) CancelRFQQuote(ctx context.Context, quoteID string) error {
 	body := map[string]string{"quoteId": quoteID}
-	return c.deleteJSON(ctx, rfqQuoteEndpoint, body, polyhttp.AuthL2, nil)
+	return c.deleteJSON(ctx, rfqQuoteEndpoint, body, polyhttp.AuthL2Builder, nil)
 }
 
 // GetRFQRequesterQuotes retrieves quotes on requests created by the authenticated user.
@@ -105,7 +105,7 @@ func (c *AuthenticatedClient) GetRFQRequesterQuotes(
 	}
 
 	var resp RFQQuotesResponse
-	if err := c.getJSON(ctx, rfqRequesterQuotesEndpoint, query, polyhttp.AuthL2, &resp); err != nil {
+	if err := c.getJSON(ctx, rfqRequesterQuotesEndpoint, query, polyhttp.AuthL2Builder, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -134,7 +134,7 @@ func (c *AuthenticatedClient) GetRFQQuoterQuotes(
 	}
 
 	var resp RFQQuotesResponse
-	if err := c.getJSON(ctx, rfqQuoterQuotesEndpoint, query, polyhttp.AuthL2, &resp); err != nil {
+	if err := c.getJSON(ctx, rfqQuoterQuotesEndpoint, query, polyhttp.AuthL2Builder, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -150,7 +150,7 @@ func (c *AuthenticatedClient) GetRFQBestQuote(
 	query.Set("requestId", requestID)
 
 	var resp RFQQuote
-	if err := c.getJSON(ctx, rfqBestQuoteEndpoint, query, polyhttp.AuthL2, &resp); err != nil {
+	if err := c.getJSON(ctx, rfqBestQuoteEndpoint, query, polyhttp.AuthL2Builder, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -164,7 +164,7 @@ func (c *AuthenticatedClient) AcceptRFQQuote(
 	params AcceptRFQQuoteRequest,
 ) (*AcceptRFQQuoteResponse, error) {
 	var resp AcceptRFQQuoteResponse
-	if err := c.postJSON(ctx, rfqRequestAcceptEndpoint, params, polyhttp.AuthL2, &resp); err != nil {
+	if err := c.postJSON(ctx, rfqRequestAcceptEndpoint, params, polyhttp.AuthL2Builder, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -176,14 +176,14 @@ func (c *AuthenticatedClient) ApproveRFQOrder(
 	ctx context.Context,
 	params ApproveRFQOrderRequest,
 ) error {
-	return c.postJSON(ctx, rfqQuoteApproveEndpoint, params, polyhttp.AuthL2, nil)
+	return c.postJSON(ctx, rfqQuoteApproveEndpoint, params, polyhttp.AuthL2Builder, nil)
 }
 
 // GetRFQConfig retrieves the current RFQ configuration.
 // Level 2 Auth required.
 func (c *AuthenticatedClient) GetRFQConfig(ctx context.Context) (jsontext.Value, error) {
 	var resp jsontext.Value
-	if err := c.getJSON(ctx, rfqConfigEndpoint, nil, polyhttp.AuthL2, &resp); err != nil {
+	if err := c.getJSON(ctx, rfqConfigEndpoint, nil, polyhttp.AuthL2Builder, &resp); err != nil {
 		return nil, err
 	}
 	return resp, nil

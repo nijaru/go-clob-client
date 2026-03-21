@@ -136,7 +136,7 @@ func (c *AuthenticatedClient) CancelMarketOrders(
 	request CancelMarketOrdersRequest,
 ) (*CancelOrdersResponse, error) {
 	var out CancelOrdersResponse
-	err := c.deleteJSON(ctx, cancelMarketOrdersEndpoint, request, polyhttp.AuthL2, &out)
+	err := c.deleteJSON(ctx, cancelMarketOrdersEndpoint, request, polyhttp.AuthL2Builder, &out)
 	return &out, err
 }
 
@@ -157,7 +157,7 @@ func (c *AuthenticatedClient) PostHeartbeat(
 	}
 
 	var out HeartbeatResponse
-	err := c.postJSON(ctx, heartbeatsEndpoint, req, polyhttp.AuthL2, &out)
+	err := c.postJSON(ctx, heartbeatsEndpoint, req, polyhttp.AuthL2Builder, &out)
 	return &out, err
 }
 
