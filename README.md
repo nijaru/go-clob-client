@@ -9,23 +9,6 @@
 
 Go client for the [Polymarket](https://polymarket.com) Central Limit Order Book (CLOB). Targets the latest stable Go release and tracks feature parity with the [official Rust SDK](https://github.com/Polymarket/rs-clob-client).
 
-## Table of Contents
-
-- [Features](#features)
-- [Install](#install)
-- [Quickstart](#quickstart)
-  - [Read-Only Access](#read-only-access)
-  - [Authenticated Trading](#authenticated-trading)
-  - [Pagination Iterators](#pagination-iterators)
-- [Client Tiers](#client-tiers)
-- [Wallet Types](#wallet-types)
-  - [Signature Types](#signature-types)
-  - [Funder Address](#funder-address)
-  - [Token Allowances (MetaMask/EOA)](#token-allowances)
-- [Examples](#examples)
-- [Error Handling](#error-handling)
-- [Contributing](#contributing)
-- [About Polymarket](#about-polymarket)
 
 ## Features
 
