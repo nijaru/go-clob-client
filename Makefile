@@ -1,4 +1,4 @@
-.PHONY: fmt test build check
+.PHONY: fmt vet test build tidy check
 
 fmt:
 	@files="$$(git ls-files '*.go')"; \
@@ -9,10 +9,16 @@ fmt:
 		golines --base-formatter gofumpt -w $$files; \
 	fi
 
+vet:
+	@go vet ./...
+
 test:
 	@go test ./...
 
 build:
 	@go build ./...
 
-check: test build
+tidy:
+	@go mod tidy
+
+check: fmt vet test build

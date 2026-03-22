@@ -412,7 +412,20 @@ func (c *Client) SetFeeRateBps(tokenID string, bps int64) {
 
 // InvalidateCaches clears all internal caches (tick size, neg risk, fee rate).
 func (c *Client) InvalidateCaches() {
-	c.ClearTickSizeCaches()
+	c.tickSizeMu.Lock()
+	c.tickSizeCache = make(map[string]TickSize)
+	c.tickSizeTimestamps = make(map[string]time.Time)
+	c.tickSizeMu.Unlock()
+
+	c.negRiskMu.Lock()
+	c.negRiskCache = make(map[string]bool)
+	c.negRiskTimestamps = make(map[string]time.Time)
+	c.negRiskMu.Unlock()
+
+	c.feeRateMu.Lock()
+	c.feeRateCache = make(map[string]int64)
+	c.feeRateTimestamps = make(map[string]time.Time)
+	c.feeRateMu.Unlock()
 }
 
 // Host returns the base CLOB API host for the client.

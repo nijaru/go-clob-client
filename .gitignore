@@ -24,9 +24,16 @@ profile.cov
 go.work
 go.work.sum
 
-# env file
+# env files
 .env
+.env.local
+.env.*.local
 
 # Editor/IDE
 # .idea/
 # .vscode/
+*.swp
+*.swo
+
+# macOS
+.DS_Store

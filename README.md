@@ -1,14 +1,35 @@
 # go-clob-client
 
-> [!WARNING]
-> **Experimental SDK**: This implementation of the March 2026 Polymarket Technical Standards (including Type-Level Auth Guards and automated Heartbeats) is feature-complete but has not been extensively tested in high-volume live trading environments. Use at your own risk. Errors in financial software can lead to irreversible loss of funds.
+[![Go Reference](https://pkg.go.dev/badge/github.com/nijaru/go-clob-client/clob.svg)](https://pkg.go.dev/github.com/nijaru/go-clob-client/clob)
+[![CI](https://github.com/nijaru/go-clob-client/actions/workflows/ci.yml/badge.svg)](https://github.com/nijaru/go-clob-client/actions/workflows/ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/nijaru/go-clob-client)](https://goreportcard.com/report/github.com/nijaru/go-clob-client)
 
-Go SDK for the Polymarket CLOB.
+Go client for the [Polymarket](https://polymarket.com) Central Limit Order Book (CLOB).
 
-- **Full 2026 Parity**: Implements Heartbeats API, 15-order batch limits, and the new Bridge withdrawal endpoints.
-- **Type-Level Auth Guards**: Strict client tiers (`Client`, `SignerClient`, `AuthenticatedClient`) prevent accidental unauthenticated calls to trading endpoints.
-- **Modern Go 1.26**: Built for Go 1.26 with `json/v2` (external package), iterators for pagination, and type-safe error handling.
-- **Comprehensive Coverage**: CLOB (REST + WS), RFQ, Gamma (Metadata), Data (User Stats), Bridge (Cross-chain), and CTF (On-chain operations).
+## Table of Contents
+
+- [Overview](#overview)
+- [Install](#install)
+- [Client Tiers](#client-tiers)
+- [Quickstart](#quickstart)
+  - [Read-Only Access](#read-only-access)
+  - [Authenticated Trading](#authenticated-trading)
+  - [Pagination Iterators](#pagination-iterators)
+- [Wallet Types](#wallet-types)
+  - [Signature Types](#signature-types)
+  - [Funder Address](#funder-address)
+  - [Token Allowances (MetaMask/EOA)](#token-allowances)
+- [Features](#features)
+- [Examples](#examples)
+- [Contributing](#contributing)
+- [About Polymarket](#about-polymarket)
+
+## Overview
+
+- **Type-level auth guards** — three client tiers (`Client`, `SignerClient`, `AuthenticatedClient`) prevent calling trading endpoints without credentials at compile time.
+- **Full API coverage** — CLOB REST + WebSocket, RFQ, Gamma, Data, Bridge, and CTF on-chain operations.
+- **Modern Go** — Go 1.23+ iterators for memory-efficient pagination, `json/v2` for strict decoding, typed error sentinels.
+- **Production-ready** — built-in rate limiting, exponential backoff retries, automatic heartbeats, concurrent-safe caches.
 
 ## Install
 
@@ -16,49 +37,74 @@ Go SDK for the Polymarket CLOB.
 go get github.com/nijaru/go-clob-client/clob
 ```
 
-Import path:
+Requires **Go 1.26.1+**.
+
+## Client Tiers
+
+The SDK enforces authentication requirements through a three-tier hierarchy — you cannot call trading methods on an unauthenticated client.
+
+| Tier | Constructor | Auth Required | Capabilities |
+|------|------------|---------------|--------------|
+| `Client` | `NewClient` | None | Public market data, orderbooks, prices |
+| `SignerClient` | `NewSignerClient` | Private key | Order building & signing, API key management |
+| `AuthenticatedClient` | `NewAuthenticatedClient` | Private key + API creds | Order posting, account management, heartbeats |
+
+You can also upgrade incrementally:
 
 ```go
-import "github.com/nijaru/go-clob-client/clob"
+base, _ := clob.NewClient(clob.Config{})
+signer, _ := base.AsSigner(privateKey, clob.SignatureTypeEOA, "")
+authed := signer.AsAuthenticated(creds, nil)
 ```
-
-## Architecture: Type-Level Auth Guards
-
-The SDK uses a three-tiered client structure to ensure safety. You cannot call trading methods on a base client; you must "upgrade" it by providing the necessary credentials.
-
-1. **`clob.Client`**: Public methods only (`GetOrderBook`, `GetMarkets`).
-2. **`clob.SignerClient`**: Extends base with L1 methods (`CreateOrder`, `CreateAPIKey`). Requires `PrivateKey`.
-3. **`clob.AuthenticatedClient`**: Extends signer with L2/L3 methods (`PostOrder`, `PostHeartbeat`, `SplitTokens`). Requires `API Credentials`.
 
 ## Quickstart
 
 ### Read-Only Access
 
 ```go
-client, _ := clob.NewClient(clob.Config{})
+import "github.com/nijaru/go-clob-client/clob"
 
-book, _ := client.GetOrderBook(ctx, "<token-id>")
+client, err := clob.NewClient(clob.Config{})
+if err != nil {
+    log.Fatal(err)
+}
+
+book, err := client.GetOrderBook(ctx, "<token-id>")
+if err != nil {
+    log.Fatal(err)
+}
 fmt.Printf("Best bid: %s\n", book.Bids[len(book.Bids)-1].Price)
 ```
 
-### Full Authenticated Trading
+### Authenticated Trading
 
-`NewAuthenticatedClient` returns an `*AuthenticatedClient` which automatically starts the background **Heartbeat loop** to maintain order liveness and priority.
+`NewAuthenticatedClient` automatically starts a background **heartbeat loop** to maintain order liveness and priority. Always call `Close` or `Shutdown` when done.
 
 ```go
-client, _ := clob.NewAuthenticatedClient(clob.Config{
-    PrivateKey:  os.Getenv("PK"),
-    Credentials: &clob.Credentials{...},
+client, err := clob.NewAuthenticatedClient(clob.Config{
+    PrivateKey: os.Getenv("POLYMARKET_PRIVATE_KEY"),
+    Credentials: &clob.Credentials{
+        Key:        os.Getenv("POLYMARKET_API_KEY"),
+        Secret:     os.Getenv("POLYMARKET_API_SECRET"),
+        Passphrase: os.Getenv("POLYMARKET_API_PASSPHRASE"),
+    },
 })
+if err != nil {
+    log.Fatal(err)
+}
+defer client.Close()
 
-// Automatic heartbeats are now running in the background.
-// Batch up to 15 orders (2026 standard)
-resp, _ := client.PostOrders(ctx, orders)
+resp, err := client.CreateAndPostOrder(ctx, clob.OrderArgs{
+    TokenID: os.Getenv("POLYMARKET_TOKEN_ID"),
+    Price:   udecimal.MustParse("0.45"),
+    Size:    udecimal.MustParse("5"),
+    Side:    clob.SideBuy,
+}, nil, clob.OrderTypeGTC, false, false)
 ```
 
-### Modern Pagination (Iterators)
+### Pagination Iterators
 
-All list methods support Go 1.23+ iterators for clean, memory-efficient processing:
+All list endpoints expose both a slice variant and a Go 1.23+ range-over-function iterator for memory-efficient streaming:
 
 ```go
 for order, err := range client.IterOpenOrders(ctx, clob.OpenOrderParams{}) {
@@ -69,26 +115,94 @@ for order, err := range client.IterOpenOrders(ctx, clob.OpenOrderParams{}) {
 }
 ```
 
+## Wallet Types
+
+### Signature Types
+
+The `SignatureType` field tells Polymarket how to verify your signatures:
+
+| Value | Constant | Wallet type |
+|-------|----------|-------------|
+| `0` | `SignatureTypeEOA` | MetaMask, hardware wallets — any wallet where you control the private key directly |
+| `1` | `SignatureTypePolyProxy` | Email / Magic wallet (delegated signing) |
+| `2` | `SignatureTypePolyGnosisSafe` | Browser proxy wallet (proxy contract) |
+
+```go
+client, err := clob.NewSignerClient(clob.Config{
+    PrivateKey:    os.Getenv("POLYMARKET_PRIVATE_KEY"),
+    SignatureType: clob.SignatureTypePolyProxy,
+    FunderAddress: "<your-polymarket-wallet-address>",
+})
+```
+
+### Funder Address
+
+The **funder address** is the address that actually holds your funds on Polymarket. For EOA wallets it equals your signing key's address, so you can omit it. For proxy/Magic wallets the signing key differs from the on-chain funder — set `FunderAddress` explicitly.
+
+### Token Allowances
+
+> **MetaMask and EOA users only.** Proxy/Magic wallet users have allowances pre-approved.
+
+Before Polymarket can execute trades you must grant the exchange contracts permission to move your tokens. You need to approve two token types, each for three exchange contracts:
+
+**USDC** (`0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174`):
+- `0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E` — main exchange
+- `0xC5d563A36AE78145C45a50134d48A1215220f80a` — neg-risk exchange
+- `0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296` — neg-risk adapter
+
+**Conditional Tokens** (`0x4D97DCd97eC945f40cF65F87097ACe5EA0476045`): same three contracts as above.
+
+**You only need to do this once per wallet.** See `examples/clob/ctf_operations` for a Go implementation.
+
 ## Features
 
-- **CLOB**: Full REST + WebSocket (Market & User channels) support.
-- **2026 Standards**:
-  - Automated **Heartbeats** with ID rotation.
-  - **Batch Order Limits** increased to 15.
-  - **Post-Only** validation for GTC/GTD orders.
-  - **Maker Rebates** (`rebate_estimated`) in responses.
-- **Bridge**: Updated Jan 2026 API for `/withdraw` and `/status`.
-- **CTF**: On-chain `Split`, `Merge`, and `Redeem` operations.
-- **Gamma/Data**: Full market discovery and user analytics.
+- **CLOB**: full REST + WebSocket (market and user channels).
+- **Heartbeats**: automated background heartbeats with ID rotation to keep orders live.
+- **Batch orders**: post and cancel up to 15 orders per request.
+- **RFQ**: submit and query request-for-quote flows.
+- **Gamma**: market and event discovery, search, tags, and metadata.
+- **Data**: positions, trades, leaderboards, and user analytics.
+- **Bridge**: cross-chain deposit addresses (EVM, Solana, Bitcoin).
+- **CTF**: on-chain split, merge, and redeem operations.
+- **Builder auth**: dual L2/builder header flows for institutional integrations.
 
 ## Examples
 
-Explore the `examples/` directory for runnable implementations:
+Runnable examples are in `examples/`:
 
-- **Read-Only**: `examples/clob/read_only` — Public orderbook and market data.
-- **Auth Bootstrap**: `examples/clob/auth_bootstrap` — Creating and deriving API keys.
-- **Trading**: `examples/clob/limit_order` — Placing limit orders with tiered clients.
-- **WebSockets**: `examples/ws` — Real-time orderbook and user event streaming.
-- **On-chain Ops**: `examples/clob/ctf_operations` — Splitting, merging, and redeeming shares.
+| Example | Path | What it shows |
+|---------|------|---------------|
+| Read-only | `examples/clob/read_only` | Orderbook, prices, market data |
+| Auth bootstrap | `examples/clob/auth_bootstrap` | Creating and deriving API keys |
+| Limit order | `examples/clob/limit_order` | Placing a GTC limit order |
+| Market order | `examples/clob/market_order` | Placing a FOK market order |
+| WebSocket | `examples/ws` | Real-time orderbook and user event streaming |
+| CTF operations | `examples/clob/ctf_operations` | Splitting, merging, and redeeming shares |
 
-Requires Go 1.26.1+.
+Run any example with:
+
+```bash
+export POLYMARKET_PRIVATE_KEY=0x...
+go run ./examples/clob/read_only
+```
+
+Copy `.env.example` to `.env` for a full set of required variables.
+
+## Error Handling
+
+API errors are returned as `*clob.APIError` and expose the HTTP status code and body. Use the package-level sentinel errors with `errors.Is` for common cases:
+
+```go
+if errors.Is(err, clob.ErrNotFound)    { /* 404 */ }
+if errors.Is(err, clob.ErrRateLimit)   { /* 429 */ }
+if errors.Is(err, clob.ErrGeoBlocked)  { /* 451 */ }
+if errors.Is(err, clob.ErrUnauthorized){ /* 401/403 */ }
+```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Primary reference for API parity is the [Rust SDK](https://github.com/Polymarket/rs-clob-client).
+
+## About Polymarket
+
+[Polymarket](https://polymarket.com) is the world's largest prediction market, where you trade on the probability of real-world events. Markets reflect accurate, unbiased, real-time probabilities derived from open trading. See [docs.polymarket.com](https://docs.polymarket.com) for the full API reference.
