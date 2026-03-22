@@ -4,7 +4,11 @@
 [![CI](https://github.com/nijaru/go-clob-client/actions/workflows/ci.yml/badge.svg)](https://github.com/nijaru/go-clob-client/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/nijaru/go-clob-client)](https://goreportcard.com/report/github.com/nijaru/go-clob-client)
 
-Go client for the [Polymarket](https://polymarket.com) Central Limit Order Book (CLOB).
+
+> [!WARNING]
+> Unofficial, community-maintained SDK. Not extensively tested in production trading environments. Use at your own risk.
+
+Go client for the [Polymarket](https://polymarket.com) Central Limit Order Book (CLOB). Targets the latest stable Go release and tracks feature parity with the [official Rust SDK](https://github.com/Polymarket/rs-clob-client).
 
 ## Table of Contents
 
@@ -26,10 +30,11 @@ Go client for the [Polymarket](https://polymarket.com) Central Limit Order Book 
 
 ## Overview
 
-- **Type-level auth guards** — three client tiers (`Client`, `SignerClient`, `AuthenticatedClient`) prevent calling trading endpoints without credentials at compile time.
+- **Type-level auth guards** — three client tiers (`Client`, `SignerClient`, `AuthenticatedClient`) prevent calling protected endpoints without credentials at compile time.
 - **Full API coverage** — CLOB REST + WebSocket, RFQ, Gamma, Data, Bridge, and CTF on-chain operations.
-- **Modern Go** — Go 1.23+ iterators for memory-efficient pagination, `json/v2` for strict decoding, typed error sentinels.
-- **Production-ready** — built-in rate limiting, exponential backoff retries, automatic heartbeats, concurrent-safe caches.
+- **Go 1.26** — range-over-function iterators for pagination, `json/v2` strict decoding, typed error sentinels.
+- **Resilient** — built-in rate limiting, exponential backoff retries, automatic heartbeats, concurrent-safe caches.
+
 
 ## Install
 
