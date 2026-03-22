@@ -37,15 +37,18 @@ Requires **Go 1.26.1+**.
 ```go
 import "github.com/nijaru/go-clob-client/clob"
 
+ctx := context.Background()
+
 client, err := clob.NewClient(clob.Config{})
 if err != nil {
-    log.Fatal(err)
+	log.Fatal(err)
 }
 
 book, err := client.GetOrderBook(ctx, "<token-id>")
 if err != nil {
-    log.Fatal(err)
+	log.Fatal(err)
 }
+
 fmt.Printf("Best bid: %s\n", book.Bids[len(book.Bids)-1].Price)
 ```
 
@@ -55,23 +58,25 @@ fmt.Printf("Best bid: %s\n", book.Bids[len(book.Bids)-1].Price)
 
 ```go
 client, err := clob.NewAuthenticatedClient(clob.Config{
-    PrivateKey: os.Getenv("POLYMARKET_PRIVATE_KEY"),
-    Credentials: &clob.Credentials{
-        Key:        os.Getenv("POLYMARKET_API_KEY"),
-        Secret:     os.Getenv("POLYMARKET_API_SECRET"),
-        Passphrase: os.Getenv("POLYMARKET_API_PASSPHRASE"),
-    },
+	PrivateKey: os.Getenv("POLYMARKET_PRIVATE_KEY"),
+	Credentials: &clob.Credentials{
+		Key:        os.Getenv("POLYMARKET_API_KEY"),
+		Secret:     os.Getenv("POLYMARKET_API_SECRET"),
+		Passphrase: os.Getenv("POLYMARKET_API_PASSPHRASE"),
+	},
 })
 if err != nil {
-    log.Fatal(err)
+	log.Fatal(err)
 }
+
 defer client.Close()
 
+ctx := context.Background()
 resp, err := client.CreateAndPostOrder(ctx, clob.OrderArgs{
-    TokenID: os.Getenv("POLYMARKET_TOKEN_ID"),
-    Price:   udecimal.MustParse("0.45"),
-    Size:    udecimal.MustParse("5"),
-    Side:    clob.SideBuy,
+	TokenID: os.Getenv("POLYMARKET_TOKEN_ID"),
+	Price:   udecimal.MustParse("0.45"),
+	Size:    udecimal.MustParse("5"),
+	Side:    clob.SideBuy,
 }, nil, clob.OrderTypeGTC, false, false)
 ```
 
@@ -120,9 +125,9 @@ The `SignatureType` field tells Polymarket how to verify your signatures:
 
 ```go
 client, err := clob.NewSignerClient(clob.Config{
-    PrivateKey:    os.Getenv("POLYMARKET_PRIVATE_KEY"),
-    SignatureType: clob.SignatureTypePolyProxy,
-    FunderAddress: "<your-polymarket-wallet-address>",
+	PrivateKey:    os.Getenv("POLYMARKET_PRIVATE_KEY"),
+	SignatureType: clob.SignatureTypePolyProxy,
+	FunderAddress: "<your-polymarket-wallet-address>",
 })
 ```
 
@@ -172,10 +177,21 @@ Copy `.env.example` to `.env` for a full set of required variables.
 API errors are returned as `*clob.APIError` and expose the HTTP status code and body. Use the package-level sentinel errors with `errors.Is` for common cases:
 
 ```go
-if errors.Is(err, clob.ErrNotFound)    { /* 404 */ }
-if errors.Is(err, clob.ErrRateLimit)   { /* 429 */ }
-if errors.Is(err, clob.ErrGeoBlocked)  { /* 451 */ }
-if errors.Is(err, clob.ErrUnauthorized){ /* 401/403 */ }
+if errors.Is(err, clob.ErrNotFound) {
+	// 404
+}
+
+if errors.Is(err, clob.ErrRateLimit) {
+	// 429
+}
+
+if errors.Is(err, clob.ErrGeoBlocked) {
+	// 451
+}
+
+if errors.Is(err, clob.ErrUnauthorized) {
+	// 401/403
+}
 ```
 
 ## Contributing
