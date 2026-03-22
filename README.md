@@ -4,7 +4,6 @@
 [![CI](https://github.com/nijaru/go-clob-client/actions/workflows/ci.yml/badge.svg)](https://github.com/nijaru/go-clob-client/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/nijaru/go-clob-client)](https://goreportcard.com/report/github.com/nijaru/go-clob-client)
 
-
 > [!WARNING]
 > Unofficial, community-maintained SDK. Not extensively tested in production trading environments. Use at your own risk.
 
@@ -12,29 +11,21 @@ Go client for the [Polymarket](https://polymarket.com) Central Limit Order Book 
 
 ## Table of Contents
 
-- [Overview](#overview)
 - [Install](#install)
-- [Client Tiers](#client-tiers)
 - [Quickstart](#quickstart)
   - [Read-Only Access](#read-only-access)
   - [Authenticated Trading](#authenticated-trading)
   - [Pagination Iterators](#pagination-iterators)
+- [Client Tiers](#client-tiers)
 - [Wallet Types](#wallet-types)
   - [Signature Types](#signature-types)
   - [Funder Address](#funder-address)
   - [Token Allowances (MetaMask/EOA)](#token-allowances)
 - [Features](#features)
 - [Examples](#examples)
+- [Error Handling](#error-handling)
 - [Contributing](#contributing)
 - [About Polymarket](#about-polymarket)
-
-## Overview
-
-- **Type-level auth guards** — three client tiers (`Client`, `SignerClient`, `AuthenticatedClient`) prevent calling protected endpoints without credentials at compile time.
-- **Full API coverage** — CLOB REST + WebSocket, RFQ, Gamma, Data, Bridge, and CTF on-chain operations.
-- **Go 1.26** — range-over-function iterators for pagination, `json/v2` strict decoding, typed error sentinels.
-- **Resilient** — built-in rate limiting, exponential backoff retries, automatic heartbeats, concurrent-safe caches.
-
 
 ## Install
 
@@ -43,24 +34,6 @@ go get github.com/nijaru/go-clob-client/clob
 ```
 
 Requires **Go 1.26.1+**.
-
-## Client Tiers
-
-The SDK enforces authentication requirements through a three-tier hierarchy — you cannot call trading methods on an unauthenticated client.
-
-| Tier | Constructor | Auth Required | Capabilities |
-|------|------------|---------------|--------------|
-| `Client` | `NewClient` | None | Public market data, orderbooks, prices |
-| `SignerClient` | `NewSignerClient` | Private key | Order building & signing, API key management |
-| `AuthenticatedClient` | `NewAuthenticatedClient` | Private key + API creds | Order posting, account management, heartbeats |
-
-You can also upgrade incrementally:
-
-```go
-base, _ := clob.NewClient(clob.Config{})
-signer, _ := base.AsSigner(privateKey, clob.SignatureTypeEOA, "")
-authed := signer.AsAuthenticated(creds, nil)
-```
 
 ## Quickstart
 
@@ -109,7 +82,7 @@ resp, err := client.CreateAndPostOrder(ctx, clob.OrderArgs{
 
 ### Pagination Iterators
 
-All list endpoints expose both a slice variant and a Go 1.23+ range-over-function iterator for memory-efficient streaming:
+All list endpoints expose both a slice variant and a Go 1.26 range-over-function iterator for memory-efficient streaming:
 
 ```go
 for order, err := range client.IterOpenOrders(ctx, clob.OpenOrderParams{}) {
@@ -118,6 +91,24 @@ for order, err := range client.IterOpenOrders(ctx, clob.OpenOrderParams{}) {
     }
     fmt.Printf("Order ID: %s\n", order.ID)
 }
+```
+
+## Client Tiers
+
+The SDK enforces authentication requirements through a three-tier hierarchy — you cannot call trading methods on an unauthenticated client.
+
+| Tier | Constructor | Auth Required | Capabilities |
+|------|------------|---------------|--------------|
+| `Client` | `NewClient` | None | Public market data, orderbooks, prices |
+| `SignerClient` | `NewSignerClient` | Private key | Order building & signing, API key management |
+| `AuthenticatedClient` | `NewAuthenticatedClient` | Private key + API creds | Order posting, account management, heartbeats |
+
+You can also upgrade incrementally:
+
+```go
+base, _ := clob.NewClient(clob.Config{})
+signer, _ := base.AsSigner(privateKey, clob.SignatureTypeEOA, "")
+authed := signer.AsAuthenticated(creds, nil)
 ```
 
 ## Wallet Types
