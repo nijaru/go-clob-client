@@ -11,6 +11,7 @@ Go client for the [Polymarket](https://polymarket.com) Central Limit Order Book 
 
 ## Table of Contents
 
+- [Features](#features)
 - [Install](#install)
 - [Quickstart](#quickstart)
   - [Read-Only Access](#read-only-access)
@@ -21,11 +22,22 @@ Go client for the [Polymarket](https://polymarket.com) Central Limit Order Book 
   - [Signature Types](#signature-types)
   - [Funder Address](#funder-address)
   - [Token Allowances (MetaMask/EOA)](#token-allowances)
-- [Features](#features)
 - [Examples](#examples)
 - [Error Handling](#error-handling)
 - [Contributing](#contributing)
 - [About Polymarket](#about-polymarket)
+
+## Features
+
+- **CLOB**: full REST + WebSocket (market and user channels).
+- **Heartbeats**: automated background heartbeats with ID rotation to keep orders live.
+- **Batch orders**: post and cancel up to 15 orders per request.
+- **RFQ**: submit and query request-for-quote flows.
+- **Gamma**: market and event discovery, search, tags, and metadata.
+- **Data**: positions, trades, leaderboards, and user analytics.
+- **Bridge**: cross-chain deposit addresses (EVM, Solana, Bitcoin).
+- **CTF**: on-chain split, merge, and redeem operations.
+- **Builder auth**: dual L2/builder header flows for institutional integrations.
 
 ## Install
 
@@ -149,18 +161,6 @@ Before Polymarket can execute trades you must grant the exchange contracts permi
 **Conditional Tokens** (`0x4D97DCd97eC945f40cF65F87097ACe5EA0476045`): same three contracts as above.
 
 **You only need to do this once per wallet.** See `examples/clob/ctf_operations` for a Go implementation.
-
-## Features
-
-- **CLOB**: full REST + WebSocket (market and user channels).
-- **Heartbeats**: automated background heartbeats with ID rotation to keep orders live.
-- **Batch orders**: post and cancel up to 15 orders per request.
-- **RFQ**: submit and query request-for-quote flows.
-- **Gamma**: market and event discovery, search, tags, and metadata.
-- **Data**: positions, trades, leaderboards, and user analytics.
-- **Bridge**: cross-chain deposit addresses (EVM, Solana, Bitcoin).
-- **CTF**: on-chain split, merge, and redeem operations.
-- **Builder auth**: dual L2/builder header flows for institutional integrations.
 
 ## Examples
 
