@@ -133,14 +133,14 @@ type OrderEvent struct {
 // TradeEvent is emitted when a user's order is filled (partially or fully).
 type TradeEvent struct {
 	BaseEvent
-	TradeID   string    `json:"trade_id"`
-	AssetID   string    `json:"asset_id"`
-	Market    string    `json:"market"`
-	Price     string    `json:"price"`
-	Size      string    `json:"size"`
-	Side      clob.Side `json:"side"`
-	Status    string    `json:"status"`
-	Timestamp string    `json:"timestamp"`
+	TradeID   string      `json:"trade_id"`
+	AssetID   string      `json:"asset_id"`
+	Market    string      `json:"market"`
+	Price     string      `json:"price"`
+	Size      string      `json:"size"`
+	Side      clob.Side   `json:"side"`
+	Status    TradeStatus `json:"status"`
+	Timestamp string      `json:"timestamp"`
 }
 
 // BestBidAskEvent is emitted when the best bid or ask for a market changes.
@@ -201,4 +201,15 @@ const (
 	OrderStatusCanceled OrderStatus = "CANCELED"
 	OrderStatusFilled   OrderStatus = "FILLED"
 	OrderStatusExpired  OrderStatus = "EXPIRED"
+	OrderStatusRetrying OrderStatus = "RETRYING"
+	OrderStatusFailed   OrderStatus = "FAILED"
+)
+
+// TradeStatus represents the lifecycle state of a trade as streamed by the user channel.
+type TradeStatus string
+
+const (
+	TradeStatusMatched  TradeStatus = "matched"
+	TradeStatusRetrying TradeStatus = "RETRYING"
+	TradeStatusFailed   TradeStatus = "FAILED"
 )

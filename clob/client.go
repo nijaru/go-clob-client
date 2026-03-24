@@ -253,9 +253,10 @@ func (c *SignerClient) AsAuthenticated(
 	signerCopy.Client = &baseCopy
 
 	ac := &AuthenticatedClient{
-		SignerClient: &signerCopy,
-		creds:        &creds,
-		builderAuth:  builder,
+		SignerClient:      &signerCopy,
+		creds:             &creds,
+		builderAuth:       builder,
+		heartbeatInterval: 5 * time.Second,
 	}
 	ac.http.Headers = ac.addAuthHeaders
 	return ac
@@ -308,6 +309,10 @@ func (c *AuthenticatedClient) Shutdown(ctx context.Context) error {
 }
 
 func (c *AuthenticatedClient) startHeartbeatLoop() {
+	if c.heartbeatInterval == 0 {
+		c.heartbeatInterval = 5 * time.Second
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	c.heartbeatCancel = cancel
 	c.heartbeatDone = make(chan struct{})
