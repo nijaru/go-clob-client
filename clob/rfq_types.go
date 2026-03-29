@@ -94,14 +94,14 @@ type wireRFQOrder struct {
 	MakerAmount   string        `json:"makerAmount"`
 	TakerAmount   string        `json:"takerAmount"`
 	Expiration    uint64        `json:"expiration"`
-	Nonce         string        `json:"nonce"`
+	Nonce         uint64        `json:"nonce"`
 	FeeRateBps    string        `json:"feeRateBps"`
 	Side          Side          `json:"side"`
 	SignatureType SignatureType `json:"signatureType"`
 	Signature     string        `json:"signature"`
 }
 
-// marshalRFQOrder encodes an RFQ accept/approve payload with numeric salt and expiration.
+// marshalRFQOrder encodes an RFQ accept/approve payload with numeric salt, expiration, and nonce.
 func marshalRFQOrder(requestID, quoteID, owner string, o SignedOrder) ([]byte, error) {
 	salt, err := strconv.ParseUint(o.Salt, 10, 64)
 	if err != nil {
@@ -110,6 +110,10 @@ func marshalRFQOrder(requestID, quoteID, owner string, o SignedOrder) ([]byte, e
 	expiration, err := strconv.ParseUint(o.Expiration, 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("parse order expiration: %w", err)
+	}
+	nonce, err := strconv.ParseUint(o.Nonce, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("parse order nonce: %w", err)
 	}
 
 	return json.Marshal(wireRFQOrder{
@@ -124,7 +128,7 @@ func marshalRFQOrder(requestID, quoteID, owner string, o SignedOrder) ([]byte, e
 		MakerAmount:   o.MakerAmount,
 		TakerAmount:   o.TakerAmount,
 		Expiration:    expiration,
-		Nonce:         o.Nonce,
+		Nonce:         nonce,
 		FeeRateBps:    o.FeeRateBps,
 		Side:          o.Side,
 		SignatureType: o.SignatureType,
@@ -138,8 +142,12 @@ func (r AcceptRFQQuoteRequest) MarshalJSON() ([]byte, error) {
 }
 
 // AcceptRFQQuoteResponse is the response for accepting a quote.
-// It returns the resulting trade IDs.
-type AcceptRFQQuoteResponse struct {
+// The server returns plain text "OK"; this type is a unit confirmation.
+type AcceptRFQQuoteResponse struct{}
+
+// ApproveRFQOrderResponse is the response for approving an RFQ order.
+// It returns the resulting trade IDs queued for on-chain execution.
+type ApproveRFQOrderResponse struct {
 	TradeIDs []string `json:"tradeIds"`
 }
 

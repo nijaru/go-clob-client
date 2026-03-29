@@ -82,6 +82,7 @@ func TestApproveRFQOrderMarshalJSON(t *testing.T) {
 		SignedOrder: SignedOrder{
 			Salt:       "999",
 			Expiration: "0",
+			Nonce:      "0",
 		},
 	}
 
@@ -112,6 +113,7 @@ func TestMarshalRFQOrderInvalidSalt(t *testing.T) {
 		SignedOrder: SignedOrder{
 			Salt:       "not-a-number",
 			Expiration: "0",
+			Nonce:      "0",
 		},
 	}
 
@@ -133,6 +135,7 @@ func TestMarshalRFQOrderInvalidExpiration(t *testing.T) {
 		SignedOrder: SignedOrder{
 			Salt:       "1",
 			Expiration: "abc",
+			Nonce:      "0",
 		},
 	}
 
@@ -184,12 +187,14 @@ func TestRFQSurfaces(t *testing.T) {
 				return
 			}
 		case rfqRequestAcceptEndpoint:
-			data, _ := json.Marshal(AcceptRFQQuoteResponse{
+			// Server returns plain text "OK" for accept.
+			w.Header().Set("Content-Type", "text/plain")
+			w.Write([]byte("OK"))
+		case rfqQuoteApproveEndpoint:
+			data, _ := json.Marshal(ApproveRFQOrderResponse{
 				TradeIDs: []string{"trade-1"},
 			})
 			w.Write(data)
-		case rfqQuoteApproveEndpoint:
-			w.WriteHeader(http.StatusOK)
 		case rfqBestQuoteEndpoint:
 			data, _ := json.Marshal(RFQQuote{
 				ID:        "quote-1",
@@ -262,33 +267,34 @@ func TestRFQSurfaces(t *testing.T) {
 		t.Errorf("unexpected best quote id: %s", best.ID)
 	}
 
-	// Accept Quote
-	resp, err := client.AcceptRFQQuote(ctx, AcceptRFQQuoteRequest{
+	// Accept Quote — server returns plain text "OK"
+	if err := client.AcceptRFQQuote(ctx, AcceptRFQQuoteRequest{
 		RequestID: "rfq-1",
 		QuoteID:   "quote-1",
 		SignedOrder: SignedOrder{
 			Salt:       "123",
 			Expiration: "0",
+			Nonce:      "0",
 		},
-	})
-	if err != nil {
+	}); err != nil {
 		t.Fatalf("accept rfq quote: %v", err)
 	}
-	if len(resp.TradeIDs) != 1 || resp.TradeIDs[0] != "trade-1" {
-		t.Errorf("unexpected accepted trade ids: %v", resp.TradeIDs)
-	}
 
-	// Approve Order
-	err = client.ApproveRFQOrder(ctx, ApproveRFQOrderRequest{
+	// Approve Order — server returns JSON with trade IDs
+	approved, err := client.ApproveRFQOrder(ctx, ApproveRFQOrderRequest{
 		RequestID: "rfq-1",
 		QuoteID:   "quote-1",
 		SignedOrder: SignedOrder{
 			Salt:       "456",
 			Expiration: "0",
+			Nonce:      "0",
 		},
 	})
 	if err != nil {
 		t.Fatalf("approve rfq order: %v", err)
+	}
+	if len(approved.TradeIDs) != 1 || approved.TradeIDs[0] != "trade-1" {
+		t.Errorf("unexpected approve trade ids: %v", approved.TradeIDs)
 	}
 	// Cancel Quote
 	err = client.CancelRFQQuote(ctx, "quote-1")

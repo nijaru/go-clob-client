@@ -58,9 +58,7 @@ func (c Config) normalized() Config {
 		c.Host = DefaultHost
 	}
 	if c.HTTPClient == nil {
-		httpClient := http.DefaultClient
-		httpClient.Timeout = 15 * time.Second
-		c.HTTPClient = httpClient
+		c.HTTPClient = &http.Client{Timeout: 15 * time.Second}
 	}
 	if c.UserAgent == "" {
 		c.UserAgent = "go-clob-client/gamma"

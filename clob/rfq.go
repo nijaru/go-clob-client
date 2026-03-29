@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/go-json-experiment/json/jsontext"
 
@@ -50,8 +51,8 @@ func (c *AuthenticatedClient) GetRFQRequests(
 		for _, id := range params.RequestIDs {
 			query.Add("requestIds", id)
 		}
-		for _, m := range params.Markets {
-			query.Add("markets", m)
+		if len(params.Markets) > 0 {
+			query.Set("markets", strings.Join(params.Markets, ","))
 		}
 	}
 
@@ -82,9 +83,11 @@ func (c *AuthenticatedClient) CancelRFQQuote(ctx context.Context, quoteID string
 	return c.deleteJSON(ctx, rfqQuoteEndpoint, body, polyhttp.AuthL2Builder, nil)
 }
 
-// GetRFQRequesterQuotes retrieves quotes on requests created by the authenticated user.
+// GetRFQQuotes retrieves RFQ quotes visible to the authenticated user.
+// As requester, returns quotes on requests you created.
+// As quoter, returns quotes you have submitted.
 // Level 2 Auth required.
-func (c *AuthenticatedClient) GetRFQRequesterQuotes(
+func (c *AuthenticatedClient) GetRFQQuotes(
 	ctx context.Context,
 	params *RFQQuoteFilterParams,
 ) (*RFQQuotesResponse, error) {
@@ -105,36 +108,7 @@ func (c *AuthenticatedClient) GetRFQRequesterQuotes(
 	}
 
 	var resp RFQQuotesResponse
-	if err := c.getJSON(ctx, rfqRequesterQuotesEndpoint, query, polyhttp.AuthL2Builder, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
-
-// GetRFQQuoterQuotes retrieves quotes created by the authenticated user.
-// Level 2 Auth required.
-func (c *AuthenticatedClient) GetRFQQuoterQuotes(
-	ctx context.Context,
-	params *RFQQuoteFilterParams,
-) (*RFQQuotesResponse, error) {
-	query := url.Values{}
-	if params != nil {
-		if params.Limit > 0 {
-			query.Set("limit", strconv.Itoa(params.Limit))
-		}
-		if params.Offset != "" {
-			query.Set("offset", params.Offset)
-		}
-		for _, id := range params.RequestIDs {
-			query.Add("requestIds", id)
-		}
-		for _, id := range params.QuoteIDs {
-			query.Add("quoteIds", id)
-		}
-	}
-
-	var resp RFQQuotesResponse
-	if err := c.getJSON(ctx, rfqQuoterQuotesEndpoint, query, polyhttp.AuthL2Builder, &resp); err != nil {
+	if err := c.getJSON(ctx, rfqDataQuotesEndpoint, query, polyhttp.AuthL2Builder, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -157,26 +131,27 @@ func (c *AuthenticatedClient) GetRFQBestQuote(
 }
 
 // AcceptRFQQuote accepts a specific RFQ quote.
-// Returns an AcceptRFQQuoteResponse containing the resulting trade IDs.
+// The server returns plain text "OK" on success.
 // Level 2 Auth required.
 func (c *AuthenticatedClient) AcceptRFQQuote(
 	ctx context.Context,
 	params AcceptRFQQuoteRequest,
-) (*AcceptRFQQuoteResponse, error) {
-	var resp AcceptRFQQuoteResponse
-	if err := c.postJSON(ctx, rfqRequestAcceptEndpoint, params, polyhttp.AuthL2Builder, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
+) error {
+	return c.postJSON(ctx, rfqRequestAcceptEndpoint, params, polyhttp.AuthL2Builder, nil)
 }
 
-// ApproveRFQOrder allows a quoter to approve the final order.
+// ApproveRFQOrder allows a quoter to approve the final order during the last-look window.
+// Returns trade IDs queued for on-chain execution.
 // Level 2 Auth required.
 func (c *AuthenticatedClient) ApproveRFQOrder(
 	ctx context.Context,
 	params ApproveRFQOrderRequest,
-) error {
-	return c.postJSON(ctx, rfqQuoteApproveEndpoint, params, polyhttp.AuthL2Builder, nil)
+) (*ApproveRFQOrderResponse, error) {
+	var resp ApproveRFQOrderResponse
+	if err := c.postJSON(ctx, rfqQuoteApproveEndpoint, params, polyhttp.AuthL2Builder, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
 }
 
 // GetRFQConfig retrieves the current RFQ configuration.

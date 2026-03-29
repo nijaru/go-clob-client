@@ -72,13 +72,12 @@ const (
 )
 
 const (
-	rfqRequestEndpoint         = "/rfq/request"
-	rfqQuoteEndpoint           = "/rfq/quote"
-	rfqRequestAcceptEndpoint   = "/rfq/request/accept"
-	rfqQuoteApproveEndpoint    = "/rfq/quote/approve"
-	rfqDataRequestsEndpoint    = "/rfq/data/requests"
-	rfqRequesterQuotesEndpoint = "/rfq/data/requester/quotes"
-	rfqQuoterQuotesEndpoint    = "/rfq/data/quoter/quotes"
-	rfqBestQuoteEndpoint       = "/rfq/data/best-quote"
-	rfqConfigEndpoint          = "/rfq/config"
+	rfqRequestEndpoint       = "/rfq/request"
+	rfqQuoteEndpoint         = "/rfq/quote"
+	rfqRequestAcceptEndpoint = "/rfq/request/accept"
+	rfqQuoteApproveEndpoint  = "/rfq/quote/approve"
+	rfqDataRequestsEndpoint  = "/rfq/data/requests"
+	rfqDataQuotesEndpoint    = "/rfq/data/quotes"
+	rfqBestQuoteEndpoint     = "/rfq/data/best-quote"
+	rfqConfigEndpoint        = "/rfq/config"
 )
