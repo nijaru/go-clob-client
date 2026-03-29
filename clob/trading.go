@@ -304,6 +304,14 @@ func (c *SignerClient) buildSignedLimitOrder(
 
 	price := userOrder.Price
 	size := userOrder.Size
+
+	if decimalPlaces(size) > roundConfig.Size {
+		return nil, fmt.Errorf(
+			"size %s exceeds maximum %d decimal places for tick size %q",
+			size, roundConfig.Size, options.TickSize,
+		)
+	}
+
 	rawPrice := roundNormal(price, roundConfig.Price)
 
 	var rawMakerAmount udecimal.Decimal

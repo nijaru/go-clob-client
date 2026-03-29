@@ -281,6 +281,37 @@ func TestCreateMarketOrderDerivesPriceFromBook(t *testing.T) {
 	}
 }
 
+func TestCreateOrderRejectsExcessSizePrecision(t *testing.T) {
+	t.Parallel()
+
+	server := newTradingTestServer(t, nil)
+	defer server.Close()
+
+	client, err := NewAuthenticatedClient(Config{
+		Host:       server.URL,
+		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
+		Credentials: &Credentials{
+			Key:        "api-key",
+			Secret:     "c2VjcmV0",
+			Passphrase: "pass",
+		},
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+
+	// Tick size 0.01 → roundConfig.Size = 2; size with 3 dp should be rejected.
+	_, err = client.CreateOrder(t.Context(), OrderArgs{
+		TokenID: "100",
+		Price:   udecimal.MustParse("0.45"),
+		Size:    udecimal.MustParse("10.123"),
+		Side:    SideBuy,
+	}, &CreateOrderOptions{TickSize: TickSizeHundredth, NegRisk: new(false)})
+	if err == nil {
+		t.Fatal("expected error for size with excess decimal places")
+	}
+}
+
 func TestCreateOrderReturnsSaltGenerationError(t *testing.T) {
 	t.Parallel()
 
