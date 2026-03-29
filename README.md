@@ -16,7 +16,6 @@ Go client for the [Polymarket](https://polymarket.com) Central Limit Order Book 
 - **Batch orders**: post and cancel up to 15 orders per request.
 - **RFQ**: submit and query request-for-quote flows.
 - **Gamma**: market and event discovery, search, tags, and metadata.
-- **Data**: positions, trades, leaderboards, and user analytics.
 - **Bridge**: cross-chain deposit addresses (EVM, Solana, Bitcoin).
 - **CTF**: on-chain split, merge, and redeem operations.
 - **Builder auth**: dual L2/builder header flows for institutional integrations.
