@@ -27,11 +27,13 @@ type Client struct {
 	conn     *websocket.Conn
 	connDone chan struct{}
 
-	msgs   chan *RtdsMessage
-	errs   chan error
-	stop   chan struct{}
-	cancel context.CancelFunc
-	closed bool
+	msgs       chan *RtdsMessage
+	errs       chan error
+	stop       chan struct{}
+	ctx        context.Context
+	cancel     context.CancelFunc
+	connCancel context.CancelFunc
+	closed     bool
 
 	autoReconnect bool
 	subsMu        sync.RWMutex
@@ -47,12 +49,15 @@ func NewClient(url string, logger *slog.Logger) *Client {
 	if logger == nil {
 		logger = slog.Default()
 	}
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Client{
 		url:           url,
 		logger:        logger.With("pkg", "rtds"),
 		msgs:          make(chan *RtdsMessage, 1024),
 		errs:          make(chan error, 100),
 		stop:          make(chan struct{}),
+		ctx:           ctx,
+		cancel:        cancel,
 		autoReconnect: true,
 	}
 }
@@ -84,13 +89,18 @@ func (c *Client) connect(ctx context.Context) error {
 		return fmt.Errorf("dial: %w", err)
 	}
 
-	loopCtx, cancel := context.WithCancel(context.Background())
+	loopCtx, cancel := context.WithCancel(c.ctx)
 
 	c.mu.Lock()
 	c.conn = conn
 	c.connDone = make(chan struct{})
-	c.cancel = cancel
+	oldCancel := c.connCancel
+	c.connCancel = cancel
 	c.mu.Unlock()
+
+	if oldCancel != nil {
+		oldCancel()
+	}
 
 	go c.readLoop(loopCtx)
 	go c.heartbeatLoop(loopCtx)
@@ -123,6 +133,7 @@ func (c *Client) Close() error {
 	}
 	c.closed = true
 	cancel := c.cancel
+	connCancel := c.connCancel
 	done := c.connDone
 	conn := c.conn
 	c.mu.Unlock()
@@ -130,6 +141,9 @@ func (c *Client) Close() error {
 	close(c.stop)
 	if cancel != nil {
 		cancel()
+	}
+	if connCancel != nil {
+		connCancel()
 	}
 	if conn != nil {
 		err := conn.Close(websocket.StatusNormalClosure, "")
@@ -397,6 +411,8 @@ func (c *Client) reportError(err error) {
 func (c *Client) attemptReconnect() {
 	backoff := 1 * time.Second
 	maxBackoff := 60 * time.Second
+	timer := time.NewTimer(backoff)
+	defer timer.Stop()
 
 	for {
 		c.mu.Lock()
@@ -407,7 +423,7 @@ func (c *Client) attemptReconnect() {
 		c.mu.Unlock()
 
 		c.logger.Info("attempting to reconnect", "backoff", backoff)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(c.ctx, 10*time.Second)
 		err := c.connect(ctx)
 		cancel()
 
@@ -417,13 +433,14 @@ func (c *Client) attemptReconnect() {
 		}
 
 		select {
-		case <-c.stop:
+		case <-c.ctx.Done():
 			return
-		case <-time.After(backoff):
+		case <-timer.C:
 			backoff *= 2
 			if backoff > maxBackoff {
 				backoff = maxBackoff
 			}
+			timer.Reset(backoff)
 		}
 	}
 }
