@@ -98,6 +98,7 @@ func (c *SignerClient) CreateMarketOrder(
 			userOrder.TokenID,
 			userOrder.Side,
 			userOrder.Amount,
+			userOrder.AmountKind,
 			userOrder.OrderType,
 		)
 		if err != nil {
@@ -209,13 +210,21 @@ func (c *AuthenticatedClient) BuildPostOrderRequest(
 }
 
 // CalculateMarketPrice derives a marketable price from the current order book.
+// amountKind controls how amount is interpreted for BUY orders:
+// AmountUSDC accumulates USDC notional (size×price) until ≥ amount;
+// AmountShares accumulates share count (size) until ≥ amount.
+// SideSell always interprets amount as shares; passing AmountUSDC for a sell is an error.
 func (c *Client) CalculateMarketPrice(
 	ctx context.Context,
 	tokenID string,
 	side Side,
 	amount udecimal.Decimal,
+	amountKind AmountKind,
 	orderType OrderType,
 ) (udecimal.Decimal, error) {
+	if side == SideSell && amountKind == AmountUSDC {
+		return udecimal.Zero, fmt.Errorf("sell orders must specify amount in shares, not USDC")
+	}
 	if orderType == "" {
 		orderType = OrderTypeFOK
 	}
@@ -265,9 +274,10 @@ func (c *Client) CalculateMarketPrice(
 	// Top of the book is at the end of the array (API returns Bids ASC, Asks DESC).
 	for i := len(parsedLevels) - 1; i >= 0; i-- {
 		level := parsedLevels[i]
-		if side == SideBuy {
+		if side == SideBuy && amountKind == AmountUSDC {
 			sum = sum.Add(level.Size.Mul(level.Price))
 		} else {
+			// SideSell always uses shares; SideBuy + AmountShares also uses shares.
 			sum = sum.Add(level.Size)
 		}
 
@@ -382,6 +392,9 @@ func (c *SignerClient) buildSignedMarketOrder(
 			return nil, fmt.Errorf("invalid amount kind %d", userOrder.AmountKind)
 		}
 	case SideSell:
+		if userOrder.AmountKind == AmountUSDC {
+			return nil, fmt.Errorf("sell orders must specify amount in shares, not USDC")
+		}
 		rawMakerAmount = roundDown(amount, roundConfig.Size)
 		rawTakerAmount = rawMakerAmount.Mul(price)
 		if decimalPlaces(rawTakerAmount) > roundConfig.Amount {
@@ -550,6 +563,9 @@ func validateMarketOrderArgs(order MarketOrderArgs) error {
 	}
 	if order.Side != SideBuy && order.Side != SideSell {
 		return fmt.Errorf("invalid side %q", order.Side)
+	}
+	if order.Side == SideSell && order.AmountKind == AmountUSDC {
+		return fmt.Errorf("sell orders must specify amount in shares, not USDC")
 	}
 	return nil
 }

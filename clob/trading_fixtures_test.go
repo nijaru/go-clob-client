@@ -238,11 +238,12 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 			},
 			build: func(client *SignerClient) (*SignedOrder, error) {
 				return client.CreateMarketOrder(t.Context(), MarketOrderArgs{
-					TokenID:   "123",
-					Price:     udecimal.MustParse("0.56"),
-					Amount:    udecimal.MustParse("100"),
-					Side:      SideSell,
-					OrderType: OrderTypeFOK,
+					TokenID:    "123",
+					Price:      udecimal.MustParse("0.56"),
+					Amount:     udecimal.MustParse("100"),
+					AmountKind: AmountShares,
+					Side:       SideSell,
+					OrderType:  OrderTypeFOK,
 				}, &CreateOrderOptions{TickSize: TickSizeHundredth, NegRisk: new(false)})
 			},
 			expect: SignedOrder{
