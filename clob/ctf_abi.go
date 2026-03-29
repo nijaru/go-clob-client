@@ -92,8 +92,10 @@ const negRiskAdapterABIJSON = `[
   }
 ]`
 
-var ctfABI abi.ABI
-var negRiskABI abi.ABI
+var (
+	ctfABI     abi.ABI
+	negRiskABI abi.ABI
+)
 
 func init() {
 	var err error
