@@ -54,6 +54,10 @@ func (s *Signer) Address() common.Address {
 	return s.address
 }
 
+func (s *Signer) PrivateKey() *ecdsa.PrivateKey {
+	return s.key
+}
+
 func SignTypedData(signer *Signer, typedData apitypes.TypedData) (string, error) {
 	digest, _, err := apitypes.TypedDataAndHash(typedData)
 	if err != nil {

@@ -66,12 +66,6 @@ const (
 )
 
 const (
-	splitPositionsEndpoint  = "/split-positions"
-	mergePositionsEndpoint  = "/merge-positions"
-	redeemPositionsEndpoint = "/redeem-positions"
-)
-
-const (
 	rfqRequestEndpoint       = "/rfq/request"
 	rfqQuoteEndpoint         = "/rfq/quote"
 	rfqRequestAcceptEndpoint = "/rfq/request/accept"

@@ -26,6 +26,7 @@ type Client struct {
 	useServerTime bool
 	http          *polyhttp.Client
 	geoblockHTTP  *polyhttp.Client
+	rpcURL        string
 
 	tickSizeMu         *sync.RWMutex
 	tickSizeCache      map[string]TickSize
@@ -50,6 +51,7 @@ type SignerClient struct {
 	signatureType SignatureType
 	funderAddress string
 	saltGenerator func() (uint64, error)
+	rpcURL        string
 }
 
 // AuthenticatedClient extends the base client with methods requiring API credentials (L2).
@@ -132,6 +134,7 @@ func newBase(config Config) *Client {
 		rtdsHost:           config.RTDSHost,
 		chainID:            config.ChainID,
 		useServerTime:      config.UseServerTime,
+		rpcURL:             config.RPCURL,
 		tickSizeMu:         &sync.RWMutex{},
 		tickSizeCache:      make(map[string]TickSize),
 		tickSizeTimestamps: make(map[string]time.Time),
@@ -180,6 +183,7 @@ func newSignerFrom(base *Client, config Config) (*SignerClient, error) {
 		signatureType: config.SignatureType,
 		funderAddress: funderAddress,
 		saltGenerator: generateSalt,
+		rpcURL:        config.RPCURL,
 	}
 	base.http.Headers = sc.addAuthHeaders
 	return sc, nil
@@ -228,6 +232,7 @@ func (c *Client) AsSigner(
 		signatureType: sigType,
 		funderAddress: funderAddress,
 		saltGenerator: generateSalt,
+		rpcURL:        c.rpcURL,
 	}
 	sc.http.Headers = sc.addAuthHeaders
 	return sc, nil
@@ -245,6 +250,7 @@ func (c *SignerClient) AsAuthenticated(
 			signatureType: c.signatureType,
 			funderAddress: c.funderAddress,
 			saltGenerator: c.saltGenerator,
+			rpcURL:        c.rpcURL,
 		},
 		creds:             &creds,
 		builderAuth:       builder,

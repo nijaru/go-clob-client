@@ -1,18 +1,79 @@
 package clob
 
-// SplitArgs represents the arguments for a split operation.
-type SplitArgs struct {
-	ConditionID string `json:"conditionId"`
-	Amount      string `json:"amount"`
+import (
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/common"
+)
+
+var BinaryPartition = []*big.Int{big.NewInt(1), big.NewInt(2)}
+
+type SplitPositionRequest struct {
+	CollateralToken    common.Address
+	ParentCollectionID common.Hash
+	ConditionID        common.Hash
+	Partition          []*big.Int
+	Amount             *big.Int
 }
 
-// MergeArgs represents the arguments for a merge operation.
-type MergeArgs struct {
-	ConditionID string `json:"conditionId"`
-	Amount      string `json:"amount"`
+func SplitBinary(
+	collateral common.Address,
+	conditionID common.Hash,
+	amount *big.Int,
+) SplitPositionRequest {
+	return SplitPositionRequest{
+		CollateralToken:    collateral,
+		ParentCollectionID: common.Hash{},
+		ConditionID:        conditionID,
+		Partition:          BinaryPartition,
+		Amount:             amount,
+	}
 }
 
-// RedeemArgs represents the arguments for a redeem operation.
-type RedeemArgs struct {
-	ConditionID string `json:"conditionId"`
+type MergePositionsRequest struct {
+	CollateralToken    common.Address
+	ParentCollectionID common.Hash
+	ConditionID        common.Hash
+	Partition          []*big.Int
+	Amount             *big.Int
+}
+
+func MergeBinary(
+	collateral common.Address,
+	conditionID common.Hash,
+	amount *big.Int,
+) MergePositionsRequest {
+	return MergePositionsRequest{
+		CollateralToken:    collateral,
+		ParentCollectionID: common.Hash{},
+		ConditionID:        conditionID,
+		Partition:          BinaryPartition,
+		Amount:             amount,
+	}
+}
+
+type RedeemPositionsRequest struct {
+	CollateralToken    common.Address
+	ParentCollectionID common.Hash
+	ConditionID        common.Hash
+	IndexSets          []*big.Int
+}
+
+func RedeemBinary(collateral common.Address, conditionID common.Hash) RedeemPositionsRequest {
+	return RedeemPositionsRequest{
+		CollateralToken:    collateral,
+		ParentCollectionID: common.Hash{},
+		ConditionID:        conditionID,
+		IndexSets:          BinaryPartition,
+	}
+}
+
+type RedeemNegRiskRequest struct {
+	ConditionID common.Hash
+	Amounts     []*big.Int
+}
+
+type TxReceipt struct {
+	Hash        common.Hash
+	BlockNumber uint64
 }

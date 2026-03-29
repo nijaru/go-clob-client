@@ -77,6 +77,9 @@ type Config struct {
 	// Defaults to 0 (no expiration).
 	TickSizeCacheTTL time.Duration
 
+	// RPCURL is the Ethereum JSON-RPC endpoint used for on-chain CTF operations
+	// (split, merge, redeem). Defaults to "https://polygon-rpc.com".
+	RPCURL string
 	// RetryMax is the maximum number of times to retry a failed request.
 	// Defaults to 0 (no retries).
 	RetryMax int
@@ -109,6 +112,10 @@ func (c Config) normalized() Config {
 
 	if c.ChainID == 0 {
 		c.ChainID = PolygonChainID
+	}
+
+	if c.RPCURL == "" {
+		c.RPCURL = "https://polygon-rpc.com"
 	}
 
 	if c.HTTPClient == nil {
