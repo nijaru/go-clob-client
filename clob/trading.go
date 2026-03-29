@@ -225,8 +225,7 @@ func (c *Client) CalculateMarketPrice(
 		return udecimal.Zero, err
 	}
 
-	target := amount
-	if target.Cmp(udecimal.Zero) <= 0 {
+	if amount.Cmp(udecimal.Zero) <= 0 {
 		return udecimal.Zero, fmt.Errorf("amount must be positive")
 	}
 
@@ -244,30 +243,36 @@ func (c *Client) CalculateMarketPrice(
 		return udecimal.Zero, fmt.Errorf("no opposing orders for token %s", tokenID)
 	}
 
+	// Pre-parse the book levels to avoid string conversion in the loop
+	type levelData struct {
+		Price udecimal.Decimal
+		Size  udecimal.Decimal
+	}
+	parsedLevels := make([]levelData, len(levels))
+	for i, l := range levels {
+		p, err := udecimal.Parse(l.Price)
+		if err != nil {
+			return udecimal.Zero, fmt.Errorf("parse price: %w", err)
+		}
+		s, err := udecimal.Parse(l.Size)
+		if err != nil {
+			return udecimal.Zero, fmt.Errorf("parse size: %w", err)
+		}
+		parsedLevels[i] = levelData{Price: p, Size: s}
+	}
+
 	sum := udecimal.Zero
-	// The Polymarket API returns Bids sorted ascending (lowest to highest price)
-	// and Asks sorted descending (highest to lowest price). In both cases,
-	// the "top of the book" (best price) is at the end of the array. Therefore,
-	// iterating backwards always starts at the most competitive price.
-	for i := len(levels) - 1; i >= 0; i-- {
-		level := levels[i]
-		size, err := udecimal.Parse(level.Size)
-		if err != nil {
-			return udecimal.Zero, fmt.Errorf("parse orderbook size: %w", err)
-		}
-		price, err := udecimal.Parse(level.Price)
-		if err != nil {
-			return udecimal.Zero, fmt.Errorf("parse orderbook price: %w", err)
-		}
-
+	// Top of the book is at the end of the array (API returns Bids ASC, Asks DESC).
+	for i := len(parsedLevels) - 1; i >= 0; i-- {
+		level := parsedLevels[i]
 		if side == SideBuy {
-			sum = sum.Add(size.Mul(price))
+			sum = sum.Add(level.Size.Mul(level.Price))
 		} else {
-			sum = sum.Add(size)
+			sum = sum.Add(level.Size)
 		}
 
-		if sum.Cmp(target) >= 0 {
-			return price, nil
+		if sum.Cmp(amount) >= 0 {
+			return level.Price, nil
 		}
 	}
 
@@ -275,11 +280,7 @@ func (c *Client) CalculateMarketPrice(
 		return udecimal.Zero, fmt.Errorf("insufficient liquidity to fill amount %s", amount)
 	}
 
-	firstPrice, err := udecimal.Parse(levels[0].Price)
-	if err != nil {
-		return udecimal.Zero, fmt.Errorf("parse fallback price: %w", err)
-	}
-	return firstPrice, nil
+	return parsedLevels[0].Price, nil
 }
 
 func (c *SignerClient) buildSignedLimitOrder(

@@ -166,7 +166,7 @@ func (c *Client) doJSON(
 		return fmt.Errorf("create request: %w", err)
 	}
 
-	req.Header.Set("Accept", "*/*")
+	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Connection", "keep-alive")
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", c.UserAgent)
@@ -191,47 +191,55 @@ func (c *Client) doJSON(
 	}
 	defer resp.Body.Close()
 
-	payload, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("read response body: %w", err)
-	}
-
 	if resp.StatusCode >= http.StatusBadRequest {
+		payload, _ := io.ReadAll(resp.Body)
 		return newAPIError(resp, payload, requestBody)
 	}
-	if out == nil || len(payload) == 0 {
+
+	if out == nil {
+		io.Copy(io.Discard, resp.Body)
 		return nil
 	}
 
-	if value, ok := out.(*jsontext.Value); ok {
-		*value = append((*value)[:0], payload...)
+	// Optimization: For certain types, we still need the full payload or special handling
+	switch target := out.(type) {
+	case *jsontext.Value:
+		payload, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("read response body: %w", err)
+		}
+		*target = append((*target)[:0], payload...)
 		return nil
-	}
-
-	if value, ok := out.(*int64); ok {
+	case *int64:
+		payload, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("read response body: %w", err)
+		}
 		parsed, err := strconv.ParseInt(strings.TrimSpace(string(payload)), 10, 64)
 		if err != nil {
 			return fmt.Errorf("decode integer response: %w", err)
 		}
-		*value = parsed
+		*target = parsed
 		return nil
-	}
-
-	if value, ok := out.(*string); ok {
+	case *string:
+		payload, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("read response body: %w", err)
+		}
 		var decoded string
 		if err := json.Unmarshal(payload, &decoded); err == nil {
-			*value = decoded
-			return nil
+			*target = decoded
+		} else {
+			*target = strings.TrimSpace(string(payload))
 		}
-		*value = strings.TrimSpace(string(payload))
+		return nil
+	default:
+		// For everything else, use streaming decode
+		if err := json.UnmarshalRead(resp.Body, out); err != nil {
+			return fmt.Errorf("decode response: %w", err)
+		}
 		return nil
 	}
-
-	if err := json.Unmarshal(payload, out); err != nil {
-		return fmt.Errorf("decode response: %w", err)
-	}
-
-	return nil
 }
 
 func marshalBody(body any) ([]byte, error) {

@@ -185,6 +185,23 @@ func newSignerFrom(base *Client, config Config) (*SignerClient, error) {
 	return sc, nil
 }
 
+func (c *Client) copyBase() *Client {
+	// Deep copy the base client and re-initialize the HTTP transport to allow
+	// different auth headers for upgraded clients (Signer/Authenticated).
+	copy := *c
+	copy.http = &polyhttp.Client{
+		BaseURL:    c.http.BaseURL,
+		HTTPClient: c.http.HTTPClient,
+		UserAgent:  c.http.UserAgent,
+	}
+	copy.geoblockHTTP = &polyhttp.Client{
+		BaseURL:    c.geoblockHTTP.BaseURL,
+		HTTPClient: c.geoblockHTTP.HTTPClient,
+		UserAgent:  c.geoblockHTTP.UserAgent,
+	}
+	return &copy
+}
+
 // NewRTDSClient creates a new RTDS (Real-Time Data Stream) WebSocket client.
 func (c *Client) NewRTDSClient() *rtds.Client {
 	return rtds.NewClient(c.rtdsHost, nil)
@@ -205,22 +222,8 @@ func (c *Client) AsSigner(
 		return nil, err
 	}
 
-	// Deep copy the base client to prevent mutating the shared http transport
-	baseCopy := *c
-	baseCopy.http = &polyhttp.Client{
-		BaseURL:    c.http.BaseURL,
-		HTTPClient: c.http.HTTPClient,
-		UserAgent:  c.http.UserAgent,
-		Headers:    nil, // Will be set below
-	}
-	baseCopy.geoblockHTTP = &polyhttp.Client{
-		BaseURL:    c.geoblockHTTP.BaseURL,
-		HTTPClient: c.geoblockHTTP.HTTPClient,
-		UserAgent:  c.geoblockHTTP.UserAgent,
-	}
-
 	sc := &SignerClient{
-		Client:        &baseCopy,
+		Client:        c.copyBase(),
 		signer:        signer,
 		signatureType: sigType,
 		funderAddress: funderAddress,
@@ -235,25 +238,14 @@ func (c *SignerClient) AsAuthenticated(
 	creds Credentials,
 	builder BuilderAuth,
 ) *AuthenticatedClient {
-	// Deep copy the base client to prevent mutating the shared http transport
-	baseCopy := *(c.Client)
-	baseCopy.http = &polyhttp.Client{
-		BaseURL:    c.http.BaseURL,
-		HTTPClient: c.http.HTTPClient,
-		UserAgent:  c.http.UserAgent,
-		Headers:    nil, // Will be set below
-	}
-	baseCopy.geoblockHTTP = &polyhttp.Client{
-		BaseURL:    c.geoblockHTTP.BaseURL,
-		HTTPClient: c.geoblockHTTP.HTTPClient,
-		UserAgent:  c.geoblockHTTP.UserAgent,
-	}
-
-	signerCopy := *c
-	signerCopy.Client = &baseCopy
-
 	ac := &AuthenticatedClient{
-		SignerClient:      &signerCopy,
+		SignerClient: &SignerClient{
+			Client:        c.Client.copyBase(),
+			signer:        c.signer,
+			signatureType: c.signatureType,
+			funderAddress: c.funderAddress,
+			saltGenerator: c.saltGenerator,
+		},
 		creds:             &creds,
 		builderAuth:       builder,
 		heartbeatInterval: 5 * time.Second,
@@ -672,16 +664,29 @@ func (c *Client) doJSON(
 
 func (c *Client) withRetry(ctx context.Context, retryable bool, fn func() error) error {
 	if !retryable {
+		if c.rateLimiter != nil {
+			if err := c.rateLimiter.Wait(ctx); err != nil {
+				return err
+			}
+		}
 		return fn()
 	}
 
 	var lastErr error
+	var timer *time.Timer
+	defer func() {
+		if timer != nil {
+			timer.Stop()
+		}
+	}()
+
 	for i := 0; i <= c.retryMax; i++ {
 		if c.rateLimiter != nil {
 			if err := c.rateLimiter.Wait(ctx); err != nil {
 				return err
 			}
 		}
+
 		err := fn()
 		if err == nil {
 			return nil
@@ -703,18 +708,22 @@ func (c *Client) withRetry(ctx context.Context, retryable bool, fn func() error)
 			shouldRetry = true
 		}
 
-		if !shouldRetry {
+		if !shouldRetry || i >= c.retryMax {
 			return err
 		}
 
-		if i < c.retryMax {
-			backoff := c.retryBackoff * time.Duration(1<<i)
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(backoff):
-				continue
-			}
+		backoff := c.retryBackoff * time.Duration(1<<i)
+		if timer == nil {
+			timer = time.NewTimer(backoff)
+		} else {
+			timer.Reset(backoff)
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-timer.C:
+			continue
 		}
 	}
 	return lastErr

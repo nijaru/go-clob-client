@@ -244,11 +244,15 @@ func HMACSignature(
 	}
 
 	mac := hmac.New(sha256.New, decoded)
-	mac.Write(strconv.AppendInt(nil, timestamp, 10))
+
+	// Use a pre-allocated buffer to avoid multiple ephemeral allocations
+	var buf [24]byte
+	mac.Write(strconv.AppendInt(buf[:0], timestamp, 10))
 	mac.Write([]byte(method))
 	mac.Write([]byte(requestPath))
 	if len(body) > 0 {
-		mac.Write(body)
+		// Polymarket API expects single quotes to be replaced with double quotes in the signature message
+		mac.Write(bytes.ReplaceAll(body, []byte("'"), []byte("\"")))
 	}
 
 	return base64.URLEncoding.EncodeToString(mac.Sum(nil)), nil

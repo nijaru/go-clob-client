@@ -141,7 +141,7 @@ func (c *AuthenticatedClient) GetOrder(ctx context.Context, orderID string) (*Op
 
 // GetTrades returns all paginated authenticated trades that match the provided filters.
 func (c *AuthenticatedClient) GetTrades(ctx context.Context, params TradeParams) ([]Trade, error) {
-	trades := make([]Trade, 0, 64)
+	trades := make([]Trade, 0, 128)
 	for trade, err := range c.IterTrades(ctx, params) {
 		if err != nil {
 			return nil, err
@@ -397,7 +397,10 @@ func tradesQuery(params TradeParams, nextCursor string) url.Values {
 		query.Set("id", params.ID)
 	}
 	if params.MakerAddress != "" {
-		query.Set("maker_address", params.MakerAddress)
+		query.Set("maker", params.MakerAddress)
+	}
+	if params.TakerAddress != "" {
+		query.Set("taker", params.TakerAddress)
 	}
 	if params.Market != "" {
 		query.Set("market", params.Market)

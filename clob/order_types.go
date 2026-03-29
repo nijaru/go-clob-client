@@ -2,7 +2,6 @@ package clob
 
 import (
 	"fmt"
-	"slices"
 	"strconv"
 
 	json "github.com/go-json-experiment/json"
@@ -32,55 +31,52 @@ type PostOrderResponse struct {
 
 // UnmarshalJSON accepts the field name variants the live API returns for post-order responses.
 func (r *PostOrderResponse) UnmarshalJSON(data []byte) error {
-	type wirePostOrderResponse struct {
-		Success         bool     `json:"success"`
-		OrderID         string   `json:"orderID"`
-		Status          string   `json:"status"`
-		TakingAmount    string   `json:"takingAmount"`
-		MakingAmount    string   `json:"makingAmount"`
-		TradeIDs        []string `json:"trade_ids"`
-		RebateEstimated string   `json:"rebate_estimated"`
-	}
-
-	var wire wirePostOrderResponse
-	if err := json.Unmarshal(data, &wire); err != nil {
-		return err
-	}
-
 	var fields map[string]jsontext.Value
 	if err := json.Unmarshal(data, &fields); err != nil {
 		return err
 	}
 
-	*r = PostOrderResponse{
-		Success:            wire.Success,
-		OrderID:            wire.OrderID,
-		TransactionsHashes: []string{},
-		Status:             wire.Status,
-		TakingAmount:       wire.TakingAmount,
-		MakingAmount:       wire.MakingAmount,
-		TradeIDs:           []string{},
-		RebateEstimated:    wire.RebateEstimated,
+	if v, ok := fields["success"]; ok {
+		json.Unmarshal(v, &r.Success)
+	}
+	if v, ok := fields["status"]; ok {
+		json.Unmarshal(v, &r.Status)
+	}
+	if v, ok := fields["takingAmount"]; ok {
+		json.Unmarshal(v, &r.TakingAmount)
+	}
+	if v, ok := fields["makingAmount"]; ok {
+		json.Unmarshal(v, &r.MakingAmount)
 	}
 
-	if message, ok, err := decodeStringAlias(fields, "error_msg", "errorMsg"); err != nil {
+	if val, ok, err := decodeStringAlias(fields, "orderID", "order_id"); err != nil {
 		return err
 	} else if ok {
-		r.ErrorMsg = message
+		r.OrderID = val
 	}
 
-	if hashes, ok, err := decodeStringSliceAlias(
-		fields,
-		"transaction_hashes",
-		"transactionsHashes",
-	); err != nil {
+	if val, ok, err := decodeStringAlias(fields, "errorMsg", "error_msg"); err != nil {
 		return err
 	} else if ok {
-		r.TransactionsHashes = hashes
+		r.ErrorMsg = val
 	}
 
-	if len(wire.TradeIDs) > 0 {
-		r.TradeIDs = slices.Clone(wire.TradeIDs)
+	if val, ok, err := decodeStringAlias(fields, "rebate_estimated", "rebateEstimated"); err != nil {
+		return err
+	} else if ok {
+		r.RebateEstimated = val
+	}
+
+	if val, ok, err := decodeStringSliceAlias(fields, "transactionsHashes", "transaction_hashes"); err != nil {
+		return err
+	} else if ok {
+		r.TransactionsHashes = val
+	}
+
+	if val, ok, err := decodeStringSliceAlias(fields, "trade_ids", "tradeIds"); err != nil {
+		return err
+	} else if ok {
+		r.TradeIDs = val
 	}
 
 	return nil
@@ -401,6 +397,7 @@ type OpenOrderParams struct {
 type TradeParams struct {
 	ID           string
 	MakerAddress string
+	TakerAddress string
 	Market       string
 	AssetID      string
 	Before       string
