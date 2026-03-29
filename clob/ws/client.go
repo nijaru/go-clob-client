@@ -538,7 +538,9 @@ func (c *Client) recordSubscription(sub subscription) (subscription, bool) {
 		if len(sub.markets) == 0 {
 			return sendSub, true
 		}
-		sendSub.markets = sendSub.markets[:0]
+		// Use a fresh slice — sendSub and the stored sub share a backing array;
+		// appending into a resliced copy would corrupt the stored subscription.
+		sendSub.markets = make([]string, 0, len(sub.markets))
 		for _, market := range sub.markets {
 			if c.userRefs[market] == 0 {
 				sendSub.markets = append(sendSub.markets, market)
@@ -553,7 +555,8 @@ func (c *Client) recordSubscription(sub subscription) (subscription, bool) {
 		return sendSub, true
 	}
 
-	sendSub.assetIDs = sendSub.assetIDs[:0]
+	// Use a fresh slice — same reason as markets above.
+	sendSub.assetIDs = make([]string, 0, len(sub.assetIDs))
 	for _, assetID := range sub.assetIDs {
 		if c.marketRefs[assetID] == 0 {
 			sendSub.assetIDs = append(sendSub.assetIDs, assetID)
@@ -664,7 +667,10 @@ func (c *Client) recomputeCustomFeatureLocked() {
 }
 
 func (c *Client) readLoop(ctx context.Context) {
-	defer close(c.connDone)
+	// Capture the channel value at start so a concurrent reconnect that
+	// replaces c.connDone cannot cause this loop to close the wrong channel.
+	done := c.connDone
+	defer close(done)
 
 	for {
 		_, data, err := c.conn.Read(ctx)

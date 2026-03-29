@@ -712,7 +712,7 @@ func (c *Client) withRetry(ctx context.Context, retryable bool, fn func() error)
 			return err
 		}
 
-		backoff := c.retryBackoff * time.Duration(1<<i)
+		backoff := c.retryBackoff * (1 << min(i, 30))
 		if timer == nil {
 			timer = time.NewTimer(backoff)
 		} else {

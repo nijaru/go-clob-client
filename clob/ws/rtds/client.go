@@ -226,7 +226,10 @@ func (c *Client) SubscribeComments(
 }
 
 func (c *Client) readLoop(ctx context.Context) {
-	defer close(c.connDone)
+	// Capture the channel value at start so a concurrent reconnect that
+	// replaces c.connDone cannot cause this loop to close the wrong channel.
+	done := c.connDone
+	defer close(done)
 
 	for {
 		typ, data, err := c.conn.Read(ctx)
