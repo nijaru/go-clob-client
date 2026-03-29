@@ -1,5 +1,7 @@
 package clob
 
+import "github.com/quagmt/udecimal"
+
 // Market is the typed response for a full market record.
 type Market struct {
 	EnableOrderBook      bool           `json:"enable_order_book"`
@@ -154,8 +156,8 @@ type GeoblockResponse struct {
 
 // MarketPrice is a single point in a market price-history response.
 type MarketPrice struct {
-	T int64   `json:"t"`
-	P float64 `json:"p"`
+	T int64            `json:"t"`
+	P udecimal.Decimal `json:"p"`
 }
 
 // PriceHistoryInterval controls the server-side time bucket for price-history queries.
