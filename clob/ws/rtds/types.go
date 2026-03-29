@@ -31,8 +31,8 @@ type Credentials struct {
 type Subscription struct {
 	Topic    string       `json:"topic"`
 	Type     string       `json:"type"`
-	Filters  any          `json:"filters,omitzero"`
-	CLOBAuth *Credentials `json:"clob_auth,omitzero"`
+	Filters  any          `json:"filters,omitempty"`
+	CLOBAuth *Credentials `json:"clob_auth,omitempty"`
 }
 
 // MarshalJSON implements custom serialization for Subscription to handle
