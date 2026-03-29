@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	json "github.com/go-json-experiment/json"
+	"github.com/go-json-experiment/json/jsontext"
 
 	"github.com/coder/websocket"
 	"github.com/nijaru/go-clob-client/clob"
@@ -748,15 +750,40 @@ func (c *Client) sendJSON(ctx context.Context, v any) error {
 	return c.conn.Write(ctx, websocket.MessageText, data)
 }
 
+// extractEventType scans JSON bytes for the "event_type" key, stopping as soon
+// as the key is found rather than decoding the full message.
+func extractEventType(data []byte) (EventType, bool) {
+	dec := jsontext.NewDecoder(bytes.NewReader(data))
+	if tok, err := dec.ReadToken(); err != nil || tok.Kind() != '{' {
+		return "", false
+	}
+	for {
+		tok, err := dec.ReadToken()
+		if err != nil || tok.Kind() == '}' {
+			return "", false
+		}
+		if tok.String() == "event_type" {
+			val, err := dec.ReadToken()
+			if err != nil {
+				return "", false
+			}
+			return EventType(val.String()), true
+		}
+		if err := dec.SkipValue(); err != nil {
+			return "", false
+		}
+	}
+}
+
 func (c *Client) handleMessage(ctx context.Context, data []byte) {
-	var base BaseEvent
-	if err := json.Unmarshal(data, &base); err != nil {
+	eventType, ok := extractEventType(data)
+	if !ok {
 		// Non-JSON message (text heartbeat, etc.) — not an error.
 		return
 	}
 
 	var event Event
-	switch base.EventType {
+	switch eventType {
 	case EventTypeBook:
 		event = &BookEvent{}
 	case EventTypePriceChange:
@@ -778,7 +805,7 @@ func (c *Client) handleMessage(ctx context.Context, data []byte) {
 	default:
 		// Unknown event type — report so callers can notice new API events.
 		select {
-		case c.errs <- fmt.Errorf("unknown event type: %s", base.EventType):
+		case c.errs <- fmt.Errorf("unknown event type: %s", eventType):
 		default:
 		}
 		return
@@ -786,7 +813,7 @@ func (c *Client) handleMessage(ctx context.Context, data []byte) {
 
 	if err := json.Unmarshal(data, event); err != nil {
 		select {
-		case c.errs <- fmt.Errorf("decode event %s: %w", base.EventType, err):
+		case c.errs <- fmt.Errorf("decode event %s: %w", eventType, err):
 		default:
 		}
 		return
