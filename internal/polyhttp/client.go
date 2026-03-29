@@ -197,7 +197,7 @@ func (c *Client) doJSON(
 	}
 
 	if out == nil {
-		io.Copy(io.Discard, resp.Body)
+		_, _ = io.Copy(io.Discard, resp.Body)
 		return nil
 	}
 

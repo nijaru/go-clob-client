@@ -167,6 +167,7 @@ func (r ApproveRFQOrderRequest) MarshalJSON() ([]byte, error) {
 // RFQRequestResponse is the response for creating an RFQ request.
 type RFQRequestResponse struct {
 	RequestID string `json:"requestId"`
+	Expiry    int64  `json:"expiry,omitzero"`
 	Error     string `json:"error,omitzero"`
 }
 

@@ -233,8 +233,11 @@ func HMACSignature(
 	method, requestPath string,
 	body []byte,
 ) (string, error) {
-	secret = normalizeBase64URL(secret)
-	decoded, err := base64.URLEncoding.DecodeString(secret)
+	normalized, err := normalizeBase64URL(secret)
+	if err != nil {
+		return "", err
+	}
+	decoded, err := base64.URLEncoding.DecodeString(normalized)
 	if err != nil {
 		std := strings.NewReplacer("-", "+", "_", "/").Replace(secret)
 		decoded, err = base64.StdEncoding.DecodeString(std)
@@ -258,13 +261,15 @@ func HMACSignature(
 	return base64.URLEncoding.EncodeToString(mac.Sum(nil)), nil
 }
 
-func normalizeBase64URL(value string) string {
+func normalizeBase64URL(value string) (string, error) {
 	value = strings.TrimSpace(value)
 	switch len(value) % 4 {
+	case 1:
+		return "", fmt.Errorf("invalid base64url secret: length mod 4 == 1 is never valid")
 	case 2:
 		value += "=="
 	case 3:
 		value += "="
 	}
-	return value
+	return value, nil
 }
