@@ -1,82 +1,127 @@
 package bridge
 
-// SupportedAsset represents a token supported on a specific chain for bridging.
-type SupportedAsset struct {
-	ChainID      string `json:"chainId"`
-	ChainName    string `json:"chainName"`
-	TokenAddress string `json:"tokenAddress"`
-	TokenSymbol  string `json:"tokenSymbol"`
-	MinDeposit   string `json:"minDeposit,omitzero"`
-}
-
-// SupportedAssetsResponse is the response from the /supported-assets endpoint.
-type SupportedAssetsResponse struct {
-	Assets []SupportedAsset `json:"assets"`
-}
-
-// DepositRequest is the request to generate a deposit address.
+// DepositRequest is the request to generate deposit addresses.
 type DepositRequest struct {
 	Address string `json:"address"` // Polymarket wallet address
 }
 
-// DepositAddress represents a unique deposit address for a specific network.
-type DepositAddress struct {
-	Network string `json:"network"`
-	Address string `json:"address"`
+// DepositAddresses holds deposit addresses for different blockchain networks.
+type DepositAddresses struct {
+	EVM string `json:"evm"`
+	SVM string `json:"svm"`
+	BTC string `json:"btc"`
 }
 
 // DepositResponse is the response from the /deposit endpoint.
 type DepositResponse struct {
-	Addresses []DepositAddress `json:"addresses"`
+	Address DepositAddresses `json:"address"`
+	Note    string           `json:"note,omitzero"`
 }
 
-// QuoteRequest represents a request for a bridge quote.
+// Token holds token information for a supported asset.
+type Token struct {
+	Name     string `json:"name"`
+	Symbol   string `json:"symbol"`
+	Address  string `json:"address"`
+	Decimals uint8  `json:"decimals"`
+}
+
+// SupportedAsset is a supported asset with chain and token information.
+type SupportedAsset struct {
+	ChainID        string `json:"chainId"`
+	ChainName      string `json:"chainName"`
+	Token          Token  `json:"token"`
+	MinCheckoutUSD string `json:"minCheckoutUsd"`
+}
+
+// SupportedAssetsResponse is the response from the /supported-assets endpoint.
+type SupportedAssetsResponse struct {
+	SupportedAssets []SupportedAsset `json:"supportedAssets"`
+	Note            string           `json:"note,omitzero"`
+}
+
+// QuoteRequest is a request for a bridge quote.
 type QuoteRequest struct {
-	FromChain   string  `json:"fromChain"`
-	ToChain     string  `json:"toChain"`
-	FromToken   string  `json:"fromToken"`
-	ToToken     string  `json:"toToken"`
-	Amount      string  `json:"amount"`
-	UserAddress string  `json:"userAddress"`
-	Slippage    float64 `json:"slippage,omitzero"`
-}
-
-// QuoteResponse represents a bridge quote.
-type QuoteResponse struct {
-	QuoteID       string `json:"quoteId"`
-	FromAmount    string `json:"fromAmount"`
-	ToAmount      string `json:"toAmount"`
-	Fee           string `json:"fee"`
-	EstimatedTime int    `json:"estimatedTime"` // in seconds
-}
-
-// WithdrawRequest represents a request to withdraw assets via the bridge (2026 standard).
-type WithdrawRequest struct {
-	ToAddress string `json:"toAddress"`
-	Amount    string `json:"amount"`
-	FromToken string `json:"fromToken"`
-	ToToken   string `json:"toToken"`
-	ToChain   string `json:"toChain"`
-}
-
-// WithdrawResponse represents the response from a withdrawal request.
-type WithdrawResponse struct {
-	TransactionID string `json:"transactionId"`
-	Status        string `json:"status"`
-}
-
-// StatusResponse represents the status of bridge transactions for an address.
-type StatusResponse struct {
-	Transactions []BridgeTransaction `json:"transactions"`
-}
-
-// BridgeTransaction represents a single bridge transaction.
-type BridgeTransaction struct {
-	ID                 string `json:"id"`
-	Status             string `json:"status"`
 	FromAmountBaseUnit string `json:"fromAmountBaseUnit"`
-	FromTokenAddress   string `json:"fromTokenAddress"`
 	FromChainID        string `json:"fromChainId"`
+	FromTokenAddress   string `json:"fromTokenAddress"`
+	RecipientAddress   string `json:"recipientAddress"`
 	ToChainID          string `json:"toChainId"`
-	TransactionHash    string `json:"transactionHash"`
+	ToTokenAddress     string `json:"toTokenAddress"`
+}
+
+// EstimatedFeeBreakdown holds the fee breakdown for a quote.
+type EstimatedFeeBreakdown struct {
+	AppFeeLabel     string  `json:"appFeeLabel"`
+	AppFeePercent   float64 `json:"appFeePercent"`
+	AppFeeUSD       float64 `json:"appFeeUsd"`
+	FillCostPercent float64 `json:"fillCostPercent"`
+	FillCostUSD     float64 `json:"fillCostUsd"`
+	GasUSD          float64 `json:"gasUsd"`
+	MaxSlippage     float64 `json:"maxSlippage"`
+	MinReceived     float64 `json:"minReceived"`
+	SwapImpact      float64 `json:"swapImpact"`
+	SwapImpactUSD   float64 `json:"swapImpactUsd"`
+	TotalImpact     float64 `json:"totalImpact"`
+	TotalImpactUSD  float64 `json:"totalImpactUsd"`
+}
+
+// QuoteResponse is the response from the /quote endpoint.
+type QuoteResponse struct {
+	QuoteID            string                `json:"quoteId"`
+	EstCheckoutTimeMs  uint64                `json:"estCheckoutTimeMs"`
+	EstFeeBreakdown    EstimatedFeeBreakdown `json:"estFeeBreakdown"`
+	EstInputUSD        float64               `json:"estInputUsd"`
+	EstOutputUSD       float64               `json:"estOutputUsd"`
+	EstToTokenBaseUnit string                `json:"estToTokenBaseUnit"`
+}
+
+// WithdrawRequest is a request to withdraw assets from Polymarket via the bridge.
+type WithdrawRequest struct {
+	Address        string `json:"address"`        // Source Polymarket wallet address on Polygon
+	ToChainID      string `json:"toChainId"`      // Destination chain ID
+	ToTokenAddress string `json:"toTokenAddress"` // Destination token contract address
+	RecipientAddr  string `json:"recipientAddr"`  // Destination wallet address
+}
+
+// WithdrawalAddresses holds withdrawal destination addresses for different networks.
+type WithdrawalAddresses struct {
+	EVM string `json:"evm"`
+	SVM string `json:"svm"`
+	BTC string `json:"btc"`
+}
+
+// WithdrawResponse is the response from the /withdraw endpoint.
+type WithdrawResponse struct {
+	Address WithdrawalAddresses `json:"address"`
+	Note    string              `json:"note"`
+}
+
+// DepositTransactionStatus is the status of a bridge deposit transaction.
+type DepositTransactionStatus string
+
+const (
+	DepositStatusDetected        DepositTransactionStatus = "DEPOSIT_DETECTED"
+	DepositStatusProcessing      DepositTransactionStatus = "PROCESSING"
+	DepositStatusOriginConfirmed DepositTransactionStatus = "ORIGIN_TX_CONFIRMED"
+	DepositStatusSubmitted       DepositTransactionStatus = "SUBMITTED"
+	DepositStatusCompleted       DepositTransactionStatus = "COMPLETED"
+	DepositStatusFailed          DepositTransactionStatus = "FAILED"
+)
+
+// DepositTransaction represents a single bridge deposit transaction.
+type DepositTransaction struct {
+	FromChainID        string                   `json:"fromChainId"`
+	FromTokenAddress   string                   `json:"fromTokenAddress"`
+	FromAmountBaseUnit string                   `json:"fromAmountBaseUnit"`
+	ToChainID          string                   `json:"toChainId"`
+	ToTokenAddress     string                   `json:"toTokenAddress"`
+	Status             DepositTransactionStatus `json:"status"`
+	TxHash             *string                  `json:"txHash,omitzero"`
+	CreatedTimeMs      *uint64                  `json:"createdTimeMs,omitzero"`
+}
+
+// StatusResponse is the response from the /status endpoint.
+type StatusResponse struct {
+	Transactions []DepositTransaction `json:"transactions"`
 }

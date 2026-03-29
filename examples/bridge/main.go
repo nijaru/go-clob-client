@@ -17,13 +17,14 @@ func main() {
 
 	// 1. Get supported assets
 	fmt.Println("Fetching supported assets...")
-	assets, err := client.GetSupportedAssets(ctx)
+	resp, err := client.GetSupportedAssets(ctx)
 	if err != nil {
 		log.Fatalf("failed to get supported assets: %v", err)
 	}
-	fmt.Printf("Found %d supported assets\n", len(assets))
-	if len(assets) > 0 {
-		fmt.Printf("Example asset: %s on %s\n", assets[0].TokenSymbol, assets[0].ChainName)
+	fmt.Printf("Found %d supported assets\n", len(resp.SupportedAssets))
+	if len(resp.SupportedAssets) > 0 {
+		a := resp.SupportedAssets[0]
+		fmt.Printf("Example asset: %s (%s) on %s\n", a.Token.Name, a.Token.Symbol, a.ChainName)
 	}
 
 	// 2. Create deposit address (mock address)
@@ -36,8 +37,8 @@ func main() {
 			err,
 		)
 	} else {
-		for _, a := range addrs.Addresses {
-			fmt.Printf("- %s: %s\n", a.Network, a.Address)
-		}
+		fmt.Printf("- EVM: %s\n", addrs.Address.EVM)
+		fmt.Printf("- SVM: %s\n", addrs.Address.SVM)
+		fmt.Printf("- BTC: %s\n", addrs.Address.BTC)
 	}
 }

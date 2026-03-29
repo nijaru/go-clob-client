@@ -59,10 +59,10 @@ func (c Config) normalized() Config {
 }
 
 // GetSupportedAssets returns all chains and tokens supported by the bridge.
-func (c *Client) GetSupportedAssets(ctx context.Context) ([]SupportedAsset, error) {
-	var out []SupportedAsset
+func (c *Client) GetSupportedAssets(ctx context.Context) (*SupportedAssetsResponse, error) {
+	var out SupportedAssetsResponse
 	err := c.http.GetJSON(ctx, supportedAssetsEndpoint, nil, polyhttp.AuthNone, &out)
-	return out, err
+	return &out, err
 }
 
 // CreateDepositAddress generates unique deposit addresses for the given Polymarket wallet.
