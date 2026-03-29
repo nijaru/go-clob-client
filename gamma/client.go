@@ -131,6 +131,39 @@ func (c *Client) GetMarkets(ctx context.Context, params MarketFilterParams) ([]M
 	if params.AcceptingOrders != nil {
 		query.Set("accepting_orders", strconv.FormatBool(*params.AcceptingOrders))
 	}
+	for _, id := range params.ClobTokenIDs {
+		query.Add("clob_token_ids", id)
+	}
+	for _, id := range params.ConditionIDs {
+		query.Add("condition_ids", id)
+	}
+	for _, addr := range params.MarketMakerAddress {
+		query.Add("market_maker_address", addr)
+	}
+	if params.LiquidityNumMin != "" {
+		query.Set("liquidity_num_min", params.LiquidityNumMin)
+	}
+	if params.LiquidityNumMax != "" {
+		query.Set("liquidity_num_max", params.LiquidityNumMax)
+	}
+	if params.VolumeNumMin != "" {
+		query.Set("volume_num_min", params.VolumeNumMin)
+	}
+	if params.VolumeNumMax != "" {
+		query.Set("volume_num_max", params.VolumeNumMax)
+	}
+	if params.StartDateMin != "" {
+		query.Set("start_date_min", params.StartDateMin)
+	}
+	if params.StartDateMax != "" {
+		query.Set("start_date_max", params.StartDateMax)
+	}
+	if params.EndDateMin != "" {
+		query.Set("end_date_min", params.EndDateMin)
+	}
+	if params.EndDateMax != "" {
+		query.Set("end_date_max", params.EndDateMax)
+	}
 
 	var out []Market
 	err := c.http.GetJSON(ctx, marketsEndpoint, query, polyhttp.AuthNone, &out)
@@ -217,6 +250,48 @@ func (c *Client) GetEvents(ctx context.Context, params EventFilterParams) ([]Eve
 	}
 	if params.NegativeRisk != nil {
 		query.Set("negative_risk", strconv.FormatBool(*params.NegativeRisk))
+	}
+	if params.TagSlug != "" {
+		query.Set("tag_slug", params.TagSlug)
+	}
+	if params.RelatedTags != nil {
+		query.Set("related_tags", strconv.FormatBool(*params.RelatedTags))
+	}
+	if params.Featured != nil {
+		query.Set("featured", strconv.FormatBool(*params.Featured))
+	}
+	if params.CYOM != nil {
+		query.Set("cyom", strconv.FormatBool(*params.CYOM))
+	}
+	if params.IncludeChat != nil {
+		query.Set("include_chat", strconv.FormatBool(*params.IncludeChat))
+	}
+	if params.Recurrence != "" {
+		query.Set("recurrence", params.Recurrence)
+	}
+	if params.LiquidityMin != "" {
+		query.Set("liquidity_min", params.LiquidityMin)
+	}
+	if params.LiquidityMax != "" {
+		query.Set("liquidity_max", params.LiquidityMax)
+	}
+	if params.VolumeMin != "" {
+		query.Set("volume_min", params.VolumeMin)
+	}
+	if params.VolumeMax != "" {
+		query.Set("volume_max", params.VolumeMax)
+	}
+	if params.StartDateMin != "" {
+		query.Set("start_date_min", params.StartDateMin)
+	}
+	if params.StartDateMax != "" {
+		query.Set("start_date_max", params.StartDateMax)
+	}
+	if params.EndDateMin != "" {
+		query.Set("end_date_min", params.EndDateMin)
+	}
+	if params.EndDateMax != "" {
+		query.Set("end_date_max", params.EndDateMax)
 	}
 
 	var out []Event

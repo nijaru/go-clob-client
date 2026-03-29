@@ -270,15 +270,14 @@ type MarketType struct {
 	Label string `json:"label"`
 }
 
-// Comment represents a user comment.
 type Comment struct {
 	ID               string         `json:"id"`
-	Comment          string         `json:"comment"`
-	UserAddress      string         `json:"userAddress"`
-	ConditionID      string         `json:"conditionId,omitzero"`
+	Body             string         `json:"body,omitzero"`
+	ReplyAddress     string         `json:"replyAddress,omitzero"`
+	UserAddress      string         `json:"userAddress,omitzero"`
 	ParentID         string         `json:"parentId,omitzero"`
-	CreatedAt        time.Time      `json:"createdAt"`
-	UpdatedAt        time.Time      `json:"updatedAt"`
+	CreatedAt        time.Time      `json:"createdAt,omitzero"`
+	UpdatedAt        time.Time      `json:"updatedAt,omitzero"`
 	Profile          CommentProfile `json:"profile,omitzero"`
 	Reactions        []Reaction     `json:"reactions,omitzero"`
 	ReportCount      int            `json:"reportCount,omitzero"`
@@ -344,19 +343,30 @@ type PublicProfileUser struct {
 
 // MarketFilterParams defines filters for market listing.
 type MarketFilterParams struct {
-	Active          *bool  `url:"active,omitzero"`
-	Closed          *bool  `url:"closed,omitzero"`
-	Archived        *bool  `url:"archived,omitzero"`
-	Resolved        *bool  `url:"resolved,omitzero"`
-	Limit           int    `url:"limit,omitzero"`
-	Offset          int    `url:"offset,omitzero"`
-	Order           string `url:"order,omitzero"`
-	Ascending       *bool  `url:"ascending,omitzero"`
-	TagID           string `url:"tag_id,omitzero"`
-	EventID         string `url:"event_id,omitzero"`
-	Slug            string `url:"slug,omitzero"`
-	NegativeRisk    *bool  `url:"negative_risk,omitzero"`
-	AcceptingOrders *bool  `url:"accepting_orders,omitzero"`
+	Active             *bool    `url:"active,omitzero"`
+	Closed             *bool    `url:"closed,omitzero"`
+	Archived           *bool    `url:"archived,omitzero"`
+	Resolved           *bool    `url:"resolved,omitzero"`
+	Limit              int      `url:"limit,omitzero"`
+	Offset             int      `url:"offset,omitzero"`
+	Order              string   `url:"order,omitzero"`
+	Ascending          *bool    `url:"ascending,omitzero"`
+	TagID              string   `url:"tag_id,omitzero"`
+	EventID            string   `url:"event_id,omitzero"`
+	Slug               string   `url:"slug,omitzero"`
+	NegativeRisk       *bool    `url:"negative_risk,omitzero"`
+	AcceptingOrders    *bool    `url:"accepting_orders,omitzero"`
+	ClobTokenIDs       []string `url:"clob_token_ids,omitzero"`
+	ConditionIDs       []string `url:"condition_ids,omitzero"`
+	MarketMakerAddress []string `url:"market_maker_address,omitzero"`
+	LiquidityNumMin    string   `url:"liquidity_num_min,omitzero"`
+	LiquidityNumMax    string   `url:"liquidity_num_max,omitzero"`
+	VolumeNumMin       string   `url:"volume_num_min,omitzero"`
+	VolumeNumMax       string   `url:"volume_num_max,omitzero"`
+	StartDateMin       string   `url:"start_date_min,omitzero"`
+	StartDateMax       string   `url:"start_date_max,omitzero"`
+	EndDateMin         string   `url:"end_date_min,omitzero"`
+	EndDateMax         string   `url:"end_date_max,omitzero"`
 }
 
 // EventFilterParams defines filters for event listing.
@@ -370,6 +380,20 @@ type EventFilterParams struct {
 	Limit        int    `url:"limit,omitzero"`
 	Offset       int    `url:"offset,omitzero"`
 	NegativeRisk *bool  `url:"negative_risk,omitzero"`
+	TagSlug      string `url:"tag_slug,omitzero"`
+	RelatedTags  *bool  `url:"related_tags,omitzero"`
+	Featured     *bool  `url:"featured,omitzero"`
+	CYOM         *bool  `url:"cyom,omitzero"`
+	IncludeChat  *bool  `url:"include_chat,omitzero"`
+	Recurrence   string `url:"recurrence,omitzero"`
+	LiquidityMin string `url:"liquidity_min,omitzero"`
+	LiquidityMax string `url:"liquidity_max,omitzero"`
+	VolumeMin    string `url:"volume_min,omitzero"`
+	VolumeMax    string `url:"volume_max,omitzero"`
+	StartDateMin string `url:"start_date_min,omitzero"`
+	StartDateMax string `url:"start_date_max,omitzero"`
+	EndDateMin   string `url:"end_date_min,omitzero"`
+	EndDateMax   string `url:"end_date_max,omitzero"`
 }
 
 // CommentFilterParams defines filters for comments.
