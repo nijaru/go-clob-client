@@ -9,7 +9,6 @@
 
 Go client for the [Polymarket](https://polymarket.com) Central Limit Order Book (CLOB). Targets the latest stable Go release and tracks feature parity with the [official Rust SDK](https://github.com/Polymarket/rs-clob-client).
 
-
 ## Features
 
 - **CLOB**: full REST + WebSocket (market and user channels).
@@ -80,6 +79,30 @@ resp, err := client.CreateAndPostOrder(ctx, clob.OrderArgs{
 }, nil, clob.OrderTypeGTC, false, false)
 ```
 
+### Market Orders
+
+Market orders require `AmountKind` to specify how the `Amount` field is interpreted. Sell orders always use `AmountShares`; buy orders accept either `AmountShares` or `AmountUSDC` (default).
+
+```go
+// Sell 25 shares at market price (FOK)
+resp, err := client.CreateAndPostMarketOrder(ctx, clob.MarketOrderArgs{
+    TokenID:    os.Getenv("POLYMARKET_TOKEN_ID"),
+    Amount:     udecimal.MustParse("25"),
+    AmountKind: clob.AmountShares,  // required for sell; also valid for buy
+    Side:       clob.SideSell,
+}, nil, clob.OrderTypeFOK, false)
+
+// Buy $10 of shares at market price (FOK)
+resp, err := client.CreateAndPostMarketOrder(ctx, clob.MarketOrderArgs{
+    TokenID:    os.Getenv("POLYMARKET_TOKEN_ID"),
+    Amount:     udecimal.MustParse("10"),
+    AmountKind: clob.AmountUSDC,    // spend $10 USDC
+    Side:       clob.SideBuy,
+}, nil, clob.OrderTypeFOK, false)
+```
+
+`CalculateMarketPrice` accepts the same `AmountKind` parameter and will return an error if `AmountUSDC` is used for a sell.
+
 ### Pagination Iterators
 
 All list endpoints expose both a slice variant and a Go 1.26 range-over-function iterator for memory-efficient streaming:
@@ -97,10 +120,10 @@ for order, err := range client.IterOpenOrders(ctx, clob.OpenOrderParams{}) {
 
 The SDK enforces authentication requirements through a three-tier hierarchy — you cannot call trading methods on an unauthenticated client.
 
-| Tier | Constructor | Auth Required | Capabilities |
-|------|------------|---------------|--------------|
-| `Client` | `NewClient` | None | Public market data, orderbooks, prices |
-| `SignerClient` | `NewSignerClient` | Private key | Order building & signing, API key management |
+| Tier                  | Constructor              | Auth Required           | Capabilities                                  |
+| --------------------- | ------------------------ | ----------------------- | --------------------------------------------- |
+| `Client`              | `NewClient`              | None                    | Public market data, orderbooks, prices        |
+| `SignerClient`        | `NewSignerClient`        | Private key             | Order building & signing, API key management  |
 | `AuthenticatedClient` | `NewAuthenticatedClient` | Private key + API creds | Order posting, account management, heartbeats |
 
 You can also upgrade incrementally:
@@ -117,11 +140,11 @@ authed := signer.AsAuthenticated(creds, nil)
 
 The `SignatureType` field tells Polymarket how to verify your signatures:
 
-| Value | Constant | Wallet type |
-|-------|----------|-------------|
-| `0` | `SignatureTypeEOA` | MetaMask, hardware wallets — any wallet where you control the private key directly |
-| `1` | `SignatureTypePolyProxy` | Email / Magic wallet (delegated signing) |
-| `2` | `SignatureTypePolyGnosisSafe` | Browser proxy wallet (proxy contract) |
+| Value | Constant                      | Wallet type                                                                        |
+| ----- | ----------------------------- | ---------------------------------------------------------------------------------- |
+| `0`   | `SignatureTypeEOA`            | MetaMask, hardware wallets — any wallet where you control the private key directly |
+| `1`   | `SignatureTypePolyProxy`      | Email / Magic wallet (delegated signing)                                           |
+| `2`   | `SignatureTypePolyGnosisSafe` | Browser proxy wallet (proxy contract)                                              |
 
 ```go
 client, err := clob.NewSignerClient(clob.Config{
@@ -142,6 +165,7 @@ The **funder address** is the address that actually holds your funds on Polymark
 Before Polymarket can execute trades you must grant the exchange contracts permission to move your tokens. You need to approve two token types, each for three exchange contracts:
 
 **USDC** (`0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174`):
+
 - `0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E` — main exchange
 - `0xC5d563A36AE78145C45a50134d48A1215220f80a` — neg-risk exchange
 - `0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296` — neg-risk adapter
@@ -154,14 +178,14 @@ Before Polymarket can execute trades you must grant the exchange contracts permi
 
 Runnable examples are in `examples/`:
 
-| Example | Path | What it shows |
-|---------|------|---------------|
-| Read-only | `examples/clob/read_only` | Orderbook, prices, market data |
-| Auth bootstrap | `examples/clob/auth_bootstrap` | Creating and deriving API keys |
-| Limit order | `examples/clob/limit_order` | Placing a GTC limit order |
-| Market order | `examples/clob/market_order` | Placing a FOK market order |
-| WebSocket | `examples/ws` | Real-time orderbook and user event streaming |
-| CTF operations | `examples/clob/ctf_operations` | Splitting, merging, and redeeming shares |
+| Example        | Path                           | What it shows                                |
+| -------------- | ------------------------------ | -------------------------------------------- |
+| Read-only      | `examples/clob/read_only`      | Orderbook, prices, market data               |
+| Auth bootstrap | `examples/clob/auth_bootstrap` | Creating and deriving API keys               |
+| Limit order    | `examples/clob/limit_order`    | Placing a GTC limit order                    |
+| Market order   | `examples/clob/market_order`   | Placing a FOK market order                   |
+| WebSocket      | `examples/ws`                  | Real-time orderbook and user event streaming |
+| CTF operations | `examples/clob/ctf_operations` | Splitting, merging, and redeeming shares     |
 
 Run any example with:
 
@@ -171,6 +195,22 @@ go run ./examples/clob/read_only
 ```
 
 Copy `.env.example` to `.env` for a full set of required variables.
+
+## API Notes
+
+### RFQ
+
+The RFQ flow uses three methods:
+
+| Method                      | Returns                             | Notes                                                |
+| --------------------------- | ----------------------------------- | ---------------------------------------------------- |
+| `GetRFQQuotes(ctx, params)` | `(*RFQQuotesResponse, error)`       | Lists quotes for one or more request IDs             |
+| `AcceptRFQQuote(ctx, req)`  | `error`                             | Requester accepts a quote; server returns plain OK   |
+| `ApproveRFQOrder(ctx, req)` | `(*ApproveRFQOrderResponse, error)` | Quoter approves the matched order; returns trade IDs |
+
+### Market Price
+
+`GetMarketTradePriceHistory` returns `MarketPrice` values where `.P` is `udecimal.Decimal` (not `float64`), preserving the full precision of the API response.
 
 ## Error Handling
 
