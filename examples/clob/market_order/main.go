@@ -25,9 +25,10 @@ func main() {
 	defer client.Close()
 
 	response, err := client.CreateAndPostMarketOrder(context.Background(), clob.MarketOrderArgs{
-		TokenID: os.Getenv("POLYMARKET_TOKEN_ID"),
-		Amount:  udecimal.MustParse("25"),
-		Side:    clob.SideSell,
+		TokenID:    os.Getenv("POLYMARKET_TOKEN_ID"),
+		Amount:     udecimal.MustParse("25"),
+		AmountKind: clob.AmountShares,
+		Side:       clob.SideSell,
 	}, nil, clob.OrderTypeFOK, false)
 	if err != nil {
 		log.Fatal(err)
