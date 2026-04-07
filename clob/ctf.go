@@ -99,7 +99,7 @@ func waitForReceipt(
 	ec *ethclient.Client,
 	txHash common.Hash,
 ) (*types.Receipt, error) {
-	ticker := time.NewTicker(100 * time.Millisecond)
+	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
 	for {
 		select {
