@@ -63,14 +63,6 @@ func (c *AuthenticatedClient) GetNotifications(ctx context.Context) ([]Notificat
 	return out, err
 }
 
-// DropNotifications is an alias for DeleteNotifications.
-func (c *AuthenticatedClient) DropNotifications(
-	ctx context.Context,
-	params DeleteNotificationsParams,
-) error {
-	return c.DeleteNotifications(ctx, params)
-}
-
 // DeleteNotifications deletes notifications by ID when provided, or all notifications otherwise.
 func (c *AuthenticatedClient) DeleteNotifications(
 	ctx context.Context,

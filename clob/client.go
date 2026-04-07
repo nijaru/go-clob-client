@@ -352,24 +352,6 @@ func (c *Client) ClearTickSizeCache(tokenID string) {
 	c.feeRateMu.Unlock()
 }
 
-// ClearTickSizeCaches clears all cached tick sizes, negative risk flags, and fee rates.
-func (c *Client) ClearTickSizeCaches() {
-	c.tickSizeMu.Lock()
-	c.tickSizeCache = make(map[string]TickSize)
-	c.tickSizeTimestamps = make(map[string]time.Time)
-	c.tickSizeMu.Unlock()
-
-	c.negRiskMu.Lock()
-	c.negRiskCache = make(map[string]bool)
-	c.negRiskTimestamps = make(map[string]time.Time)
-	c.negRiskMu.Unlock()
-
-	c.feeRateMu.Lock()
-	c.feeRateCache = make(map[string]int64)
-	c.feeRateTimestamps = make(map[string]time.Time)
-	c.feeRateMu.Unlock()
-}
-
 // ClearFeeRateCache removes the cached fee rate for a specific token.
 func (c *Client) ClearFeeRateCache(tokenID string) {
 	c.feeRateMu.Lock()

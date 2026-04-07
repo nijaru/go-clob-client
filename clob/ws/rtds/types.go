@@ -1,9 +1,11 @@
 package rtds
 
 import (
-	"encoding/json"
 	"fmt"
 	"time"
+
+	json "github.com/go-json-experiment/json"
+	"github.com/go-json-experiment/json/jsontext"
 )
 
 // Action represents an RTDS subscription action.
@@ -60,10 +62,10 @@ func (s Subscription) MarshalJSON() ([]byte, error) {
 
 // RtdsMessage is the top-level message received from RTDS.
 type RtdsMessage struct {
-	Topic     string          `json:"topic"`
-	Type      string          `json:"type"`
-	Timestamp int64           `json:"timestamp"`
-	Payload   json.RawMessage `json:"payload"`
+	Topic     string         `json:"topic"`
+	Type      string         `json:"type"`
+	Timestamp int64          `json:"timestamp"`
+	Payload   jsontext.Value `json:"payload"`
 }
 
 // AsCryptoPrice attempts to unmarshal the payload as a CryptoPrice.

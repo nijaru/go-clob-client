@@ -131,7 +131,7 @@ func TestClearFeeRateCache(t *testing.T) {
 	}
 }
 
-func TestClearTickSizeCaches(t *testing.T) {
+func TestInvalidateCaches(t *testing.T) {
 	t.Parallel()
 
 	client, err := NewClient(Config{})
@@ -156,7 +156,7 @@ func TestClearTickSizeCaches(t *testing.T) {
 	client.feeRateMu.Unlock()
 
 	// Clear all
-	client.ClearTickSizeCaches()
+	client.InvalidateCaches()
 
 	client.tickSizeMu.RLock()
 	if len(client.tickSizeCache) != 0 {
@@ -233,7 +233,7 @@ func TestManualCacheSettersHonorTTL(t *testing.T) {
 	}
 }
 
-func TestDropNotifications(t *testing.T) {
+func TestDeleteNotifications(t *testing.T) {
 	t.Parallel()
 
 	var receivedIDs string
@@ -262,7 +262,7 @@ func TestDropNotifications(t *testing.T) {
 		t.Fatalf("new client: %v", err)
 	}
 
-	err = client.DropNotifications(t.Context(), DeleteNotificationsParams{
+	err = client.DeleteNotifications(t.Context(), DeleteNotificationsParams{
 		IDs: []string{"n1", "n2"},
 	})
 	if err != nil {

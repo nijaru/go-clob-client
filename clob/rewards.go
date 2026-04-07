@@ -212,14 +212,6 @@ func (c *AuthenticatedClient) GetCurrentRewardsPage(
 	return &out, err
 }
 
-// GetRawRewardsForMarket is an alias for GetRewardsForMarket.
-func (c *AuthenticatedClient) GetRawRewardsForMarket(
-	ctx context.Context,
-	conditionID string,
-) ([]MarketReward, error) {
-	return c.GetRewardsForMarket(ctx, conditionID)
-}
-
 // GetRewardsForMarket returns all paginated reward rows for a specific market.
 func (c *AuthenticatedClient) GetRewardsForMarket(
 	ctx context.Context,

@@ -178,15 +178,6 @@ func (c *AuthenticatedClient) IterTrades(
 	}
 }
 
-// GetTradesPaginated is an alias for GetTradesPage.
-func (c *AuthenticatedClient) GetTradesPaginated(
-	ctx context.Context,
-	params TradeParams,
-	nextCursor string,
-) (*Page[Trade], error) {
-	return c.GetTradesPage(ctx, params, nextCursor)
-}
-
 // GetTradesPage returns a single page of authenticated trades.
 func (c *AuthenticatedClient) GetTradesPage(
 	ctx context.Context,

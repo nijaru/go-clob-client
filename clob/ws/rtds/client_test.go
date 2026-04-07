@@ -14,7 +14,7 @@ import (
 )
 
 func TestRTDSClient(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
 	// Mock RTDS Server
@@ -154,7 +154,7 @@ func TestRTDSClient(t *testing.T) {
 }
 
 func TestRTDSReconnect(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	connCount := 0
