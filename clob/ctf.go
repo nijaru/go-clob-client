@@ -94,6 +94,9 @@ func (c *SignerClient) sendTxAndWait(
 	return receipt, nil
 }
 
+// waitForReceipt polls for a transaction receipt every 250ms — matching alloy's
+// default HTTP polling interval. NotFound is expected until the tx is mined and
+// is retried silently; any other error propagates immediately.
 func waitForReceipt(
 	ctx context.Context,
 	ec *ethclient.Client,
