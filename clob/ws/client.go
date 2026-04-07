@@ -669,13 +669,14 @@ func (c *Client) recomputeCustomFeatureLocked() {
 }
 
 func (c *Client) readLoop(ctx context.Context) {
-	// Capture the channel value at start so a concurrent reconnect that
-	// replaces c.connDone cannot cause this loop to close the wrong channel.
+	// Capture both at goroutine start so a concurrent reconnect that replaces
+	// c.connDone or c.conn cannot affect this loop.
 	done := c.connDone
+	conn := c.conn
 	defer close(done)
 
 	for {
-		_, data, err := c.conn.Read(ctx)
+		_, data, err := conn.Read(ctx)
 		if err != nil {
 			// Context canceled means Close() was called — exit silently.
 			if ctx.Err() != nil {

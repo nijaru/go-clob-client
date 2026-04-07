@@ -38,7 +38,7 @@ type Client struct {
 	feeRateCache       map[string]int64
 	feeRateTimestamps  map[string]time.Time
 
-	tickSizeTTL  time.Duration
+	cacheTTL     time.Duration
 	retryMax     int
 	retryBackoff time.Duration
 	rateLimiter  *rate.Limiter
@@ -145,7 +145,7 @@ func newBase(config Config) *Client {
 		feeRateCache:       make(map[string]int64),
 		feeRateTimestamps:  make(map[string]time.Time),
 
-		tickSizeTTL:  config.TickSizeCacheTTL,
+		cacheTTL:     config.TickSizeCacheTTL,
 		retryMax:     config.RetryMax,
 		retryBackoff: config.RetryBackoff,
 		rateLimiter:  newLimiter(config.RateLimit, config.RateBurst),

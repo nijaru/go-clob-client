@@ -2,8 +2,10 @@ package clob
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
@@ -97,15 +99,20 @@ func waitForReceipt(
 	ec *ethclient.Client,
 	txHash common.Hash,
 ) (*types.Receipt, error) {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
 	for {
-		receipt, err := ec.TransactionReceipt(ctx, txHash)
-		if err == nil {
-			return receipt, nil
-		}
 		select {
 		case <-ctx.Done():
 			return nil, fmt.Errorf("ctf: waiting for receipt %s: %w", txHash.Hex(), ctx.Err())
-		default:
+		case <-ticker.C:
+			receipt, err := ec.TransactionReceipt(ctx, txHash)
+			if err == nil {
+				return receipt, nil
+			}
+			if !errors.Is(err, ethereum.NotFound) {
+				return nil, fmt.Errorf("ctf: get receipt %s: %w", txHash.Hex(), err)
+			}
 		}
 	}
 }

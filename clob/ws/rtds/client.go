@@ -227,12 +227,13 @@ func (c *Client) SubscribeComments(
 
 func (c *Client) readLoop(ctx context.Context) {
 	// Capture the channel value at start so a concurrent reconnect that
-	// replaces c.connDone cannot cause this loop to close the wrong channel.
+	// replaces c.connDone or c.conn cannot affect this loop.
 	done := c.connDone
+	conn := c.conn
 	defer close(done)
 
 	for {
-		typ, data, err := c.conn.Read(ctx)
+		typ, data, err := conn.Read(ctx)
 		if err != nil {
 			if ctx.Err() != nil {
 				return
@@ -300,6 +301,10 @@ func (c *Client) dispatch(ctx context.Context, m *RtdsMessage) {
 	case <-ctx.Done():
 	default:
 		c.logger.Warn("message dropped, channel full", "topic", m.Topic, "type", m.Type)
+		select {
+		case c.errs <- fmt.Errorf("rtds: message dropped (channel full): topic=%s type=%s", m.Topic, m.Type):
+		default:
+		}
 	}
 }
 

@@ -616,7 +616,7 @@ func (c *Client) resolveTickSize(
 	c.tickSizeMu.RUnlock()
 
 	var marketTickSize TickSize
-	if ok && (c.tickSizeTTL == 0 || time.Since(ts) < c.tickSizeTTL) {
+	if ok && (c.cacheTTL == 0 || time.Since(ts) < c.cacheTTL) {
 		marketTickSize = cached
 	} else {
 		response, err := c.GetTickSize(ctx, tokenID)
@@ -659,7 +659,7 @@ func (c *Client) resolveNegRisk(
 	ts := c.negRiskTimestamps[tokenID]
 	c.negRiskMu.RUnlock()
 
-	if ok && (c.tickSizeTTL == 0 || time.Since(ts) < c.tickSizeTTL) {
+	if ok && (c.cacheTTL == 0 || time.Since(ts) < c.cacheTTL) {
 		return cached, nil
 	}
 
@@ -687,7 +687,7 @@ func (c *Client) resolveFeeRateBps(
 	c.feeRateMu.RUnlock()
 
 	var marketFeeRateBps int64
-	if ok && (c.tickSizeTTL == 0 || time.Since(ts) < c.tickSizeTTL) {
+	if ok && (c.cacheTTL == 0 || time.Since(ts) < c.cacheTTL) {
 		marketFeeRateBps = cached
 	} else {
 		bps, err := c.GetFeeRateBps(ctx, tokenID)

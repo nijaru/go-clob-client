@@ -296,7 +296,7 @@ func TestHeartbeatPingPong(t *testing.T) {
 	select {
 	case <-pingReceived:
 		// Good — heartbeat reached the server
-	case <-time.After(15 * time.Second):
+	case <-time.After(2 * pingInterval):
 		t.Fatal("timed out waiting for PING")
 	}
 }
