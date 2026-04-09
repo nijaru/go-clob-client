@@ -399,28 +399,32 @@ func (c *Client) heartbeatLoop(
 	}
 }
 
-// UnsubscribeCryptoPrices unsubscribes from Binance crypto price updates.
+// UnsubscribeCryptoPrices unsubscribes from crypto price updates.
 func (c *Client) UnsubscribeCryptoPrices(ctx context.Context) error {
-	return c.unsubscribe(ctx, "crypto_prices")
+	return c.unsubscribe(ctx, "crypto_prices", "update")
 }
 
 // UnsubscribeChainlinkPrices unsubscribes from Chainlink price feed updates.
 func (c *Client) UnsubscribeChainlinkPrices(ctx context.Context) error {
-	return c.unsubscribe(ctx, "crypto_prices_chainlink")
+	return c.unsubscribe(ctx, "crypto_prices_chainlink", "*")
 }
 
 // UnsubscribeComments unsubscribes from comment events.
-func (c *Client) UnsubscribeComments(ctx context.Context) error {
-	return c.unsubscribe(ctx, "comments")
+func (c *Client) UnsubscribeComments(ctx context.Context, commentType CommentType) error {
+	msgType := string(commentType)
+	if msgType == "" {
+		msgType = "*"
+	}
+	return c.unsubscribe(ctx, "comments", msgType)
 }
 
 // unsubscribe sends an unsubscribe request for the given topic and removes it from the tracked subs.
-func (c *Client) unsubscribe(ctx context.Context, topic string) error {
+func (c *Client) unsubscribe(ctx context.Context, topic, msgType string) error {
 	c.subsMu.Lock()
 	var remaining []Subscription
 	var removed []Subscription
 	for _, s := range c.subs {
-		if s.Topic == topic {
+		if s.Topic == topic && (msgType == "" || s.Type == msgType) {
 			removed = append(removed, s)
 		} else {
 			remaining = append(remaining, s)

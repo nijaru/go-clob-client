@@ -290,13 +290,13 @@ func (c *Client) SubscribeBestBidAsk(ctx context.Context, assetIDs []string) err
 }
 
 // SubscribeNewMarkets subscribes to new market creation events.
-func (c *Client) SubscribeNewMarkets(ctx context.Context) error {
-	return c.addAndSend(ctx, newMarketSubscription(nil, false, true))
+func (c *Client) SubscribeNewMarkets(ctx context.Context, assetIDs []string) error {
+	return c.addAndSend(ctx, newMarketSubscription(assetIDs, false, true))
 }
 
 // SubscribeMarketResolutions subscribes to market resolution events.
-func (c *Client) SubscribeMarketResolutions(ctx context.Context) error {
-	return c.addAndSend(ctx, newMarketSubscription(nil, false, true))
+func (c *Client) SubscribeMarketResolutions(ctx context.Context, assetIDs []string) error {
+	return c.addAndSend(ctx, newMarketSubscription(assetIDs, false, true))
 }
 
 // SubscribeUserEvents subscribes to all user events (orders and trades) for the given markets.
