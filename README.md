@@ -7,11 +7,12 @@
 > [!WARNING]
 > Unofficial, community-maintained SDK. Not extensively tested in production trading environments. Use at your own risk.
 
-Go client for the [Polymarket](https://polymarket.com) Central Limit Order Book (CLOB). Targets the latest stable Go release and tracks feature parity with the [official Rust SDK](https://github.com/Polymarket/rs-clob-client).
+Go SDK for the [Polymarket](https://polymarket.com) CLOB and Data APIs. Targets the latest stable Go release and tracks feature parity with the [official Rust SDK](https://github.com/Polymarket/rs-clob-client).
 
 ## Features
 
 - **CLOB**: full REST + WebSocket (market and user channels).
+- **Data API**: positions, trades, activity, holders, live volume, and leaderboards.
 - **Heartbeats**: automated background heartbeats with ID rotation to keep orders live.
 - **Batch orders**: post and cancel up to 15 orders per request.
 - **RFQ**: submit and query request-for-quote flows.
@@ -24,6 +25,7 @@ Go client for the [Polymarket](https://polymarket.com) Central Limit Order Book 
 
 ```bash
 go get github.com/nijaru/go-clob-client/clob
+go get github.com/nijaru/go-clob-client/data
 ```
 
 Requires **Go 1.26.1+**.
@@ -115,6 +117,26 @@ for order, err := range client.IterOpenOrders(ctx, clob.OpenOrderParams{}) {
 }
 ```
 
+### Data API
+
+```go
+import "github.com/nijaru/go-clob-client/data"
+
+ctx := context.Background()
+client := data.New(data.Config{})
+
+positions, err := client.GetPositions(ctx, data.PositionParams{
+	User: "0x1234...",
+})
+if err != nil {
+	log.Fatal(err)
+}
+
+for _, pos := range positions {
+	fmt.Printf("%s: %s shares\n", pos.Title, pos.Size)
+}
+```
+
 ## Client Tiers
 
 The SDK enforces authentication requirements through a three-tier hierarchy — you cannot call trading methods on an unauthenticated client.
@@ -181,8 +203,11 @@ Runnable examples are in `examples/`:
 | -------------- | ------------------------------ | -------------------------------------------- |
 | Read-only      | `examples/clob/read_only`      | Orderbook, prices, market data               |
 | Auth bootstrap | `examples/clob/auth_bootstrap` | Creating and deriving API keys               |
+| Bridge         | `examples/bridge`              | Supported assets and deposit-address flows   |
+| Data API       | `examples/data`                | Positions and read-only data endpoints       |
 | Limit order    | `examples/clob/limit_order`    | Placing a GTC limit order                    |
 | Market order   | `examples/clob/market_order`   | Placing a FOK market order                   |
+| Gamma          | `examples/gamma`               | Search, events, and discovery metadata       |
 | WebSocket      | `examples/ws`                  | Real-time orderbook and user event streaming |
 | CTF operations | `examples/clob/ctf_operations` | Splitting, merging, and redeeming shares     |
 
@@ -236,6 +261,10 @@ if errors.Is(err, clob.ErrUnauthorized) {
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Primary reference for API parity is the [Rust SDK](https://github.com/Polymarket/rs-clob-client).
+
+## Security
+
+See [SECURITY.md](SECURITY.md).
 
 ## About Polymarket
 
