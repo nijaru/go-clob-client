@@ -22,9 +22,10 @@ Contributions are welcome. Please follow these guidelines:
 ## Guidelines
 
 - Match the style of the surrounding code.
-- Add tests for new behaviour, especially for auth flows and order construction.
-- When adding new API endpoints, mirror the naming conventions in the existing `clob/` package.
-- Keep public API changes minimal and backwards-compatible where possible.
+- Add tests for new behavior, especially for auth flows, order construction, and request/response shaping.
+- When adding new API endpoints, mirror the Rust SDK's behavior first, then express that idiomatically in Go.
+- Prefer package-level separation (`clob/`, `data/`, `gamma/`, `bridge/`) over growing one package too wide.
+- Avoid compatibility shims unless they are explicitly required; this repo prefers clean breaks when interfaces change.
 - Reference the [Rust SDK](https://github.com/Polymarket/rs-clob-client) for API parity questions.
 
 ## Commit messages
