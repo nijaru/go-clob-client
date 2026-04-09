@@ -2,6 +2,7 @@ package clob
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	neturl "net/url"
 	"time"
@@ -10,7 +11,8 @@ import (
 )
 
 type localBuilderAuth struct {
-	creds Credentials
+	creds         Credentials
+	decodedSecret []byte
 }
 
 type remoteBuilderAuth struct {
@@ -20,8 +22,12 @@ type remoteBuilderAuth struct {
 }
 
 // NewLocalBuilderAuth creates a builder auth provider that signs headers locally.
-func NewLocalBuilderAuth(creds Credentials) BuilderAuth {
-	return &localBuilderAuth{creds: creds}
+func NewLocalBuilderAuth(creds Credentials) (BuilderAuth, error) {
+	decodedSecret, err := polyauth.DecodeAPISecret(creds.Secret)
+	if err != nil {
+		return nil, fmt.Errorf("invalid builder API secret: %w", err)
+	}
+	return &localBuilderAuth{creds: creds, decodedSecret: decodedSecret}, nil
 }
 
 // NewRemoteBuilderAuth creates a builder auth provider backed by a remote signing service.
@@ -52,7 +58,7 @@ func (a *localBuilderAuth) Headers(
 ) (map[string]string, error) {
 	return polyauth.BuilderHeaders(
 		a.creds.Key,
-		a.creds.Secret,
+		a.decodedSecret,
 		a.creds.Passphrase,
 		req.Timestamp,
 		req.Method,

@@ -180,7 +180,7 @@ You can also upgrade incrementally:
 ```go
 base, _ := clob.NewClient(clob.Config{})
 signer, _ := base.AsSigner(privateKey, clob.SignatureTypeEOA, "")
-authed := signer.AsAuthenticated(creds, nil)
+authed, _ := signer.AsAuthenticated(creds, nil)
 ```
 
 ## Wallet Types

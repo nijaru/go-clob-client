@@ -30,12 +30,24 @@ func ExampleSignerClient_CreateOrDeriveAPIKey() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		authClient := client.AsAuthenticated(*creds, nil)
+		authClient, err := client.AsAuthenticated(*creds, nil)
+		if err != nil {
+			log.Fatal(err)
+		}
 		_ = authClient
 	}
 }
 
 func ExampleNewLocalBuilderAuth() {
+	builderAuth, err := clob.NewLocalBuilderAuth(clob.Credentials{
+		Key:        "builder-key",
+		Secret:     "builder-secret",
+		Passphrase: "builder-passphrase",
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	client, err := clob.NewAuthenticatedClient(clob.Config{
 		ChainID:    clob.PolygonChainID,
 		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
@@ -44,11 +56,7 @@ func ExampleNewLocalBuilderAuth() {
 			Secret:     "api-secret",
 			Passphrase: "api-passphrase",
 		},
-		BuilderAuth: clob.NewLocalBuilderAuth(clob.Credentials{
-			Key:        "builder-key",
-			Secret:     "builder-secret",
-			Passphrase: "builder-passphrase",
-		}),
+		BuilderAuth: builderAuth,
 	})
 	if err != nil {
 		log.Fatal(err)

@@ -89,15 +89,12 @@ func L1Headers(signer *Signer, chainID, timestamp, nonce int64) (map[string]stri
 
 func L2Headers(
 	signer *Signer,
-	key, secret, passphrase string,
+	key string, secret []byte, passphrase string,
 	timestamp int64,
 	method, path string,
 	body []byte,
 ) (map[string]string, error) {
-	signature, err := HMACSignature(secret, timestamp, method, path, body)
-	if err != nil {
-		return nil, err
-	}
+	signature := HMACSignatureBytes(secret, timestamp, method, path, body)
 
 	return map[string]string{
 		"POLY_ADDRESS":    signer.address.Hex(),
@@ -109,15 +106,12 @@ func L2Headers(
 }
 
 func BuilderHeaders(
-	key, secret, passphrase string,
+	key string, secret []byte, passphrase string,
 	timestamp int64,
 	method, path string,
 	body []byte,
 ) (map[string]string, error) {
-	signature, err := HMACSignature(secret, timestamp, method, path, body)
-	if err != nil {
-		return nil, err
-	}
+	signature := HMACSignatureBytes(secret, timestamp, method, path, body)
 
 	return map[string]string{
 		"POLY_BUILDER_API_KEY":    key,
@@ -242,38 +236,54 @@ func (s *Signer) signClobAuth(chainID, timestamp, nonce int64) (string, error) {
 	return SignTypedData(s, typedData)
 }
 
-func HMACSignature(
-	secret string,
-	timestamp int64,
-	method, requestPath string,
-	body []byte,
-) (string, error) {
+func DecodeAPISecret(secret string) ([]byte, error) {
 	normalized, err := normalizeBase64URL(secret)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	decoded, err := base64.URLEncoding.DecodeString(normalized)
 	if err != nil {
 		std := strings.NewReplacer("-", "+", "_", "/").Replace(secret)
 		decoded, err = base64.StdEncoding.DecodeString(std)
 		if err != nil {
-			return "", fmt.Errorf("decode API secret: %w", err)
+			return nil, fmt.Errorf("decode API secret: %w", err)
 		}
 	}
+	return decoded, nil
+}
 
-	mac := hmac.New(sha256.New, decoded)
+func HMACSignature(
+	secret string,
+	timestamp int64,
+	method, requestPath string,
+	body []byte,
+) (string, error) {
+	decoded, err := DecodeAPISecret(secret)
+	if err != nil {
+		return "", err
+	}
+	return HMACSignatureBytes(decoded, timestamp, method, requestPath, body), nil
+}
+
+func HMACSignatureBytes(
+	secret []byte,
+	timestamp int64,
+	method, requestPath string,
+	body []byte,
+) string {
+	mac := hmac.New(sha256.New, secret)
 
 	// Use a pre-allocated buffer to avoid multiple ephemeral allocations
 	var buf [24]byte
 	mac.Write(strconv.AppendInt(buf[:0], timestamp, 10))
-	mac.Write([]byte(method))
-	mac.Write([]byte(requestPath))
+	io.WriteString(mac, method)
+	io.WriteString(mac, requestPath)
 	if len(body) > 0 {
 		// Polymarket API expects single quotes to be replaced with double quotes in the signature message
 		mac.Write(normalizeSignatureBody(body))
 	}
 
-	return base64.URLEncoding.EncodeToString(mac.Sum(nil)), nil
+	return base64.URLEncoding.EncodeToString(mac.Sum(nil))
 }
 
 func normalizeBase64URL(value string) (string, error) {

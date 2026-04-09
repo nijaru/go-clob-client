@@ -22,7 +22,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	authClient := client.AsAuthenticated(*creds, nil)
+	authClient, err := client.AsAuthenticated(*creds, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
 	_ = authClient // Use authClient for authenticated requests
 	log.Printf("derived API key %s", creds.Key)
 }

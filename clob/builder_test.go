@@ -15,11 +15,14 @@ import (
 func TestLocalBuilderAuthHeaders(t *testing.T) {
 	t.Parallel()
 
-	auth := NewLocalBuilderAuth(Credentials{
+	auth, err := NewLocalBuilderAuth(Credentials{
 		Key:        "builder-key",
 		Secret:     "c2VjcmV0",
 		Passphrase: "builder-pass",
 	})
+	if err != nil {
+		t.Fatalf("new builder auth: %v", err)
+	}
 
 	headers, err := auth.Headers(t.Context(), BuilderHeaderRequest{
 		Method:    http.MethodPost,
@@ -298,6 +301,15 @@ func TestBuilderAndHeartbeatEndpoints(t *testing.T) {
 	}))
 	defer server.Close()
 
+	builderAuth, err := NewLocalBuilderAuth(Credentials{
+		Key:        "builder-key",
+		Secret:     "c2VjcmV0",
+		Passphrase: "builder-pass",
+	})
+	if err != nil {
+		t.Fatalf("new local builder auth: %v", err)
+	}
+
 	client, err := NewAuthenticatedClient(Config{
 		Host:       server.URL,
 		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
@@ -306,11 +318,7 @@ func TestBuilderAndHeartbeatEndpoints(t *testing.T) {
 			Secret:     "c2VjcmV0",
 			Passphrase: "pass",
 		},
-		BuilderAuth: NewLocalBuilderAuth(Credentials{
-			Key:        "builder-key",
-			Secret:     "c2VjcmV0",
-			Passphrase: "builder-pass",
-		}),
+		BuilderAuth: builderAuth,
 	})
 	if err != nil {
 		t.Fatalf("new client: %v", err)

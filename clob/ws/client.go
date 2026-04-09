@@ -40,6 +40,7 @@ const (
 type Client struct {
 	url   string
 	creds *clob.Credentials
+	decodedSecret []byte
 
 	mu       sync.Mutex
 	conn     *websocket.Conn
@@ -435,6 +436,7 @@ func (c *Client) sendUserSubscribeMessage(ctx context.Context, sub subscription)
 func (c *Client) deriveWSAuth(ctx context.Context) (clob.WSAuth, error) {
 	c.mu.Lock()
 	creds := c.creds
+	decodedSecret := c.decodedSecret
 	c.mu.Unlock()
 
 	if creds == nil {
@@ -444,10 +446,7 @@ func (c *Client) deriveWSAuth(ctx context.Context) (clob.WSAuth, error) {
 	}
 
 	timestamp := time.Now().Unix()
-	sig, err := polyauth.HMACSignature(creds.Secret, timestamp, "GET", "/ws/user", nil)
-	if err != nil {
-		return clob.WSAuth{}, fmt.Errorf("derive ws auth: %w", err)
-	}
+	sig := polyauth.HMACSignatureBytes(decodedSecret, timestamp, "GET", "/ws/user", nil)
 
 	return clob.WSAuth{
 		Key:        creds.Key,

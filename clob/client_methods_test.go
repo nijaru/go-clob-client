@@ -18,11 +18,14 @@ func TestAsAuthenticated(t *testing.T) {
 	}
 
 	// Upgrade to AuthenticatedClient
-	authClient := client.AsAuthenticated(Credentials{
+	authClient, err := client.AsAuthenticated(Credentials{
 		Key:        "new-key",
 		Secret:     "c2VjcmV0",
 		Passphrase: "new-pass",
 	}, nil)
+	if err != nil {
+		t.Fatalf("as authenticated: %v", err)
+	}
 
 	if authClient == nil {
 		t.Fatal("expected client to be authenticated")

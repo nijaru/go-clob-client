@@ -59,6 +59,7 @@ type AuthenticatedClient struct {
 	*SignerClient
 	authMu            sync.RWMutex
 	creds             *Credentials
+	decodedSecret     []byte
 	builderAuth       BuilderAuth
 	heartbeatID       string
 	heartbeatInterval time.Duration
@@ -242,7 +243,12 @@ func (c *Client) AsSigner(
 func (c *SignerClient) AsAuthenticated(
 	creds Credentials,
 	builder BuilderAuth,
-) *AuthenticatedClient {
+) (*AuthenticatedClient, error) {
+	decodedSecret, err := polyauth.DecodeAPISecret(creds.Secret)
+	if err != nil {
+		return nil, fmt.Errorf("invalid API secret: %w", err)
+	}
+
 	ac := &AuthenticatedClient{
 		SignerClient: &SignerClient{
 			Client:        c.Client.copyBase(),
@@ -253,11 +259,12 @@ func (c *SignerClient) AsAuthenticated(
 			rpcURL:        c.rpcURL,
 		},
 		creds:             &creds,
+		decodedSecret:     decodedSecret,
 		builderAuth:       builder,
 		heartbeatInterval: 5 * time.Second,
 	}
 	ac.http.Headers = ac.addAuthHeaders
-	return ac
+	return ac, nil
 }
 
 // NewAuthenticatedRTDSClient creates a new RTDS client that can also subscribe to authenticated topics.
@@ -497,7 +504,7 @@ func (c *AuthenticatedClient) addAuthHeaders(
 		return polyauth.L2Headers(
 			c.signer,
 			creds.Key,
-			creds.Secret,
+			c.decodedSecret,
 			creds.Passphrase,
 			timestamp,
 			method,
@@ -516,7 +523,7 @@ func (c *AuthenticatedClient) addAuthHeaders(
 		headers, err := polyauth.L2Headers(
 			c.signer,
 			creds.Key,
-			creds.Secret,
+			c.decodedSecret,
 			creds.Passphrase,
 			timestamp,
 			method,
