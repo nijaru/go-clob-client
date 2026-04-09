@@ -11,14 +11,14 @@ Go SDK for the [Polymarket](https://polymarket.com) CLOB and Data APIs. Targets 
 
 ## Features
 
-- **CLOB**: full REST + WebSocket (market and user channels).
-- **Data API**: positions, trades, activity, holders, live volume, and leaderboards.
+- **CLOB**: full REST + WebSocket support for markets, orders, and user events.
+- **Data API**: read-only positions, trades, activity, holders, live volume, and leaderboards.
 - **Heartbeats**: automated background heartbeats with ID rotation to keep orders live.
 - **Batch orders**: post and cancel up to 15 orders per request.
 - **RFQ**: submit and query request-for-quote flows.
-- **Gamma**: market and event discovery, search, tags, and metadata.
+- **Gamma**: market discovery, search, tags, and event metadata.
 - **Bridge**: cross-chain deposit addresses (EVM, Solana, Bitcoin).
-- **CTF**: on-chain split, merge, and redeem operations.
+- **CTF**: on-chain split, merge, and redeem operations for conditional tokens.
 - **Builder auth**: dual L2/builder header flows for institutional integrations.
 
 ## Install
@@ -31,9 +31,25 @@ go get github.com/nijaru/go-clob-client@latest
 
 Import the package you need: `clob` for trading and CLOB APIs, `data` for read-only Data API access.
 
-## Quickstart
-
 This repo exposes multiple public packages within one module. The most common entrypoints are `github.com/nijaru/go-clob-client/clob` and `github.com/nijaru/go-clob-client/data`.
+
+## Choose Your Path
+
+Use `clob` if you need:
+
+- orderbooks, prices, and market data
+- signed order creation and submission
+- account management, heartbeats, or websockets
+
+Use `data` if you need:
+
+- read-only analytics and reporting
+- positions, trades, activity, holders, and leaderboards
+- no signing or trading flows
+
+If you are integrating trading, start with `clob.NewClient` for read-only checks, then move to `NewSignerClient` or `NewAuthenticatedClient` once wallet and API credentials are configured.
+
+## Quickstart
 
 ### CLOB Read-Only
 
@@ -139,6 +155,15 @@ for _, pos := range positions {
 	fmt.Printf("%s: %s shares\n", pos.Title, pos.Size)
 }
 ```
+
+## Before Live Trading
+
+Read the wallet and allowance notes below before sending real orders. In particular:
+
+- choose the correct `SignatureType` for your wallet path
+- set `FunderAddress` when using proxy or delegated wallets
+- confirm token allowances if you are trading from an EOA wallet
+- always close authenticated clients cleanly so heartbeat state shuts down cleanly
 
 ## Client Tiers
 
