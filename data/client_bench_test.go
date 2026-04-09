@@ -95,8 +95,11 @@ func BenchmarkGetTradesWithFilter(b *testing.B) {
 
 	for b.Loop() {
 		items, err := client.GetTrades(ctx, TradeParams{
-			User:        "0x123",
-			TradeFilter: &TradeFilter{FilterType: FilterTypeCash, FilterAmount: udecimalMustParse("100")},
+			User: "0x123",
+			TradeFilter: &TradeFilter{
+				FilterType:   FilterTypeCash,
+				FilterAmount: udecimalMustParse("100"),
+			},
 		})
 		if err != nil {
 			b.Fatalf("GetTrades: %v", err)
