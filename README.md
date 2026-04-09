@@ -25,25 +25,17 @@ Go SDK for the [Polymarket](https://polymarket.com) CLOB and Data APIs. Targets 
 
 Requires **Go 1.26.1+**.
 
-Install the package you need:
-
-### CLOB SDK
-
 ```bash
-go get github.com/nijaru/go-clob-client/clob@latest
+go get github.com/nijaru/go-clob-client@latest
 ```
 
-### Data API
-
-```bash
-go get github.com/nijaru/go-clob-client/data@latest
-```
-
-If you use both packages, Go will keep a single module dependency on `github.com/nijaru/go-clob-client`.
+Import the package you need: `clob` for trading and CLOB APIs, `data` for read-only Data API access.
 
 ## Quickstart
 
-### Read-Only Access
+This repo exposes multiple public packages within one module. The most common entrypoints are `github.com/nijaru/go-clob-client/clob` and `github.com/nijaru/go-clob-client/data`.
+
+### CLOB Read-Only
 
 ```go
 import "github.com/nijaru/go-clob-client/clob"
