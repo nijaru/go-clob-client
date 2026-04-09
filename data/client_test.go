@@ -6,7 +6,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/quagmt/udecimal"
 )
+
+func udecimalMustParse(s string) Decimal {
+	return udecimal.MustParse(s)
+}
 
 func TestDataClient(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -16,50 +22,62 @@ func TestDataClient(t *testing.T) {
 			json.NewEncoder(w).Encode(Health{Data: "OK"})
 		case "/positions":
 			json.NewEncoder(w).Encode([]Position{
-				{Asset: "0x123", Title: "Test Market", Size: "100"},
+				{Asset: "0x123", Title: "Test Market", Size: udecimalMustParse("100")},
 			})
 		case "/trades":
-			json.NewEncoder(w).Encode([]DataTrade{
-				{Side: "BUY", Size: "50", Price: "0.65"},
+			json.NewEncoder(w).Encode([]Trade{
+				{Side: SideBuy, Size: udecimalMustParse("50"), Price: udecimalMustParse("0.65")},
 			})
 		case "/activity":
 			json.NewEncoder(w).Encode([]Activity{
-				{Type: "TRADE", Size: "10", USDCSize: "6.5"},
+				{
+					Type:     ActivityTypeTrade,
+					Size:     udecimalMustParse("10"),
+					USDCSize: udecimalMustParse("6.5"),
+				},
 			})
 		case "/holders":
 			json.NewEncoder(w).Encode([]MetaHolder{
-				{Token: "0x123", Holders: []Holder{{ProxyWallet: "0xabc", Amount: "100"}}},
+				{
+					Token:   "0x123",
+					Holders: []Holder{{ProxyWallet: "0xabc", Amount: udecimalMustParse("100")}},
+				},
 			})
 		case "/value":
 			json.NewEncoder(w).Encode([]Value{
-				{User: "0x123", Value: "1000.50"},
+				{User: "0x123", Value: udecimalMustParse("1000.50")},
 			})
 		case "/v1/leaderboard":
 			json.NewEncoder(w).Encode([]TraderLeaderboardEntry{
-				{Rank: 1, Username: "trader1", Volume: "1000", PNL: "500"},
+				{
+					Rank:     1,
+					Username: "trader1",
+					Volume:   udecimalMustParse("1000"),
+					PNL:      udecimalMustParse("500"),
+				},
 			})
 		case "/v1/builders/leaderboard":
 			json.NewEncoder(w).Encode([]BuilderLeaderboardEntry{
-				{Rank: 1, Builder: "0xabc", Volume: "5000", ActiveUsers: 10},
+				{Rank: 1, Builder: "0xabc", Volume: udecimalMustParse("5000"), ActiveUsers: 10},
 			})
 		case "/v1/builders/volume":
 			json.NewEncoder(w).Encode([]BuilderVolumeEntry{
-				{Builder: "0xabc", Volume: "1000", ActiveUsers: 5},
+				{Builder: "0xabc", Volume: udecimalMustParse("1000"), ActiveUsers: 5},
 			})
 		case "/traded":
 			json.NewEncoder(w).Encode(Traded{User: "0x123", Traded: 42})
 		case "/oi":
 			json.NewEncoder(w).Encode([]OpenInterest{
-				{Market: "0xabc", Value: "10000"},
+				{Market: "0xabc", Value: udecimalMustParse("10000")},
 			})
 		case "/live-volume":
 			json.NewEncoder(w).Encode([]LiveVolume{{
-				Total:   "50000",
-				Markets: []MarketVolume{{Market: "0xabc", Value: "25000"}},
+				Total:   udecimalMustParse("50000"),
+				Markets: []MarketVolume{{Market: "0xabc", Value: udecimalMustParse("25000")}},
 			}})
 		case "/closed-positions":
 			json.NewEncoder(w).Encode([]ClosedPosition{
-				{Asset: "0x123", Title: "Closed", RealizedPNL: "50"},
+				{Asset: "0x123", Title: "Closed", RealizedPNL: udecimalMustParse("50")},
 			})
 		}
 	}))
@@ -93,7 +111,7 @@ func TestDataClient(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetTrades: %v", err)
 		}
-		if len(items) != 1 || items[0].Side != "BUY" {
+		if len(items) != 1 || items[0].Side != SideBuy {
 			t.Errorf("unexpected: %+v", items)
 		}
 	})
@@ -103,7 +121,7 @@ func TestDataClient(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetActivity: %v", err)
 		}
-		if len(items) != 1 || items[0].Type != "TRADE" {
+		if len(items) != 1 || items[0].Type != ActivityTypeTrade {
 			t.Errorf("unexpected: %+v", items)
 		}
 	})
@@ -123,13 +141,16 @@ func TestDataClient(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetValue: %v", err)
 		}
-		if len(items) != 1 || items[0].Value != "1000.50" {
+		if len(items) != 1 || items[0].Value.String() != "1000.5" {
 			t.Errorf("unexpected values: %+v", items)
 		}
 	})
 
 	t.Run("GetLeaderboard", func(t *testing.T) {
-		items, err := client.GetLeaderboard(ctx, LeaderboardParams{Category: "OVERALL"})
+		items, err := client.GetLeaderboard(
+			ctx,
+			LeaderboardParams{Category: LeaderboardCategoryOverall},
+		)
 		if err != nil {
 			t.Fatalf("GetLeaderboard: %v", err)
 		}
@@ -153,7 +174,7 @@ func TestDataClient(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetBuilderVolume: %v", err)
 		}
-		if len(items) != 1 || items[0].Volume != "1000" {
+		if len(items) != 1 || items[0].Volume.String() != "1000" {
 			t.Errorf("unexpected: %+v", items)
 		}
 	})
@@ -173,7 +194,7 @@ func TestDataClient(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetOpenInterest: %v", err)
 		}
-		if len(items) != 1 || items[0].Value != "10000" {
+		if len(items) != 1 || items[0].Value.String() != "10000" {
 			t.Errorf("unexpected: %+v", items)
 		}
 	})
@@ -183,7 +204,7 @@ func TestDataClient(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetLiveVolume: %v", err)
 		}
-		if len(items) != 1 || items[0].Total != "50000" {
+		if len(items) != 1 || items[0].Total.String() != "50000" {
 			t.Errorf("unexpected live volume: %+v", items)
 		}
 	})
@@ -193,7 +214,7 @@ func TestDataClient(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetClosedPositions: %v", err)
 		}
-		if len(items) != 1 || items[0].RealizedPNL != "50" {
+		if len(items) != 1 || items[0].RealizedPNL.String() != "50" {
 			t.Errorf("unexpected: %+v", items)
 		}
 	})
@@ -246,7 +267,7 @@ func TestDataClient(t *testing.T) {
 						return
 					}
 					w.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(w).Encode([]DataTrade{})
+					json.NewEncoder(w).Encode([]Trade{})
 					errCh <- nil
 				}),
 			)
@@ -279,7 +300,7 @@ func TestDataClient(t *testing.T) {
 						return
 					}
 					w.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(w).Encode([]DataTrade{})
+					json.NewEncoder(w).Encode([]Trade{})
 					errCh <- nil
 				}),
 			)
@@ -287,8 +308,11 @@ func TestDataClient(t *testing.T) {
 
 			client := New(Config{Host: server.URL})
 			_, err := client.GetTrades(t.Context(), TradeParams{
-				User:        "0x123",
-				TradeFilter: &TradeFilter{FilterType: FilterTypeCash, FilterAmount: "100"},
+				User: "0x123",
+				TradeFilter: &TradeFilter{
+					FilterType:   FilterTypeCash,
+					FilterAmount: udecimalMustParse("100"),
+				},
 			})
 			if err != nil {
 				t.Fatalf("GetTrades: %v", err)
@@ -331,7 +355,7 @@ func TestDataClient(t *testing.T) {
 			defer server.Close()
 
 			client := New(Config{Host: server.URL})
-			for range client.IterLeaderboard(t.Context(), LeaderboardParams{Category: "OVERALL"}) {
+			for range client.IterLeaderboard(t.Context(), LeaderboardParams{Category: LeaderboardCategoryOverall}) {
 			}
 			if gotLimit := <-limitCh; gotLimit != "50" {
 				t.Fatalf("iterator limit = %q, want %q", gotLimit, "50")
@@ -355,7 +379,7 @@ func TestDataClient(t *testing.T) {
 
 			client := New(Config{Host: server.URL})
 			_, err := client.GetLeaderboard(t.Context(), LeaderboardParams{
-				Category: "OVERALL",
+				Category: LeaderboardCategoryOverall,
 				Limit:    100,
 			})
 			if err != nil {

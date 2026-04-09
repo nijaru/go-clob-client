@@ -68,14 +68,18 @@ func setInt64(query url.Values, key string, val int64) {
 	}
 }
 
-func setString(query url.Values, key, val string) {
+func setString[T ~string](query url.Values, key string, val T) {
 	if val != "" {
-		query.Set(key, val)
+		query.Set(key, string(val))
 	}
 }
 
-func setCommaList(query url.Values, key string, vals []string) {
+func setCommaList[T ~string](query url.Values, key string, vals []T) {
 	if len(vals) > 0 {
-		query.Set(key, strings.Join(vals, ","))
+		parts := make([]string, len(vals))
+		for i, val := range vals {
+			parts[i] = string(val)
+		}
+		query.Set(key, strings.Join(parts, ","))
 	}
 }

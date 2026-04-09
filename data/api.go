@@ -135,7 +135,7 @@ func (c *Client) GetValue(ctx context.Context, user string, markets []string) ([
 	return out, err
 }
 
-func (c *Client) GetTrades(ctx context.Context, p TradeParams) ([]DataTrade, error) {
+func (c *Client) GetTrades(ctx context.Context, p TradeParams) ([]Trade, error) {
 	q := url.Values{}
 	setString(q, "user", p.User)
 	p.Filter.appendQuery(q)
@@ -144,17 +144,17 @@ func (c *Client) GetTrades(ctx context.Context, p TradeParams) ([]DataTrade, err
 	setBool(q, "takerOnly", p.TakerOnly)
 	if p.TradeFilter != nil {
 		setString(q, "filterType", string(p.TradeFilter.FilterType))
-		setString(q, "filterAmount", p.TradeFilter.FilterAmount)
+		setString(q, "filterAmount", p.TradeFilter.FilterAmount.String())
 	}
 	setString(q, "side", p.Side)
 
-	var out []DataTrade
+	var out []Trade
 	err := c.getJSON(ctx, tradesEndpoint, q, &out)
 	return out, err
 }
 
-func (c *Client) IterTrades(ctx context.Context, p TradeParams) iter.Seq2[DataTrade, error] {
-	return func(yield func(DataTrade, error) bool) {
+func (c *Client) IterTrades(ctx context.Context, p TradeParams) iter.Seq2[Trade, error] {
+	return func(yield func(Trade, error) bool) {
 		offset := p.Offset
 		limit := iteratorLimit(p.Limit, 100, 10000)
 		for {
@@ -163,7 +163,7 @@ func (c *Client) IterTrades(ctx context.Context, p TradeParams) iter.Seq2[DataTr
 			q.Offset = offset
 			items, err := c.GetTrades(ctx, q)
 			if err != nil {
-				yield(DataTrade{}, err)
+				yield(Trade{}, err)
 				return
 			}
 			if len(items) == 0 {
