@@ -52,6 +52,9 @@ func (c *SignerClient) CreateOrder(
 	if err := validatePrice(userOrder.Price, tickSize); err != nil {
 		return nil, err
 	}
+	if err := validateLimitPricePrecision(userOrder.Price, tickSize); err != nil {
+		return nil, err
+	}
 
 	negRisk, err := c.resolveNegRisk(ctx, userOrder.TokenID, options)
 	if err != nil {
@@ -373,8 +376,8 @@ func (c *SignerClient) buildSignedMarketOrder(
 	case SideBuy:
 		switch userOrder.AmountKind {
 		case AmountUSDC:
-			// Spend exactly Amount USDC; compute shares from price.
-			rawMakerAmount = roundDown(amount, roundConfig.Size)
+			// Preserve the full USDC amount; only the derived share quantity is quantized.
+			rawMakerAmount = amount
 			val, err := rawMakerAmount.Div(price)
 			if err != nil {
 				return nil, fmt.Errorf("calculation error: %w", err)
@@ -589,6 +592,22 @@ func validatePrice(price udecimal.Decimal, tickSize TickSize) error {
 		return nil
 	}
 	return fmt.Errorf("invalid price (%s), min: %s - max: %s", price, minimum, maximum)
+}
+
+func validateLimitPricePrecision(price udecimal.Decimal, tickSize TickSize) error {
+	minimum, err := parseTickSize(tickSize)
+	if err != nil {
+		return err
+	}
+	if decimalPlaces(price) <= decimalPlaces(minimum) {
+		return nil
+	}
+	return fmt.Errorf(
+		"price %s exceeds maximum %d decimal places for tick size %q",
+		price,
+		decimalPlaces(minimum),
+		tickSize,
+	)
 }
 
 func sideValue(side Side) int {

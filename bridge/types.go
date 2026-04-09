@@ -1,15 +1,54 @@
 package bridge
 
+import (
+	"fmt"
+	"strconv"
+
+	"github.com/ethereum/go-ethereum/common"
+	json "github.com/go-json-experiment/json"
+	"github.com/quagmt/udecimal"
+)
+
+// ChainID identifies an EVM or bridge-supported chain.
+// It marshals to the wire format Polymarket expects: a base-10 JSON string.
+type ChainID int64
+
+func (c ChainID) MarshalJSON() ([]byte, error) {
+	return json.Marshal(strconv.FormatInt(int64(c), 10))
+}
+
+func (c *ChainID) UnmarshalJSON(data []byte) error {
+	var raw string
+	if err := json.Unmarshal(data, &raw); err == nil {
+		parsed, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			return fmt.Errorf("parse chain id: %w", err)
+		}
+		*c = ChainID(parsed)
+		return nil
+	}
+
+	var numeric int64
+	if err := json.Unmarshal(data, &numeric); err != nil {
+		return fmt.Errorf("decode chain id: %w", err)
+	}
+	*c = ChainID(numeric)
+	return nil
+}
+
+// Decimal is the numeric type used for bridge decimal amounts.
+type Decimal = udecimal.Decimal
+
 // DepositRequest is the request to generate deposit addresses.
 type DepositRequest struct {
-	Address string `json:"address"` // Polymarket wallet address
+	Address common.Address `json:"address"` // Polymarket wallet address
 }
 
 // DepositAddresses holds deposit addresses for different blockchain networks.
 type DepositAddresses struct {
-	EVM string `json:"evm"`
-	SVM string `json:"svm"`
-	BTC string `json:"btc"`
+	EVM common.Address `json:"evm"`
+	SVM string         `json:"svm"`
+	BTC string         `json:"btc"`
 }
 
 // DepositResponse is the response from the /deposit endpoint.
@@ -28,10 +67,10 @@ type Token struct {
 
 // SupportedAsset is a supported asset with chain and token information.
 type SupportedAsset struct {
-	ChainID        string `json:"chainId"`
-	ChainName      string `json:"chainName"`
-	Token          Token  `json:"token"`
-	MinCheckoutUSD string `json:"minCheckoutUsd"`
+	ChainID        ChainID `json:"chainId"`
+	ChainName      string  `json:"chainName"`
+	Token          Token   `json:"token"`
+	MinCheckoutUSD Decimal `json:"minCheckoutUsd"`
 }
 
 // SupportedAssetsResponse is the response from the /supported-assets endpoint.
@@ -42,12 +81,12 @@ type SupportedAssetsResponse struct {
 
 // QuoteRequest is a request for a bridge quote.
 type QuoteRequest struct {
-	FromAmountBaseUnit string `json:"fromAmountBaseUnit"`
-	FromChainID        string `json:"fromChainId"`
-	FromTokenAddress   string `json:"fromTokenAddress"`
-	RecipientAddress   string `json:"recipientAddress"`
-	ToChainID          string `json:"toChainId"`
-	ToTokenAddress     string `json:"toTokenAddress"`
+	FromAmountBaseUnit string  `json:"fromAmountBaseUnit"`
+	FromChainID        ChainID `json:"fromChainId"`
+	FromTokenAddress   string  `json:"fromTokenAddress"`
+	RecipientAddress   string  `json:"recipientAddress"`
+	ToChainID          ChainID `json:"toChainId"`
+	ToTokenAddress     string  `json:"toTokenAddress"`
 }
 
 // EstimatedFeeBreakdown holds the fee breakdown for a quote.
@@ -78,17 +117,17 @@ type QuoteResponse struct {
 
 // WithdrawRequest is a request to withdraw assets from Polymarket via the bridge.
 type WithdrawRequest struct {
-	Address        string `json:"address"`        // Source Polymarket wallet address on Polygon
-	ToChainID      string `json:"toChainId"`      // Destination chain ID
-	ToTokenAddress string `json:"toTokenAddress"` // Destination token contract address
-	RecipientAddr  string `json:"recipientAddr"`  // Destination wallet address
+	Address        common.Address `json:"address"`        // Source Polymarket wallet address on Polygon
+	ToChainID      ChainID        `json:"toChainId"`      // Destination chain ID
+	ToTokenAddress string         `json:"toTokenAddress"` // Destination token contract address
+	RecipientAddr  string         `json:"recipientAddr"`  // Destination wallet address
 }
 
 // WithdrawalAddresses holds withdrawal destination addresses for different networks.
 type WithdrawalAddresses struct {
-	EVM string `json:"evm"`
-	SVM string `json:"svm"`
-	BTC string `json:"btc"`
+	EVM common.Address `json:"evm"`
+	SVM string         `json:"svm"`
+	BTC string         `json:"btc"`
 }
 
 // WithdrawResponse is the response from the /withdraw endpoint.
@@ -111,11 +150,11 @@ const (
 
 // DepositTransaction represents a single bridge deposit transaction.
 type DepositTransaction struct {
-	FromChainID        string                   `json:"fromChainId"`
+	FromChainID        ChainID                  `json:"fromChainId"`
 	FromTokenAddress   string                   `json:"fromTokenAddress"`
 	FromAmountBaseUnit string                   `json:"fromAmountBaseUnit"`
-	ToChainID          string                   `json:"toChainId"`
-	ToTokenAddress     string                   `json:"toTokenAddress"`
+	ToChainID          ChainID                  `json:"toChainId"`
+	ToTokenAddress     common.Address           `json:"toTokenAddress"`
 	Status             DepositTransactionStatus `json:"status"`
 	TxHash             *string                  `json:"txHash,omitzero"`
 	CreatedTimeMs      *uint64                  `json:"createdTimeMs,omitzero"`

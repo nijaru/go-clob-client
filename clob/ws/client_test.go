@@ -296,8 +296,71 @@ func TestHeartbeatPingPong(t *testing.T) {
 	select {
 	case <-pingReceived:
 		// Good — heartbeat reached the server
-	case <-time.After(2 * pingInterval):
+	case <-time.After(2 * client.heartbeatInterval):
 		t.Fatal("timed out waiting for PING")
+	}
+}
+
+func TestHeartbeatTimeoutTriggersReconnect(t *testing.T) {
+	t.Parallel()
+
+	reconnected := make(chan struct{}, 1)
+	var connCount int
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		connCount++
+		current := connCount
+
+		c, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			t.Logf("accept: %v", err)
+			return
+		}
+		defer c.Close(websocket.StatusNormalClosure, "")
+
+		for {
+			_, data, err := c.Read(r.Context())
+			if err != nil {
+				return
+			}
+
+			if string(data) != "PING" {
+				continue
+			}
+
+			if current == 1 {
+				// Intentionally ignore the first connection's heartbeat so the client
+				// declares it stale and reconnects.
+				continue
+			}
+
+			select {
+			case reconnected <- struct{}{}:
+			default:
+			}
+			_ = c.Write(r.Context(), websocket.MessageText, []byte("PONG"))
+		}
+	}))
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+	client := NewClient(wsURL)
+	client.heartbeatInterval = 25 * time.Millisecond
+	client.heartbeatTimeout = 25 * time.Millisecond
+
+	if err := client.Connect(t.Context()); err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer client.Close()
+
+	select {
+	case <-reconnected:
+	case <-time.After(3 * time.Second):
+		t.Fatalf("timed out waiting for reconnect, connCount=%d", connCount)
+	}
+
+	if connCount < 2 {
+		t.Fatalf("expected reconnect after heartbeat timeout, connCount=%d", connCount)
 	}
 }
 

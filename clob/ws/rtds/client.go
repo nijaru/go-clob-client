@@ -14,8 +14,9 @@ import (
 
 const (
 	// DefaultRTDSHost is the production Polymarket RTDS WebSocket URL.
-	DefaultRTDSHost = "wss://rtds.polymarket.com"
-	pingInterval    = 10 * time.Second
+	DefaultRTDSHost          = "wss://rtds.polymarket.com"
+	defaultHeartbeatInterval = 5 * time.Second
+	defaultHeartbeatTimeout  = 15 * time.Second
 )
 
 // Client is a WebSocket client for the Polymarket RTDS (Real-Time Data Stream).
@@ -27,18 +28,22 @@ type Client struct {
 	conn     *websocket.Conn
 	connDone chan struct{}
 
-	msgs       chan *RtdsMessage
-	errs       chan error
-	stop       chan struct{}
-	ctx        context.Context
-	cancel     context.CancelFunc
-	connCancel context.CancelFunc
-	closed     bool
+	msgs         chan *RtdsMessage
+	errs         chan error
+	stop         chan struct{}
+	ctx          context.Context
+	cancel       context.CancelFunc
+	connCancel   context.CancelFunc
+	closed       bool
+	reconnecting bool
 
 	autoReconnect bool
 	subsMu        sync.RWMutex
 	subs          []Subscription
 	creds         *Credentials
+
+	heartbeatInterval time.Duration
+	heartbeatTimeout  time.Duration
 }
 
 // NewClient creates a new RTDS client.
@@ -51,14 +56,16 @@ func NewClient(url string, logger *slog.Logger) *Client {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Client{
-		url:           url,
-		logger:        logger.With("pkg", "rtds"),
-		msgs:          make(chan *RtdsMessage, 1024),
-		errs:          make(chan error, 100),
-		stop:          make(chan struct{}),
-		ctx:           ctx,
-		cancel:        cancel,
-		autoReconnect: true,
+		url:               url,
+		logger:            logger.With("pkg", "rtds"),
+		msgs:              make(chan *RtdsMessage, 1024),
+		errs:              make(chan error, 100),
+		stop:              make(chan struct{}),
+		ctx:               ctx,
+		cancel:            cancel,
+		autoReconnect:     true,
+		heartbeatInterval: defaultHeartbeatInterval,
+		heartbeatTimeout:  defaultHeartbeatTimeout,
 	}
 }
 
@@ -102,12 +109,13 @@ func (c *Client) connect(ctx context.Context) error {
 		oldCancel()
 	}
 
-	go c.readLoop(loopCtx)
-	go c.heartbeatLoop(loopCtx)
+	pongs := make(chan time.Time, 1)
+	go c.readLoop(loopCtx, conn, c.connDone, pongs)
+	go c.heartbeatLoop(loopCtx, conn, pongs)
 
 	// Resubscribe if reconnecting
 	c.subsMu.RLock()
-	subs := c.subs
+	subs := append([]Subscription(nil), c.subs...)
 	c.subsMu.RUnlock()
 
 	if len(subs) > 0 {
@@ -122,6 +130,18 @@ func (c *Client) connect(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (c *Client) scheduleReconnect() {
+	c.mu.Lock()
+	if c.closed || !c.autoReconnect || c.reconnecting {
+		c.mu.Unlock()
+		return
+	}
+	c.reconnecting = true
+	c.mu.Unlock()
+
+	go c.attemptReconnect()
 }
 
 // Close closes the connection and stops the loops.
@@ -225,11 +245,12 @@ func (c *Client) SubscribeComments(
 	return c.Subscribe(ctx, sub)
 }
 
-func (c *Client) readLoop(ctx context.Context) {
-	// Capture the channel value at start so a concurrent reconnect that
-	// replaces c.connDone or c.conn cannot affect this loop.
-	done := c.connDone
-	conn := c.conn
+func (c *Client) readLoop(
+	ctx context.Context,
+	conn *websocket.Conn,
+	done chan struct{},
+	pongs chan<- time.Time,
+) {
 	defer close(done)
 
 	for {
@@ -241,7 +262,7 @@ func (c *Client) readLoop(ctx context.Context) {
 			c.logger.Error("read error", "error", err)
 
 			if c.autoReconnect {
-				go c.attemptReconnect()
+				c.scheduleReconnect()
 				return
 			}
 
@@ -250,6 +271,14 @@ func (c *Client) readLoop(ctx context.Context) {
 		}
 
 		if typ != websocket.MessageText {
+			continue
+		}
+
+		if string(data) == "PONG" {
+			select {
+			case pongs <- time.Now():
+			default:
+			}
 			continue
 		}
 
@@ -308,31 +337,62 @@ func (c *Client) dispatch(ctx context.Context, m *RtdsMessage) {
 	}
 }
 
-func (c *Client) heartbeatLoop(ctx context.Context) {
-	ticker := time.NewTicker(pingInterval)
+func (c *Client) heartbeatLoop(
+	ctx context.Context,
+	conn *websocket.Conn,
+	pongs <-chan time.Time,
+) {
+	ticker := time.NewTicker(c.heartbeatInterval)
 	defer ticker.Stop()
+
+	var timeout *time.Timer
+	defer func() {
+		if timeout != nil {
+			timeout.Stop()
+		}
+	}()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			c.mu.Lock()
-			conn := c.conn
-			c.mu.Unlock()
-
-			if conn == nil {
-				return
+			for {
+				select {
+				case <-pongs:
+				default:
+					goto drained
+				}
 			}
-
-			// RTDS expects plain text " " or "PING" usually,
-			// the Rust SDK sends " " by default in some cases but here we follow clob pattern if unsure.
-			// Actually let's just send a space as it is common for simple keepalives if not specified.
-			if err := conn.Write(ctx, websocket.MessageText, []byte(" ")); err != nil {
+		drained:
+			if err := conn.Write(ctx, websocket.MessageText, []byte("PING")); err != nil {
 				if ctx.Err() != nil {
 					return
 				}
 				c.logger.Error("ping failed", "error", err)
+				c.scheduleReconnect()
+				return
+			}
+
+			if timeout == nil {
+				timeout = time.NewTimer(c.heartbeatTimeout)
+			} else {
+				timeout.Reset(c.heartbeatTimeout)
+			}
+
+			select {
+			case <-ctx.Done():
+				return
+			case <-pongs:
+				if !timeout.Stop() {
+					select {
+					case <-timeout.C:
+					default:
+					}
+				}
+			case <-timeout.C:
+				_ = conn.Close(websocket.StatusPolicyViolation, "heartbeat timeout")
+				c.scheduleReconnect()
 				return
 			}
 		}
@@ -417,6 +477,12 @@ func (c *Client) reportError(err error) {
 }
 
 func (c *Client) attemptReconnect() {
+	defer func() {
+		c.mu.Lock()
+		c.reconnecting = false
+		c.mu.Unlock()
+	}()
+
 	backoff := 1 * time.Second
 	maxBackoff := 60 * time.Second
 	timer := time.NewTimer(backoff)

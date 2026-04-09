@@ -12,7 +12,6 @@ import (
 	"time"
 
 	json "github.com/go-json-experiment/json"
-	"github.com/go-json-experiment/json/jsontext"
 
 	"github.com/coder/websocket"
 	"github.com/nijaru/go-clob-client/clob"
@@ -20,8 +19,9 @@ import (
 )
 
 const (
-	defaultMarketURL = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
-	pingInterval     = 10 * time.Second
+	defaultMarketURL         = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
+	defaultHeartbeatInterval = 5 * time.Second
+	defaultHeartbeatTimeout  = 15 * time.Second
 
 	channelTypeOrderBook      = "order_book"
 	channelTypeLastTradePrice = "last_trade_price"
@@ -45,13 +45,14 @@ type Client struct {
 	conn     *websocket.Conn
 	connDone chan struct{} // closed when conn.Close() completes
 
-	events     chan Event
-	errs       chan error
-	stop       chan struct{}
-	ctx        context.Context
-	cancel     context.CancelFunc
-	connCancel context.CancelFunc
-	closed     bool
+	events       chan Event
+	errs         chan error
+	stop         chan struct{}
+	ctx          context.Context
+	cancel       context.CancelFunc
+	connCancel   context.CancelFunc
+	closed       bool
+	reconnecting bool
 
 	autoReconnect bool
 	subsMu        sync.RWMutex
@@ -59,6 +60,9 @@ type Client struct {
 	marketRefs    map[string]int
 	userRefs      map[string]int
 	customFeature bool
+
+	heartbeatInterval time.Duration
+	heartbeatTimeout  time.Duration
 }
 
 type subscriptionTarget uint8
@@ -101,16 +105,18 @@ func newClient(url string, creds *clob.Credentials) *Client {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Client{
-		url:           url,
-		creds:         creds,
-		events:        make(chan Event, 100),
-		errs:          make(chan error, 10),
-		stop:          make(chan struct{}),
-		ctx:           ctx,
-		cancel:        cancel,
-		autoReconnect: true,
-		marketRefs:    make(map[string]int),
-		userRefs:      make(map[string]int),
+		url:               url,
+		creds:             creds,
+		events:            make(chan Event, 100),
+		errs:              make(chan error, 10),
+		stop:              make(chan struct{}),
+		ctx:               ctx,
+		cancel:            cancel,
+		autoReconnect:     true,
+		marketRefs:        make(map[string]int),
+		userRefs:          make(map[string]int),
+		heartbeatInterval: defaultHeartbeatInterval,
+		heartbeatTimeout:  defaultHeartbeatTimeout,
 	}
 }
 
@@ -154,8 +160,9 @@ func (c *Client) connect(ctx context.Context) error {
 		oldCancel()
 	}
 
-	go c.readLoop(loopCtx)
-	go c.heartbeatLoop(loopCtx)
+	pongs := make(chan time.Time, 1)
+	go c.readLoop(loopCtx, conn, c.connDone, pongs)
+	go c.heartbeatLoop(loopCtx, conn, pongs)
 
 	c.replayTrackedSubscriptions(ctx)
 
@@ -192,6 +199,18 @@ func (c *Client) Close() error {
 		return err
 	}
 	return nil
+}
+
+func (c *Client) scheduleReconnect() {
+	c.mu.Lock()
+	if c.closed || !c.autoReconnect || c.reconnecting {
+		c.mu.Unlock()
+		return
+	}
+	c.reconnecting = true
+	c.mu.Unlock()
+
+	go c.attemptReconnect()
 }
 
 // IsConnected reports whether the client has an active WebSocket connection.
@@ -668,11 +687,12 @@ func (c *Client) recomputeCustomFeatureLocked() {
 	}
 }
 
-func (c *Client) readLoop(ctx context.Context) {
-	// Capture both at goroutine start so a concurrent reconnect that replaces
-	// c.connDone or c.conn cannot affect this loop.
-	done := c.connDone
-	conn := c.conn
+func (c *Client) readLoop(
+	ctx context.Context,
+	conn *websocket.Conn,
+	done chan struct{},
+	pongs chan<- time.Time,
+) {
 	defer close(done)
 
 	for {
@@ -685,7 +705,7 @@ func (c *Client) readLoop(ctx context.Context) {
 
 			// If auto-reconnect enabled, try to reconnect
 			if c.autoReconnect {
-				go c.attemptReconnect()
+				c.scheduleReconnect()
 				return
 			}
 
@@ -698,6 +718,10 @@ func (c *Client) readLoop(ctx context.Context) {
 
 		// Handle PONG
 		if string(data) == "PONG" {
+			select {
+			case pongs <- time.Now():
+			default:
+			}
 			continue
 		}
 
@@ -706,32 +730,62 @@ func (c *Client) readLoop(ctx context.Context) {
 	}
 }
 
-func (c *Client) heartbeatLoop(ctx context.Context) {
-	ticker := time.NewTicker(pingInterval)
+func (c *Client) heartbeatLoop(
+	ctx context.Context,
+	conn *websocket.Conn,
+	pongs <-chan time.Time,
+) {
+	ticker := time.NewTicker(c.heartbeatInterval)
 	defer ticker.Stop()
+
+	var timeout *time.Timer
+	defer func() {
+		if timeout != nil {
+			timeout.Stop()
+		}
+	}()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// Polymarket expects plain text "PING"
-			c.mu.Lock()
-			if c.conn == nil {
-				c.mu.Unlock()
-				return
+			for {
+				select {
+				case <-pongs:
+				default:
+					goto drained
+				}
 			}
-			err := c.conn.Write(ctx, websocket.MessageText, []byte("PING"))
-			c.mu.Unlock()
-
-			if err != nil {
+		drained:
+			// Polymarket expects plain text "PING"
+			if err := conn.Write(ctx, websocket.MessageText, []byte("PING")); err != nil {
 				if ctx.Err() != nil {
 					return
 				}
-				select {
-				case c.errs <- fmt.Errorf("ping: %w", err):
-				default:
+				c.scheduleReconnect()
+				return
+			}
+
+			if timeout == nil {
+				timeout = time.NewTimer(c.heartbeatTimeout)
+			} else {
+				timeout.Reset(c.heartbeatTimeout)
+			}
+
+			select {
+			case <-ctx.Done():
+				return
+			case <-pongs:
+				if !timeout.Stop() {
+					select {
+					case <-timeout.C:
+					default:
+					}
 				}
+			case <-timeout.C:
+				_ = conn.Close(websocket.StatusPolicyViolation, "heartbeat timeout")
+				c.scheduleReconnect()
 				return
 			}
 		}
@@ -751,29 +805,44 @@ func (c *Client) sendJSON(ctx context.Context, v any) error {
 	return c.conn.Write(ctx, websocket.MessageText, data)
 }
 
-// extractEventType scans JSON bytes for the "event_type" key, stopping as soon
-// as the key is found rather than decoding the full message.
+var eventTypeKey = []byte(`"event_type"`)
+
+// extractEventType scans JSON bytes for the "event_type" key using a direct
+// byte search so the hot path avoids decoder allocations.
 func extractEventType(data []byte) (EventType, bool) {
-	dec := jsontext.NewDecoder(bytes.NewReader(data))
-	if tok, err := dec.ReadToken(); err != nil || tok.Kind() != '{' {
+	idx := bytes.Index(data, eventTypeKey)
+	if idx < 0 {
 		return "", false
 	}
-	for {
-		tok, err := dec.ReadToken()
-		if err != nil || tok.Kind() == '}' {
+
+	i := idx + len(eventTypeKey)
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != ':' {
+		return "", false
+	}
+	i++
+	for i < len(data) && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '"' {
+		return "", false
+	}
+	i++
+	start := i
+	for i < len(data) {
+		switch data[i] {
+		case '\\':
+			// Event types are fixed identifiers, not escaped strings.
 			return "", false
-		}
-		if tok.String() == "event_type" {
-			val, err := dec.ReadToken()
-			if err != nil {
-				return "", false
-			}
-			return EventType(val.String()), true
-		}
-		if err := dec.SkipValue(); err != nil {
-			return "", false
+		case '"':
+			return EventType(data[start:i]), true
+		default:
+			i++
 		}
 	}
+	return "", false
 }
 
 func (c *Client) handleMessage(ctx context.Context, data []byte) {
@@ -827,6 +896,12 @@ func (c *Client) handleMessage(ctx context.Context, data []byte) {
 }
 
 func (c *Client) attemptReconnect() {
+	defer func() {
+		c.mu.Lock()
+		c.reconnecting = false
+		c.mu.Unlock()
+	}()
+
 	backoff := 1 * time.Second
 	maxBackoff := 60 * time.Second
 	timer := time.NewTimer(backoff)

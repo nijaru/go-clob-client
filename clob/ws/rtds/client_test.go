@@ -36,7 +36,8 @@ func TestRTDSClient(t *testing.T) {
 			}
 
 			// Heartbeat
-			if string(data) == " " {
+			if string(data) == "PING" {
+				_ = conn.Write(r.Context(), websocket.MessageText, []byte("PONG"))
 				continue
 			}
 
@@ -177,7 +178,7 @@ func TestRTDSReconnect(t *testing.T) {
 			if err != nil {
 				return
 			}
-			if typ == websocket.MessageText && string(data) != " " {
+			if typ == websocket.MessageText && string(data) != "PING" {
 				var req SubscriptionRequest
 				if err := json.Unmarshal(data, &req); err == nil {
 					resp := RtdsMessage{
@@ -218,5 +219,65 @@ func TestRTDSReconnect(t *testing.T) {
 
 	if connCount < 2 {
 		t.Errorf("expected at least 2 connections, got %d", connCount)
+	}
+}
+
+func TestRTDSHeartbeatTimeoutTriggersReconnect(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+
+	reconnected := make(chan struct{}, 1)
+	connCount := 0
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		connCount++
+		current := connCount
+
+		conn, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close(websocket.StatusNormalClosure, "")
+
+		for {
+			typ, data, err := conn.Read(r.Context())
+			if err != nil {
+				return
+			}
+			if typ != websocket.MessageText || string(data) != "PING" {
+				continue
+			}
+
+			if current == 1 {
+				continue
+			}
+
+			select {
+			case reconnected <- struct{}{}:
+			default:
+			}
+			_ = conn.Write(r.Context(), websocket.MessageText, []byte("PONG"))
+		}
+	}))
+	defer server.Close()
+
+	url := strings.Replace(server.URL, "http", "ws", 1)
+	client := NewClient(url, nil)
+	client.heartbeatInterval = 25 * time.Millisecond
+	client.heartbeatTimeout = 25 * time.Millisecond
+	t.Cleanup(func() { client.Close() })
+
+	if err := client.Connect(ctx); err != nil {
+		t.Fatalf("connect failed: %v", err)
+	}
+
+	select {
+	case <-reconnected:
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for reconnect, connCount=%d", connCount)
+	}
+
+	if connCount < 2 {
+		t.Fatalf("expected reconnect after heartbeat timeout, connCount=%d", connCount)
 	}
 }

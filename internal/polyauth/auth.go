@@ -127,6 +127,17 @@ func BuilderHeaders(
 	}, nil
 }
 
+func normalizeSignatureBody(body []byte) []byte {
+	if len(body) == 0 {
+		return nil
+	}
+	return bytes.ReplaceAll(body, []byte("'"), []byte("\""))
+}
+
+func NormalizeSignatureBodyForRemote(body []byte) []byte {
+	return normalizeSignatureBody(body)
+}
+
 type RemoteBuilderHeaderRequest struct {
 	Method    string `json:"method"`
 	Path      string `json:"path"`
@@ -259,7 +270,7 @@ func HMACSignature(
 	mac.Write([]byte(requestPath))
 	if len(body) > 0 {
 		// Polymarket API expects single quotes to be replaced with double quotes in the signature message
-		mac.Write(bytes.ReplaceAll(body, []byte("'"), []byte("\"")))
+		mac.Write(normalizeSignatureBody(body))
 	}
 
 	return base64.URLEncoding.EncodeToString(mac.Sum(nil)), nil

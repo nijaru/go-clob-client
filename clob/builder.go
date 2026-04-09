@@ -73,7 +73,7 @@ func (a *remoteBuilderAuth) Headers(
 		polyauth.RemoteBuilderHeaderRequest{
 			Method:    req.Method,
 			Path:      req.Path,
-			Body:      string(req.Body),
+			Body:      string(polyauth.NormalizeSignatureBodyForRemote(req.Body)),
 			Timestamp: req.Timestamp,
 		},
 	)

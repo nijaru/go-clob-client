@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
 )
 
@@ -68,7 +69,7 @@ func (c *Client) GetSupportedAssets(ctx context.Context) (*SupportedAssetsRespon
 // CreateDepositAddress generates unique deposit addresses for the given Polymarket wallet.
 func (c *Client) CreateDepositAddress(
 	ctx context.Context,
-	address string,
+	address common.Address,
 ) (*DepositResponse, error) {
 	req := DepositRequest{Address: address}
 	var out DepositResponse

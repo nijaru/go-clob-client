@@ -650,8 +650,8 @@ func (c *Client) doJSON(
 	})
 }
 
-func (c *Client) withRetry(ctx context.Context, retryable bool, fn func() error) error {
-	if !retryable {
+func (c *Client) withRetry(ctx context.Context, retryEnabled bool, fn func() error) error {
+	if !retryEnabled {
 		if c.rateLimiter != nil {
 			if err := c.rateLimiter.Wait(ctx); err != nil {
 				return err

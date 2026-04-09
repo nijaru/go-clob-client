@@ -80,10 +80,12 @@ type Config struct {
 	// RPCURL is the Ethereum JSON-RPC endpoint used for on-chain CTF operations
 	// (split, merge, redeem). Defaults to "https://polygon-rpc.com".
 	RPCURL string
-	// RetryMax is the maximum number of times to retry a failed request.
+	// RetryMax is the maximum number of retries for retry-eligible requests.
+	// Today that means plain GET requests issued through the shared HTTP helpers.
 	// Defaults to 0 (no retries).
 	RetryMax int
-	// RetryBackoff is the base duration for exponential backoff between retries.
+	// RetryBackoff is the base duration for exponential backoff between retries
+	// for retry-eligible requests.
 	// Defaults to 1 second.
 	RetryBackoff time.Duration
 	// RateLimit is the maximum number of requests per second.

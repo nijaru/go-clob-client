@@ -73,7 +73,7 @@ func (c *AuthenticatedClient) DeleteNotifications(
 		query.Set("ids", strings.Join(params.IDs, ","))
 	}
 
-	return c.deleteJSONQuery(ctx, notificationsEndpoint, query, nil, polyhttp.AuthL2, nil)
+	return c.deleteJSONQuery(ctx, notificationsEndpoint, query, params.IDs, polyhttp.AuthL2, nil)
 }
 
 // GetBalanceAllowance returns the current balance and allowances for the requested asset.
@@ -143,9 +143,11 @@ func (c *AuthenticatedClient) PostHeartbeat(
 	ctx context.Context,
 	heartbeatID string,
 ) (*HeartbeatResponse, error) {
-	req := map[string]string{}
+	req := struct {
+		HeartbeatID *string `json:"heartbeat_id"`
+	}{}
 	if heartbeatID != "" {
-		req["heartbeat_id"] = heartbeatID
+		req.HeartbeatID = &heartbeatID
 	}
 
 	var out HeartbeatResponse

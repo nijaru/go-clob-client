@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/nijaru/go-clob-client/bridge"
 )
 
@@ -30,7 +31,7 @@ func main() {
 	// 2. Create deposit address (mock address)
 	address := "0x1234567890123456789012345678901234567890"
 	fmt.Printf("\nGenerating deposit addresses for %s...\n", address)
-	addrs, err := client.CreateDepositAddress(ctx, address)
+	addrs, err := client.CreateDepositAddress(ctx, common.HexToAddress(address))
 	if err != nil {
 		fmt.Printf(
 			"failed to generate deposit addresses: %v (expected if not on whitelist/live)\n",

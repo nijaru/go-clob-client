@@ -114,6 +114,46 @@ func TestRemoteBuilderAuthHeaders(t *testing.T) {
 	}
 }
 
+func TestRemoteBuilderAuthNormalizesBodyBeforeSigning(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload struct {
+			Body string `json:"body"`
+		}
+		body, _ := io.ReadAll(r.Body)
+		if err := json.Unmarshal(body, &payload); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		if payload.Body != `{"a":"b"}` {
+			t.Fatalf("unexpected normalized body: %q", payload.Body)
+		}
+
+		_, _ = w.Write([]byte(`{
+			"poly_builder_api_key":"remote-builder",
+			"poly_builder_timestamp":"1710000000",
+			"poly_builder_passphrase":"remote-pass",
+			"poly_builder_signature":"remote-sig"
+		}`))
+	}))
+	defer server.Close()
+
+	auth, err := NewRemoteBuilderAuth(RemoteBuilderAuthConfig{URL: server.URL})
+	if err != nil {
+		t.Fatalf("new remote builder auth: %v", err)
+	}
+
+	_, err = auth.Headers(t.Context(), BuilderHeaderRequest{
+		Method:    http.MethodPost,
+		Path:      postOrderEndpoint,
+		Body:      []byte("{'a':'b'}"),
+		Timestamp: 1710000000,
+	})
+	if err != nil {
+		t.Fatalf("builder headers: %v", err)
+	}
+}
+
 func TestNewRemoteBuilderAuthValidation(t *testing.T) {
 	t.Parallel()
 
@@ -141,6 +181,7 @@ func TestNewRemoteBuilderAuthValidation(t *testing.T) {
 func TestBuilderAndHeartbeatEndpoints(t *testing.T) {
 	t.Parallel()
 
+	var heartbeatBodies []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
@@ -239,6 +280,7 @@ func TestBuilderAndHeartbeatEndpoints(t *testing.T) {
 
 			var payload map[string]*string
 			body, _ := io.ReadAll(r.Body)
+			heartbeatBodies = append(heartbeatBodies, string(body))
 			if err := json.Unmarshal(body, &payload); err != nil {
 				t.Fatalf("decode heartbeat payload: %v", err)
 			}
@@ -329,5 +371,18 @@ func TestBuilderAndHeartbeatEndpoints(t *testing.T) {
 	}
 	if heartbeat.HeartbeatID != "heartbeat-2" {
 		t.Fatalf("unexpected chained heartbeat response: %+v", heartbeat)
+	}
+	if len(heartbeatBodies) != 2 {
+		t.Fatalf("heartbeat request count = %d, want 2", len(heartbeatBodies))
+	}
+	if heartbeatBodies[0] != `{"heartbeat_id":null}` {
+		t.Fatalf("first heartbeat body = %q, want %q", heartbeatBodies[0], `{"heartbeat_id":null}`)
+	}
+	if heartbeatBodies[1] != `{"heartbeat_id":"heartbeat-1"}` {
+		t.Fatalf(
+			"second heartbeat body = %q, want %q",
+			heartbeatBodies[1],
+			`{"heartbeat_id":"heartbeat-1"}`,
+		)
 	}
 }

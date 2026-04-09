@@ -312,6 +312,76 @@ func TestCreateOrderRejectsExcessSizePrecision(t *testing.T) {
 	}
 }
 
+func TestCreateOrderRejectsOffTickLimitPrice(t *testing.T) {
+	t.Parallel()
+
+	server := newTradingTestServer(t, nil)
+	defer server.Close()
+
+	client, err := NewAuthenticatedClient(Config{
+		Host:       server.URL,
+		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
+		Credentials: &Credentials{
+			Key:        "api-key",
+			Secret:     "c2VjcmV0",
+			Passphrase: "pass",
+		},
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+
+	_, err = client.CreateOrder(t.Context(), OrderArgs{
+		TokenID: "100",
+		Price:   udecimal.MustParse("0.455"),
+		Size:    udecimal.MustParse("10"),
+		Side:    SideBuy,
+	}, &CreateOrderOptions{TickSize: TickSizeHundredth, NegRisk: new(false)})
+	if err == nil {
+		t.Fatal("expected error for off-tick limit price")
+	}
+}
+
+func TestCreateMarketOrderPreservesUSDCPrecisionForBuy(t *testing.T) {
+	t.Parallel()
+
+	server := newTradingTestServer(t, nil)
+	defer server.Close()
+
+	client, err := NewAuthenticatedClient(Config{
+		Host:       server.URL,
+		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
+		Credentials: &Credentials{
+			Key:        "api-key",
+			Secret:     "c2VjcmV0",
+			Passphrase: "pass",
+		},
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	client.saltGenerator = func() (uint64, error) { return 42, nil }
+
+	order, err := client.CreateMarketOrder(t.Context(), MarketOrderArgs{
+		TokenID:    "100",
+		Price:      udecimal.MustParse("0.56"),
+		Amount:     udecimal.MustParse("100.123456"),
+		AmountKind: AmountUSDC,
+		Side:       SideBuy,
+		OrderType:  OrderTypeFOK,
+	}, nil)
+	if err != nil {
+		t.Fatalf("create market order: %v", err)
+	}
+
+	if order.MakerAmount != "100123456" {
+		t.Fatalf("unexpected maker amount: %s", order.MakerAmount)
+	}
+	if order.TakerAmount != "178791800" {
+		t.Fatalf("unexpected taker amount: %s", order.TakerAmount)
+	}
+}
+
 func TestCreateOrderReturnsSaltGenerationError(t *testing.T) {
 	t.Parallel()
 

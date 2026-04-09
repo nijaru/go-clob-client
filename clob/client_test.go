@@ -275,3 +275,36 @@ func TestGetJSONRetriesTransientServerFailures(t *testing.T) {
 		t.Fatalf("get order book calls = %d, want 2", calls)
 	}
 }
+
+func TestCreateAPIKeyDoesNotRetryNonceGETRequests(t *testing.T) {
+	t.Parallel()
+
+	var calls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != createAPIKeyEndpoint {
+			http.NotFound(w, r)
+			return
+		}
+		calls++
+		http.Error(w, `{"error":"temporary"}`, http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	client, err := NewSignerClient(Config{
+		Host:         server.URL,
+		PrivateKey:   "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
+		RetryMax:     3,
+		RetryBackoff: time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("new signer client: %v", err)
+	}
+
+	_, err = client.CreateAPIKey(t.Context(), 7)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if calls != 1 {
+		t.Fatalf("create api key calls = %d, want 1", calls)
+	}
+}

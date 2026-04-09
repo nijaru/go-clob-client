@@ -2,7 +2,6 @@ package gamma
 
 import (
 	"context"
-	"fmt"
 	"iter"
 	"net/http"
 	"net/url"
@@ -75,18 +74,9 @@ func (c *Client) GetMarket(ctx context.Context, id string) (*Market, error) {
 
 // GetMarketBySlug returns a single market by its slug.
 func (c *Client) GetMarketBySlug(ctx context.Context, slug string) (*Market, error) {
-	query := url.Values{}
-	query.Set("slug", slug)
-
-	var out []Market
-	err := c.http.GetJSON(ctx, marketsEndpoint, query, polyhttp.AuthNone, &out)
-	if err != nil {
-		return nil, err
-	}
-	if len(out) == 0 {
-		return nil, fmt.Errorf("market not found")
-	}
-	return &out[0], nil
+	var out Market
+	err := c.http.GetJSON(ctx, marketsEndpoint+"/slug/"+slug, nil, polyhttp.AuthNone, &out)
+	return &out, err
 }
 
 // GetMarkets returns a list of markets based on the provided filters.
@@ -333,14 +323,14 @@ func (c *Client) IterEvents(ctx context.Context, params EventFilterParams) iter.
 	}
 }
 
-// Search returns search results matching the query.
-func (c *Client) Search(ctx context.Context, query string) ([]Market, error) {
+// Search returns structured search results matching the query.
+func (c *Client) Search(ctx context.Context, query string) (*SearchResults, error) {
 	params := url.Values{}
 	params.Set("query", query)
 
-	var out []Market
+	var out SearchResults
 	err := c.http.GetJSON(ctx, searchEndpoint, params, polyhttp.AuthNone, &out)
-	return out, err
+	return &out, err
 }
 
 // GetSeries returns a single series by its ID.
@@ -431,9 +421,9 @@ func (c *Client) GetMarketTags(ctx context.Context, marketID string) ([]Tag, err
 	return out, err
 }
 
-// GetSports returns all sports metadata.
-func (c *Client) GetSports(ctx context.Context) ([]Sport, error) {
-	var out []Sport
+// GetSports returns all sports metadata feeds.
+func (c *Client) GetSports(ctx context.Context) ([]SportsMetadata, error) {
+	var out []SportsMetadata
 	err := c.http.GetJSON(ctx, sportsEndpoint, nil, polyhttp.AuthNone, &out)
 	return out, err
 }
@@ -445,11 +435,11 @@ func (c *Client) GetTeams(ctx context.Context) ([]Team, error) {
 	return out, err
 }
 
-// GetMarketTypes returns all valid sports market types.
-func (c *Client) GetMarketTypes(ctx context.Context) ([]MarketType, error) {
-	var out []MarketType
+// GetMarketTypes returns the valid sports market types response.
+func (c *Client) GetMarketTypes(ctx context.Context) (*SportsMarketTypesResponse, error) {
+	var out SportsMarketTypesResponse
 	err := c.http.GetJSON(ctx, sportsEndpoint+"/market-types", nil, polyhttp.AuthNone, &out)
-	return out, err
+	return &out, err
 }
 
 // GetComments returns a list of comments based on the provided filters.

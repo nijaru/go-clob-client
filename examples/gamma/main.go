@@ -12,18 +12,18 @@ func main() {
 	client := gamma.New(gamma.Config{})
 	ctx := context.Background()
 
-	// 1. Search for a market
-	fmt.Println("Searching for 'Bitcoin' markets...")
-	markets, err := client.Search(ctx, "Bitcoin")
+	// 1. Search Gamma content
+	fmt.Println("Searching for 'Bitcoin' content...")
+	results, err := client.Search(ctx, "Bitcoin")
 	if err != nil {
 		log.Fatalf("Search failed: %v", err)
 	}
 
-	for i, m := range markets {
+	for i, e := range results.Events {
 		if i >= 3 {
 			break
 		}
-		fmt.Printf(" - %s (ConditionID: %s)\n", m.Question, m.ConditionID)
+		fmt.Printf(" - %s (EventID: %s)\n", e.Title, e.ID)
 	}
 
 	// 2. List active events

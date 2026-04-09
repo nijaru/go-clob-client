@@ -1,6 +1,7 @@
 package clob
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -237,6 +238,7 @@ func TestDeleteNotifications(t *testing.T) {
 	t.Parallel()
 
 	var receivedIDs string
+	var requestBody string
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != notificationsEndpoint {
@@ -244,6 +246,11 @@ func TestDeleteNotifications(t *testing.T) {
 			return
 		}
 		receivedIDs = r.URL.Query().Get("ids")
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		requestBody = string(body)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
@@ -271,6 +278,9 @@ func TestDeleteNotifications(t *testing.T) {
 
 	if receivedIDs != "n1,n2" {
 		t.Errorf("received ids = %q, want %q", receivedIDs, "n1,n2")
+	}
+	if requestBody != `["n1","n2"]` {
+		t.Errorf("request body = %q, want %q", requestBody, `["n1","n2"]`)
 	}
 }
 

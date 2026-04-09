@@ -264,10 +264,27 @@ type Team struct {
 	UpdatedAt    time.Time `json:"updatedAt"`
 }
 
-// MarketType represents a valid sports market type.
-type MarketType struct {
-	ID    string `json:"id"`
-	Label string `json:"label"`
+// Pagination describes offset-based pagination metadata in list/search responses.
+type Pagination struct {
+	HasMore      bool `json:"hasMore,omitzero"`
+	TotalResults int  `json:"totalResults,omitzero"`
+}
+
+// SportsMetadata describes a supported sports feed in Gamma.
+type SportsMetadata struct {
+	ID         int       `json:"id,omitzero"`
+	Sport      string    `json:"sport"`
+	Image      string    `json:"image"`
+	Resolution string    `json:"resolution"`
+	Ordering   string    `json:"ordering"`
+	Tags       []string  `json:"tags,omitzero"`
+	Series     string    `json:"series"`
+	CreatedAt  time.Time `json:"createdAt,omitzero"`
+}
+
+// SportsMarketTypesResponse wraps the valid sports market types response.
+type SportsMarketTypesResponse struct {
+	MarketTypes []string `json:"marketTypes,omitzero"`
 }
 
 type Comment struct {
@@ -339,6 +356,49 @@ type PublicProfileUser struct {
 	ID      string `json:"id"`
 	Creator bool   `json:"creator"`
 	Mod     bool   `json:"mod"`
+}
+
+// SearchTag is a tag entry returned by Gamma public search.
+type SearchTag struct {
+	ID         string `json:"id,omitzero"`
+	Label      string `json:"label,omitzero"`
+	Slug       string `json:"slug,omitzero"`
+	EventCount int    `json:"eventCount,omitzero"`
+}
+
+// Profile is a user/profile entry returned by Gamma public search.
+type Profile struct {
+	ID                    string    `json:"id"`
+	Name                  string    `json:"name,omitzero"`
+	User                  int       `json:"user,omitzero"`
+	Referral              string    `json:"referral,omitzero"`
+	CreatedBy             int       `json:"createdBy,omitzero"`
+	UpdatedBy             int       `json:"updatedBy,omitzero"`
+	CreatedAt             time.Time `json:"createdAt,omitzero"`
+	UpdatedAt             time.Time `json:"updatedAt,omitzero"`
+	UTMSource             string    `json:"utmSource,omitzero"`
+	UTMMedium             string    `json:"utmMedium,omitzero"`
+	UTMCampaign           string    `json:"utmCampaign,omitzero"`
+	UTMContent            string    `json:"utmContent,omitzero"`
+	UTMTerm               string    `json:"utmTerm,omitzero"`
+	WalletActivated       bool      `json:"walletActivated,omitzero"`
+	Pseudonym             string    `json:"pseudonym,omitzero"`
+	DisplayUsernamePublic bool      `json:"displayUsernamePublic,omitzero"`
+	ProfileImage          string    `json:"profileImage,omitzero"`
+	Bio                   string    `json:"bio,omitzero"`
+	ProxyWallet           string    `json:"proxyWallet,omitzero"`
+	ProfileImageOptimized string    `json:"profileImageOptimized,omitzero"`
+	IsCloseOnly           bool      `json:"isCloseOnly,omitzero"`
+	IsCertReq             bool      `json:"isCertReq,omitzero"`
+	CertReqDate           time.Time `json:"certReqDate,omitzero"`
+}
+
+// SearchResults is the structured response from Gamma public search.
+type SearchResults struct {
+	Events     []Event     `json:"events,omitzero"`
+	Tags       []SearchTag `json:"tags,omitzero"`
+	Profiles   []Profile   `json:"profiles,omitzero"`
+	Pagination *Pagination `json:"pagination,omitzero"`
 }
 
 // MarketFilterParams defines filters for market listing.
