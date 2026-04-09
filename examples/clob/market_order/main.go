@@ -28,8 +28,8 @@ func main() {
 		TokenID:    os.Getenv("POLYMARKET_TOKEN_ID"),
 		Amount:     udecimal.MustParse("25"),
 		AmountKind: clob.AmountShares,
-		Side:       clob.SideSell,
-	}, nil, clob.OrderTypeFOK, false)
+		Side:       clob.SideBuy,
+	}, nil, clob.OrderTypeFOK)
 	if err != nil {
 		log.Fatal(err)
 	}

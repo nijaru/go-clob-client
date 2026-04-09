@@ -29,7 +29,7 @@ func main() {
 		Price:   udecimal.MustParse("0.45"),
 		Size:    udecimal.MustParse("5"),
 		Side:    clob.SideBuy,
-	}, nil, clob.OrderTypeGTC, false, false)
+	}, nil, clob.OrderTypeGTC, false)
 	if err != nil {
 		log.Fatal(err)
 	}

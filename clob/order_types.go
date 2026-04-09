@@ -382,7 +382,6 @@ type PostOrderRequest struct {
 	Order     SignedOrder `json:"order"`
 	Owner     string      `json:"owner"`
 	OrderType OrderType   `json:"orderType"`
-	DeferExec bool        `json:"deferExec"`
 	PostOnly  bool        `json:"postOnly,omitzero"`
 }
 

@@ -131,7 +131,6 @@ func (c *AuthenticatedClient) CreateAndPostOrder(
 	userOrder OrderArgs,
 	options *CreateOrderOptions,
 	orderType OrderType,
-	deferExec bool,
 	postOnly bool,
 ) (*PostOrderResponse, error) {
 	order, err := c.CreateOrder(ctx, userOrder, options)
@@ -139,7 +138,7 @@ func (c *AuthenticatedClient) CreateAndPostOrder(
 		return nil, err
 	}
 
-	request, err := c.BuildPostOrderRequest(*order, orderType, deferExec, postOnly)
+	request, err := c.BuildPostOrderRequest(*order, orderType, postOnly)
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +152,6 @@ func (c *AuthenticatedClient) CreateAndPostMarketOrder(
 	userOrder MarketOrderArgs,
 	options *CreateOrderOptions,
 	orderType OrderType,
-	deferExec bool,
 ) (*PostOrderResponse, error) {
 	if orderType == "" {
 		orderType = userOrder.OrderType
@@ -170,7 +168,7 @@ func (c *AuthenticatedClient) CreateAndPostMarketOrder(
 		return nil, err
 	}
 
-	request, err := c.BuildPostOrderRequest(*order, orderType, deferExec, false)
+	request, err := c.BuildPostOrderRequest(*order, orderType, false)
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +180,6 @@ func (c *AuthenticatedClient) CreateAndPostMarketOrder(
 func (c *AuthenticatedClient) BuildPostOrderRequest(
 	order SignedOrder,
 	orderType OrderType,
-	deferExec bool,
 	postOnly bool,
 ) (PostOrderRequest, error) {
 	creds := c.credentials()
@@ -207,7 +204,6 @@ func (c *AuthenticatedClient) BuildPostOrderRequest(
 		Order:     order,
 		Owner:     creds.Key,
 		OrderType: orderType,
-		DeferExec: deferExec,
 		PostOnly:  postOnly,
 	}, nil
 }

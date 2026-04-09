@@ -110,7 +110,7 @@ resp, err := client.CreateAndPostMarketOrder(ctx, clob.MarketOrderArgs{
     Amount:     udecimal.MustParse("25"),
     AmountKind: clob.AmountShares,  // required for sell; also valid for buy
     Side:       clob.SideSell,
-}, nil, clob.OrderTypeFOK, false)
+}, nil, clob.OrderTypeFOK)
 
 // Buy $10 of shares at market price (FOK)
 resp, err := client.CreateAndPostMarketOrder(ctx, clob.MarketOrderArgs{

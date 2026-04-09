@@ -82,9 +82,9 @@ func ExampleAuthenticatedClient_CreateAndPostOrder() {
 		_, err := client.CreateAndPostOrder(context.Background(), clob.OrderArgs{
 			TokenID: "token-id",
 			Price:   udecimal.MustParse("0.45"),
-			Size:    udecimal.MustParse("5"),
+			Size:    udecimal.MustParse("100"),
 			Side:    clob.SideBuy,
-		}, nil, clob.OrderTypeGTC, false, false)
+		}, nil, clob.OrderTypeGTC, false)
 		if err != nil {
 			log.Fatal(err)
 		}

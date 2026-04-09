@@ -99,9 +99,9 @@ func TestCreateAndPostOrderSendsExpectedPayload(t *testing.T) {
 	_, err = client.CreateAndPostOrder(t.Context(), OrderArgs{
 		TokenID: "100",
 		Price:   udecimal.MustParse("0.45"),
-		Size:    udecimal.MustParse("10"),
+		Size:    udecimal.MustParse("100"),
 		Side:    SideBuy,
-	}, nil, OrderTypeGTC, false, false)
+	}, nil, OrderTypeGTC, false)
 	if err != nil {
 		t.Fatalf("create and post order: %v", err)
 	}
@@ -166,9 +166,9 @@ func TestCreateAndPostOrderDecodesLiveFOKResponse(t *testing.T) {
 	response, err := client.CreateAndPostOrder(t.Context(), OrderArgs{
 		TokenID: "100",
 		Price:   udecimal.MustParse("0.45"),
-		Size:    udecimal.MustParse("10"),
+		Size:    udecimal.MustParse("100"),
 		Side:    SideBuy,
-	}, nil, OrderTypeFOK, false, false)
+	}, nil, OrderTypeGTC, false)
 	if err != nil {
 		t.Fatalf("create and post order: %v", err)
 	}
@@ -222,9 +222,9 @@ func TestCreateAndPostOrderDecodesMatchedFAKResponse(t *testing.T) {
 	response, err := client.CreateAndPostOrder(t.Context(), OrderArgs{
 		TokenID: "100",
 		Price:   udecimal.MustParse("0.45"),
-		Size:    udecimal.MustParse("10"),
+		Size:    udecimal.MustParse("100"),
 		Side:    SideBuy,
-	}, nil, OrderTypeFAK, false, false)
+	}, nil, OrderTypeGTC, false)
 	if err != nil {
 		t.Fatalf("create and post order: %v", err)
 	}
