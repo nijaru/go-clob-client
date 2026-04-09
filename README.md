@@ -33,15 +33,15 @@ Import the package you need: `clob` for trading and CLOB APIs, `data` for read-o
 
 This repo exposes multiple public packages within one module. The most common entrypoints are `github.com/nijaru/go-clob-client/clob` and `github.com/nijaru/go-clob-client/data`.
 
-## Choose Your Path
+## Packages
 
-Use `clob` if you need:
+Use `clob` for:
 
 - orderbooks, prices, and market data
 - signed order creation and submission
 - account management, heartbeats, or websockets
 
-Use `data` if you need:
+Use `data` for:
 
 - read-only analytics and reporting
 - positions, trades, activity, holders, and leaderboards
