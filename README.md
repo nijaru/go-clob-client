@@ -31,7 +31,7 @@ go get github.com/nijaru/go-clob-client@latest
 
 Import the package you need: `clob` for trading and CLOB APIs, `data` for read-only Data API access.
 
-This repo exposes multiple public packages within one module. The most common entrypoints are `github.com/nijaru/go-clob-client/clob` and `github.com/nijaru/go-clob-client/data`.
+This module exposes multiple public packages. The main entrypoints are `github.com/nijaru/go-clob-client/clob` and `github.com/nijaru/go-clob-client/data`.
 
 ## Packages
 
@@ -47,7 +47,7 @@ Use `data` for:
 - positions, trades, activity, holders, and leaderboards
 - no signing or trading flows
 
-If you are integrating trading, start with `clob.NewClient` for read-only checks, then move to `NewSignerClient` or `NewAuthenticatedClient` once wallet and API credentials are configured.
+If you are integrating trading, start with `clob.NewClient` for read-only checks, then move to `NewSignerClient` or `NewAuthenticatedClient` after wallet and API credentials are configured.
 
 ## Quickstart
 
@@ -163,7 +163,7 @@ Read the wallet and allowance notes below before sending real orders. In particu
 - choose the correct `SignatureType` for your wallet path
 - set `FunderAddress` when using proxy or delegated wallets
 - confirm token allowances if you are trading from an EOA wallet
-- always close authenticated clients cleanly so heartbeat state shuts down cleanly
+- always close authenticated clients cleanly so the heartbeat loop shuts down cleanly
 
 ## Client Tiers
 
@@ -246,7 +246,7 @@ export POLYMARKET_PRIVATE_KEY=0x...
 go run ./examples/clob/read_only
 ```
 
-Copy `.env.example` to `.env` for a full set of required variables.
+Copy `.env.example` to `.env` if you want a single place to manage example environment variables.
 
 ## API Notes
 
