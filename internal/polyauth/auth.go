@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -243,6 +244,10 @@ func DecodeAPISecret(secret string) ([]byte, error) {
 	}
 	decoded, err := base64.URLEncoding.DecodeString(normalized)
 	if err != nil {
+		// The secret uses standard base64 encoding instead of URL-safe encoding.
+		// This is technically misconfigured — Polymarket issues URL-safe secrets.
+		// We accept it for backward compatibility but warn so the caller can fix it.
+		slog.Warn("API secret uses standard base64 encoding; URL-safe encoding is expected")
 		std := strings.NewReplacer("-", "+", "_", "/").Replace(secret)
 		decoded, err = base64.StdEncoding.DecodeString(std)
 		if err != nil {

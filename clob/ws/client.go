@@ -38,8 +38,8 @@ const (
 
 // Client is a WebSocket client for the Polymarket CLOB.
 type Client struct {
-	url   string
-	creds *clob.Credentials
+	url           string
+	creds         *clob.Credentials
 	decodedSecret []byte
 
 	mu       sync.Mutex

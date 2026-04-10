@@ -2,6 +2,7 @@ package clob
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 
 	json "github.com/go-json-experiment/json"
@@ -37,16 +38,24 @@ func (r *PostOrderResponse) UnmarshalJSON(data []byte) error {
 	}
 
 	if v, ok := fields["success"]; ok {
-		json.Unmarshal(v, &r.Success)
+		if err := json.Unmarshal(v, &r.Success); err != nil {
+			return fmt.Errorf("decode success: %w", err)
+		}
 	}
 	if v, ok := fields["status"]; ok {
-		json.Unmarshal(v, &r.Status)
+		if err := json.Unmarshal(v, &r.Status); err != nil {
+			return fmt.Errorf("decode status: %w", err)
+		}
 	}
 	if v, ok := fields["takingAmount"]; ok {
-		json.Unmarshal(v, &r.TakingAmount)
+		if err := json.Unmarshal(v, &r.TakingAmount); err != nil {
+			return fmt.Errorf("decode takingAmount: %w", err)
+		}
 	}
 	if v, ok := fields["makingAmount"]; ok {
-		json.Unmarshal(v, &r.MakingAmount)
+		if err := json.Unmarshal(v, &r.MakingAmount); err != nil {
+			return fmt.Errorf("decode makingAmount: %w", err)
+		}
 	}
 
 	if val, ok, err := decodeStringAlias(fields, "orderID", "order_id"); err != nil {
@@ -339,6 +348,7 @@ func (o SignedOrder) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON handles the diverse salt format from the API.
+// The salt may arrive as a JSON number (integer or float) or a string.
 func (o *SignedOrder) UnmarshalJSON(data []byte) error {
 	type wireSignedOrder struct {
 		Salt          any           `json:"salt"`
@@ -361,7 +371,11 @@ func (o *SignedOrder) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	o.Salt = fmt.Sprint(decoded.Salt)
+	salt, err := parseSaltValue(decoded.Salt)
+	if err != nil {
+		return fmt.Errorf("parse order salt: %w", err)
+	}
+	o.Salt = salt
 	o.Maker = decoded.Maker
 	o.Signer = decoded.Signer
 	o.Taker = decoded.Taker
@@ -375,6 +389,26 @@ func (o *SignedOrder) UnmarshalJSON(data []byte) error {
 	o.SignatureType = decoded.SignatureType
 	o.Signature = decoded.Signature
 	return nil
+}
+
+// parseSaltValue converts the polymorphic JSON salt value to a decimal string.
+// The API may return the salt as a JSON number (integer or float64) or as a string.
+// Using fmt.Sprint on a float64 is unsafe: fmt.Sprint(1e20) => "1e+20", breaking
+// strconv.ParseUint in MarshalJSON. We convert float64 -> uint64 explicitly.
+func parseSaltValue(v any) (string, error) {
+	switch val := v.(type) {
+	case string:
+		return val, nil
+	case float64:
+		if val < 0 || val > math.MaxUint64 || math.IsNaN(val) || math.IsInf(val, 0) {
+			return "", fmt.Errorf("salt value %v is out of uint64 range", val)
+		}
+		return strconv.FormatUint(uint64(val), 10), nil
+	case nil:
+		return "0", nil
+	default:
+		return "", fmt.Errorf("unexpected salt type %T", v)
+	}
 }
 
 // PostOrderRequest is the authenticated order-post payload.

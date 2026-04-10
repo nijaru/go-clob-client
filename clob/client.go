@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"net/http"
 	"net/url"
@@ -244,9 +245,24 @@ func (c *SignerClient) AsAuthenticated(
 	creds Credentials,
 	builder BuilderAuth,
 ) (*AuthenticatedClient, error) {
+	return c.AsAuthenticatedWithInterval(creds, builder, 5*time.Second)
+}
+
+// AsAuthenticatedWithInterval upgrades a SignerClient to an AuthenticatedClient
+// with a configurable heartbeat interval. Use this when upgrading from an existing
+// SignerClient where the original Config is no longer available.
+func (c *SignerClient) AsAuthenticatedWithInterval(
+	creds Credentials,
+	builder BuilderAuth,
+	heartbeatInterval time.Duration,
+) (*AuthenticatedClient, error) {
 	decodedSecret, err := polyauth.DecodeAPISecret(creds.Secret)
 	if err != nil {
 		return nil, fmt.Errorf("invalid API secret: %w", err)
+	}
+
+	if heartbeatInterval <= 0 {
+		heartbeatInterval = 5 * time.Second
 	}
 
 	ac := &AuthenticatedClient{
@@ -261,7 +277,7 @@ func (c *SignerClient) AsAuthenticated(
 		creds:             &creds,
 		decodedSecret:     decodedSecret,
 		builderAuth:       builder,
-		heartbeatInterval: 5 * time.Second,
+		heartbeatInterval: heartbeatInterval,
 	}
 	ac.http.Headers = ac.addAuthHeaders
 	return ac, nil
@@ -333,7 +349,9 @@ func (c *AuthenticatedClient) startHeartbeatLoop() {
 				return
 			case <-ticker.C:
 				resp, err := c.PostHeartbeat(ctx, c.heartbeatID)
-				if err == nil {
+				if err != nil {
+					slog.Warn("heartbeat failed", "err", err)
+				} else {
 					c.heartbeatID = resp.HeartbeatID
 				}
 			}
@@ -689,9 +707,9 @@ func (c *Client) withRetry(ctx context.Context, retryEnabled bool, fn func() err
 		lastErr = err
 
 		// Only retry on:
-		// 1. Connection/context errors (non-API errors)
-		// 2. HTTP 429 (Rate Limit)
-		// 3. HTTP 5xx (Server Error)
+		// 1. HTTP 429 (Rate Limit)
+		// 2. HTTP 5xx (Server Error)
+		// 3. Connection/transport errors (not context cancellation)
 		var apiErr *polyhttp.APIError
 		shouldRetry := false
 		if errors.As(err, &apiErr) {
@@ -699,7 +717,10 @@ func (c *Client) withRetry(ctx context.Context, retryEnabled bool, fn func() err
 				shouldRetry = true
 			}
 		} else {
-			// Not an API error (e.g., timeout, connection refused) - safe to retry
+			// Don't retry on context cancellation or deadline — fail fast.
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return err
+			}
 			shouldRetry = true
 		}
 

@@ -56,14 +56,14 @@ func (c *SignerClient) CreateOrder(
 		return nil, err
 	}
 
-	negRisk, err := c.resolveNegRisk(ctx, userOrder.TokenID, options)
+	isNegRisk, err := c.resolveNegRisk(ctx, userOrder.TokenID, options)
 	if err != nil {
 		return nil, err
 	}
 
 	return c.buildSignedLimitOrder(userOrder, CreateOrderOptions{
 		TickSize: tickSize,
-		NegRisk:  new(negRisk),
+		NegRisk:  new(isNegRisk),
 	})
 }
 
@@ -114,14 +114,14 @@ func (c *SignerClient) CreateMarketOrder(
 		return nil, err
 	}
 
-	negRisk, err := c.resolveNegRisk(ctx, userOrder.TokenID, options)
+	isNegRisk, err := c.resolveNegRisk(ctx, userOrder.TokenID, options)
 	if err != nil {
 		return nil, err
 	}
 
 	return c.buildSignedMarketOrder(userOrder, CreateOrderOptions{
 		TickSize: tickSize,
-		NegRisk:  new(negRisk),
+		NegRisk:  new(isNegRisk),
 	})
 }
 
@@ -153,6 +153,7 @@ func (c *AuthenticatedClient) CreateAndPostMarketOrder(
 	options *CreateOrderOptions,
 	orderType OrderType,
 ) (*PostOrderResponse, error) {
+	// Resolve the effective order type once here; pass it down to avoid double normalization.
 	if orderType == "" {
 		orderType = userOrder.OrderType
 	}
@@ -162,6 +163,7 @@ func (c *AuthenticatedClient) CreateAndPostMarketOrder(
 	if orderType != OrderTypeFOK && orderType != OrderTypeFAK {
 		return nil, fmt.Errorf("market orders only support FOK or FAK order types")
 	}
+	userOrder.OrderType = orderType
 
 	order, err := c.CreateMarketOrder(ctx, userOrder, options)
 	if err != nil {
@@ -224,6 +226,9 @@ func (c *Client) CalculateMarketPrice(
 	if side == SideSell && amountKind == AmountUSDC {
 		return udecimal.Zero, fmt.Errorf("sell orders must specify amount in shares, not USDC")
 	}
+	if amount.Cmp(udecimal.Zero) <= 0 {
+		return udecimal.Zero, fmt.Errorf("amount must be positive")
+	}
 	if orderType == "" {
 		orderType = OrderTypeFOK
 	}
@@ -231,10 +236,6 @@ func (c *Client) CalculateMarketPrice(
 	book, err := c.GetOrderBook(ctx, tokenID)
 	if err != nil {
 		return udecimal.Zero, err
-	}
-
-	if amount.Cmp(udecimal.Zero) <= 0 {
-		return udecimal.Zero, fmt.Errorf("amount must be positive")
 	}
 
 	var levels []OrderSummary
@@ -319,22 +320,10 @@ func (c *SignerClient) buildSignedLimitOrder(
 	switch userOrder.Side {
 	case SideBuy:
 		rawTakerAmount = roundDown(size, roundConfig.Size)
-		rawMakerAmount = rawTakerAmount.Mul(rawPrice)
-		if decimalPlaces(rawMakerAmount) > roundConfig.Amount {
-			rawMakerAmount = roundUp(rawMakerAmount, roundConfig.Amount+4)
-			if decimalPlaces(rawMakerAmount) > roundConfig.Amount {
-				rawMakerAmount = roundDown(rawMakerAmount, roundConfig.Amount)
-			}
-		}
+		rawMakerAmount = roundToAmount(rawTakerAmount.Mul(rawPrice), roundConfig)
 	case SideSell:
 		rawMakerAmount = roundDown(size, roundConfig.Size)
-		rawTakerAmount = rawMakerAmount.Mul(rawPrice)
-		if decimalPlaces(rawTakerAmount) > roundConfig.Amount {
-			rawTakerAmount = roundUp(rawTakerAmount, roundConfig.Amount+4)
-			if decimalPlaces(rawTakerAmount) > roundConfig.Amount {
-				rawTakerAmount = roundDown(rawTakerAmount, roundConfig.Amount)
-			}
-		}
+		rawTakerAmount = roundToAmount(rawMakerAmount.Mul(rawPrice), roundConfig)
 	default:
 		return nil, fmt.Errorf("invalid side %q", userOrder.Side)
 	}
@@ -378,23 +367,11 @@ func (c *SignerClient) buildSignedMarketOrder(
 			if err != nil {
 				return nil, fmt.Errorf("calculation error: %w", err)
 			}
-			rawTakerAmount = val
-			if decimalPlaces(rawTakerAmount) > roundConfig.Amount {
-				rawTakerAmount = roundUp(rawTakerAmount, roundConfig.Amount+4)
-				if decimalPlaces(rawTakerAmount) > roundConfig.Amount {
-					rawTakerAmount = roundDown(rawTakerAmount, roundConfig.Amount)
-				}
-			}
+			rawTakerAmount = roundToAmount(val, roundConfig)
 		case AmountShares:
 			// Buy exactly Amount shares; compute USDC cost from price.
 			rawTakerAmount = roundDown(amount, roundConfig.Size)
-			rawMakerAmount = rawTakerAmount.Mul(price)
-			if decimalPlaces(rawMakerAmount) > roundConfig.Amount {
-				rawMakerAmount = roundUp(rawMakerAmount, roundConfig.Amount+4)
-				if decimalPlaces(rawMakerAmount) > roundConfig.Amount {
-					rawMakerAmount = roundDown(rawMakerAmount, roundConfig.Amount)
-				}
-			}
+			rawMakerAmount = roundToAmount(rawTakerAmount.Mul(price), roundConfig)
 		default:
 			return nil, fmt.Errorf("invalid amount kind %d", userOrder.AmountKind)
 		}
@@ -403,13 +380,7 @@ func (c *SignerClient) buildSignedMarketOrder(
 			return nil, fmt.Errorf("sell orders must specify amount in shares, not USDC")
 		}
 		rawMakerAmount = roundDown(amount, roundConfig.Size)
-		rawTakerAmount = rawMakerAmount.Mul(price)
-		if decimalPlaces(rawTakerAmount) > roundConfig.Amount {
-			rawTakerAmount = roundUp(rawTakerAmount, roundConfig.Amount+4)
-			if decimalPlaces(rawTakerAmount) > roundConfig.Amount {
-				rawTakerAmount = roundDown(rawTakerAmount, roundConfig.Amount)
-			}
-		}
+		rawTakerAmount = roundToAmount(rawMakerAmount.Mul(price), roundConfig)
 	default:
 		return nil, fmt.Errorf("invalid side %q", userOrder.Side)
 	}
@@ -647,7 +618,11 @@ func (c *Client) resolveTickSize(
 	}
 
 	if options != nil && options.TickSize != "" {
-		if isTickSizeSmaller(options.TickSize, marketTickSize) {
+		smaller, err := isTickSizeSmaller(options.TickSize, marketTickSize)
+		if err != nil {
+			return "", fmt.Errorf("invalid tick size option: %w", err)
+		}
+		if smaller {
 			return "", fmt.Errorf(
 				"invalid tick size %q, minimum for market is %q",
 				options.TickSize,
@@ -739,6 +714,21 @@ func roundUp(value udecimal.Decimal, places uint8) udecimal.Decimal {
 	return value.RoundAwayFromZero(places)
 }
 
+// roundToAmount quantizes a computed maker/taker amount to the allowed precision.
+// The two-pass approach (round-up with 4 extra digits, then round-down if still too long)
+// mirrors the Rust SDK's order_builder.rs behavior: prefer rounding up to avoid
+// underpaying, but clamp back down if the extra digits don't resolve cleanly.
+func roundToAmount(value udecimal.Decimal, cfg roundConfig) udecimal.Decimal {
+	if decimalPlaces(value) <= cfg.Amount {
+		return value
+	}
+	v := roundUp(value, cfg.Amount+4)
+	if decimalPlaces(v) > cfg.Amount {
+		v = roundDown(v, cfg.Amount)
+	}
+	return v
+}
+
 func decimalPlaces(value udecimal.Decimal) uint8 {
 	return value.PrecUint()
 }
@@ -760,6 +750,9 @@ func generateSalt() (uint64, error) {
 	if _, err := rand.Read(raw[:]); err != nil {
 		return 0, err
 	}
+	// Mask to 53 bits so the salt survives JSON encoding as a JS Number without
+	// precision loss (JavaScript float64 values can only represent integers exactly
+	// up to 2^53-1).
 	return binary.BigEndian.Uint64(raw[:]) & ((1 << 53) - 1), nil
 }
 
@@ -767,17 +760,17 @@ func derefBool(value *bool) bool {
 	return value != nil && *value
 }
 
-func isTickSizeSmaller(a, b TickSize) bool {
+func isTickSizeSmaller(a, b TickSize) (bool, error) {
 	aParsed, err := udecimal.Parse(string(a))
 	if err != nil {
-		return false
+		return false, fmt.Errorf("parse tick size %q: %w", a, err)
 	}
 	bParsed, err := udecimal.Parse(string(b))
 	if err != nil {
-		return false
+		return false, fmt.Errorf("parse tick size %q: %w", b, err)
 	}
-	return aParsed.Cmp(bParsed) < 0
+	return aParsed.Cmp(bParsed) < 0, nil
 }
 
-// PostOrdersBatchLimit is the maximum number of orders allowed in a single batch (2026 limit).
+// PostOrdersBatchLimit is the maximum number of orders allowed in a single batch.
 const PostOrdersBatchLimit = 15
