@@ -83,22 +83,21 @@ type AcceptRFQQuoteRequest struct {
 
 // wireRFQOrder is the shared wire format for RFQ accept/approve payloads.
 type wireRFQOrder struct {
-	RequestID     string        `json:"requestId"`
-	QuoteID       string        `json:"quoteId"`
-	Owner         string        `json:"owner"`
-	Salt          uint64        `json:"salt"`
-	Maker         string        `json:"maker"`
-	Signer        string        `json:"signer"`
-	Taker         string        `json:"taker"`
-	TokenID       string        `json:"tokenId"`
-	MakerAmount   string        `json:"makerAmount"`
-	TakerAmount   string        `json:"takerAmount"`
-	Expiration    uint64        `json:"expiration"`
-	Nonce         uint64        `json:"nonce"`
-	FeeRateBps    string        `json:"feeRateBps"`
-	Side          Side          `json:"side"`
-	SignatureType SignatureType `json:"signatureType"`
-	Signature     string        `json:"signature"`
+	RequestID   string `json:"requestId"`
+	QuoteID     string `json:"quoteId"`
+	Owner       string `json:"owner"`
+	Salt        uint64 `json:"salt"`
+	Maker       string `json:"maker"`
+	Signer      string `json:"signer"`
+	Taker       string `json:"taker"`
+	TokenID     string `json:"tokenId"`
+	MakerAmount string `json:"makerAmount"`
+	TakerAmount string `json:"takerAmount"`
+	Expiration  uint64 `json:"expiration"`
+	Nonce       uint64 `json:"nonce"`
+	FeeRateBps  string `json:"feeRateBps"`
+	Side        Side   `json:"side"`
+	Signature   string `json:"signature"`
 }
 
 // marshalRFQOrder encodes an RFQ accept/approve payload with numeric salt, expiration, and nonce.
@@ -117,22 +116,21 @@ func marshalRFQOrder(requestID, quoteID, owner string, o SignedOrder) ([]byte, e
 	}
 
 	return json.Marshal(wireRFQOrder{
-		RequestID:     requestID,
-		QuoteID:       quoteID,
-		Owner:         owner,
-		Salt:          salt,
-		Maker:         o.Maker,
-		Signer:        o.Signer,
-		Taker:         o.Taker,
-		TokenID:       o.TokenID,
-		MakerAmount:   o.MakerAmount,
-		TakerAmount:   o.TakerAmount,
-		Expiration:    expiration,
-		Nonce:         nonce,
-		FeeRateBps:    o.FeeRateBps,
-		Side:          o.Side,
-		SignatureType: o.SignatureType,
-		Signature:     o.Signature,
+		RequestID:   requestID,
+		QuoteID:     quoteID,
+		Owner:       owner,
+		Salt:        salt,
+		Maker:       o.Maker,
+		Signer:      o.Signer,
+		Taker:       o.Taker,
+		TokenID:     o.TokenID,
+		MakerAmount: o.MakerAmount,
+		TakerAmount: o.TakerAmount,
+		Expiration:  expiration,
+		Nonce:       nonce,
+		FeeRateBps:  o.FeeRateBps,
+		Side:        o.Side,
+		Signature:   o.Signature,
 	})
 }
 
@@ -185,17 +183,35 @@ type RFQQuotesResponse Page[RFQQuote]
 
 // RFQRequestFilterParams contains the filters for listing RFQ requests.
 type RFQRequestFilterParams struct {
-	Limit      int      `url:"limit,omitzero"`
-	Offset     string   `url:"offset,omitzero"`
-	State      string   `url:"state,omitzero"`
-	RequestIDs []string `url:"requestIds,omitzero"`
-	Markets    []string `url:"markets,omitzero"`
+	Limit       int      `url:"limit,omitzero"`
+	Offset      string   `url:"offset,omitzero"`
+	State       string   `url:"state,omitzero"`
+	RequestIDs  []string `url:"requestIds,omitzero"`
+	Markets     []string `url:"markets,omitzero"`
+	SizeMin     string   `url:"sizeMin,omitzero"`
+	SizeMax     string   `url:"sizeMax,omitzero"`
+	SizeUSDcMin string   `url:"sizeUsdcMin,omitzero"`
+	SizeUSDcMax string   `url:"sizeUsdcMax,omitzero"`
+	PriceMin    string   `url:"priceMin,omitzero"`
+	PriceMax    string   `url:"priceMax,omitzero"`
+	SortBy      string   `url:"sortBy,omitzero"`
+	SortDir     string   `url:"sortDir,omitzero"`
 }
 
 // RFQQuoteFilterParams contains the filters for listing RFQ quotes.
 type RFQQuoteFilterParams struct {
-	Limit      int      `url:"limit,omitzero"`
-	Offset     string   `url:"offset,omitzero"`
-	RequestIDs []string `url:"requestIds,omitzero"`
-	QuoteIDs   []string `url:"quoteIds,omitzero"`
+	Limit       int      `url:"limit,omitzero"`
+	Offset      string   `url:"offset,omitzero"`
+	State       string   `url:"state,omitzero"`
+	QuoteIDs    []string `url:"quoteIds,omitzero"`
+	RequestIDs  []string `url:"requestIds,omitzero"`
+	Markets     []string `url:"markets,omitzero"`
+	SizeMin     string   `url:"sizeMin,omitzero"`
+	SizeMax     string   `url:"sizeMax,omitzero"`
+	SizeUSDcMin string   `url:"sizeUsdcMin,omitzero"`
+	SizeUSDcMax string   `url:"sizeUsdcMax,omitzero"`
+	PriceMin    string   `url:"priceMin,omitzero"`
+	PriceMax    string   `url:"priceMax,omitzero"`
+	SortBy      string   `url:"sortBy,omitzero"`
+	SortDir     string   `url:"sortDir,omitzero"`
 }

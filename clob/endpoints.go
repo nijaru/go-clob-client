@@ -72,6 +72,4 @@ const (
 	rfqQuoteApproveEndpoint  = "/rfq/quote/approve"
 	rfqDataRequestsEndpoint  = "/rfq/data/requests"
 	rfqDataQuotesEndpoint    = "/rfq/data/quotes"
-	rfqBestQuoteEndpoint     = "/rfq/data/best-quote"
-	rfqConfigEndpoint        = "/rfq/config"
 )

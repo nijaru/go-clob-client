@@ -195,12 +195,6 @@ func TestRFQSurfaces(t *testing.T) {
 				TradeIDs: []string{"trade-1"},
 			})
 			w.Write(data)
-		case rfqBestQuoteEndpoint:
-			data, _ := json.Marshal(RFQQuote{
-				ID:        "quote-1",
-				RequestID: "rfq-1",
-			})
-			w.Write(data)
 		default:
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
@@ -256,15 +250,6 @@ func TestRFQSurfaces(t *testing.T) {
 	}
 	if quote.QuoteID != "quote-1" {
 		t.Errorf("unexpected quote id: %s", quote.QuoteID)
-	}
-
-	// Get Best Quote
-	best, err := client.GetRFQBestQuote(ctx, "rfq-1")
-	if err != nil {
-		t.Fatalf("get best quote: %v", err)
-	}
-	if best.ID != "quote-1" {
-		t.Errorf("unexpected best quote id: %s", best.ID)
 	}
 
 	// Accept Quote — server returns plain text "OK"

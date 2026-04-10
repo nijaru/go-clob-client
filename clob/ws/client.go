@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"slices"
 	"strconv"
 	"strings"
@@ -20,6 +21,7 @@ import (
 
 const (
 	defaultMarketURL         = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
+	defaultUserURL           = "wss://ws-subscriptions-clob.polymarket.com/ws/user"
 	defaultHeartbeatInterval = 5 * time.Second
 	defaultHeartbeatTimeout  = 15 * time.Second
 
@@ -92,18 +94,21 @@ type subscription struct {
 
 // NewClient creates a new unauthenticated WebSocket client.
 func NewClient(url string) *Client {
+	if url == "" {
+		url = defaultMarketURL
+	}
 	return newClient(url, nil)
 }
 
 // NewAuthenticatedClient creates a WebSocket client with API credentials for user channel subscriptions.
 func NewAuthenticatedClient(url string, creds clob.Credentials) *Client {
+	if url == "" {
+		url = defaultUserURL
+	}
 	return newClient(url, &creds)
 }
 
 func newClient(url string, creds *clob.Credentials) *Client {
-	if url == "" {
-		url = defaultMarketURL
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Client{
 		url:               url,
@@ -930,7 +935,12 @@ func (c *Client) attemptReconnect() {
 			if backoff > maxBackoff {
 				backoff = maxBackoff
 			}
-			timer.Reset(backoff)
+
+			// Add ±25% jitter to prevent thundering herd
+			jitter := time.Duration(rand.Float64()*0.5-0.25) * backoff
+			nextBackoff := backoff + jitter
+
+			timer.Reset(nextBackoff)
 		}
 	}
 }

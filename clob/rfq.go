@@ -6,8 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/go-json-experiment/json/jsontext"
-
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
 )
 
@@ -54,6 +52,30 @@ func (c *AuthenticatedClient) GetRFQRequests(
 		if len(params.Markets) > 0 {
 			query.Set("markets", strings.Join(params.Markets, ","))
 		}
+		if params.SizeMin != "" {
+			query.Set("sizeMin", params.SizeMin)
+		}
+		if params.SizeMax != "" {
+			query.Set("sizeMax", params.SizeMax)
+		}
+		if params.SizeUSDcMin != "" {
+			query.Set("sizeUsdcMin", params.SizeUSDcMin)
+		}
+		if params.SizeUSDcMax != "" {
+			query.Set("sizeUsdcMax", params.SizeUSDcMax)
+		}
+		if params.PriceMin != "" {
+			query.Set("priceMin", params.PriceMin)
+		}
+		if params.PriceMax != "" {
+			query.Set("priceMax", params.PriceMax)
+		}
+		if params.SortBy != "" {
+			query.Set("sortBy", params.SortBy)
+		}
+		if params.SortDir != "" {
+			query.Set("sortDir", params.SortDir)
+		}
 	}
 
 	var resp RFQRequestsResponse
@@ -99,32 +121,46 @@ func (c *AuthenticatedClient) GetRFQQuotes(
 		if params.Offset != "" {
 			query.Set("offset", params.Offset)
 		}
+		if params.State != "" {
+			query.Set("state", params.State)
+		}
 		for _, id := range params.RequestIDs {
 			query.Add("requestIds", id)
 		}
 		for _, id := range params.QuoteIDs {
 			query.Add("quoteIds", id)
 		}
+		if len(params.Markets) > 0 {
+			query.Set("markets", strings.Join(params.Markets, ","))
+		}
+		if params.SizeMin != "" {
+			query.Set("sizeMin", params.SizeMin)
+		}
+		if params.SizeMax != "" {
+			query.Set("sizeMax", params.SizeMax)
+		}
+		if params.SizeUSDcMin != "" {
+			query.Set("sizeUsdcMin", params.SizeUSDcMin)
+		}
+		if params.SizeUSDcMax != "" {
+			query.Set("sizeUsdcMax", params.SizeUSDcMax)
+		}
+		if params.PriceMin != "" {
+			query.Set("priceMin", params.PriceMin)
+		}
+		if params.PriceMax != "" {
+			query.Set("priceMax", params.PriceMax)
+		}
+		if params.SortBy != "" {
+			query.Set("sortBy", params.SortBy)
+		}
+		if params.SortDir != "" {
+			query.Set("sortDir", params.SortDir)
+		}
 	}
 
 	var resp RFQQuotesResponse
 	if err := c.getJSON(ctx, rfqDataQuotesEndpoint, query, polyhttp.AuthL2Builder, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
-
-// GetRFQBestQuote retrieves the current best quote for a specific request.
-// Level 2 Auth required.
-func (c *AuthenticatedClient) GetRFQBestQuote(
-	ctx context.Context,
-	requestID string,
-) (*RFQQuote, error) {
-	query := url.Values{}
-	query.Set("requestId", requestID)
-
-	var resp RFQQuote
-	if err := c.getJSON(ctx, rfqBestQuoteEndpoint, query, polyhttp.AuthL2Builder, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -152,14 +188,4 @@ func (c *AuthenticatedClient) ApproveRFQOrder(
 		return nil, err
 	}
 	return &resp, nil
-}
-
-// GetRFQConfig retrieves the current RFQ configuration.
-// Level 2 Auth required.
-func (c *AuthenticatedClient) GetRFQConfig(ctx context.Context) (jsontext.Value, error) {
-	var resp jsontext.Value
-	if err := c.getJSON(ctx, rfqConfigEndpoint, nil, polyhttp.AuthL2Builder, &resp); err != nil {
-		return nil, err
-	}
-	return resp, nil
 }

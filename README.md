@@ -252,13 +252,18 @@ Copy `.env.example` to `.env` if you want a single place to manage example envir
 
 ### RFQ
 
-The RFQ flow uses three methods:
+The RFQ (Request for Quote) flow involves both Requesters and Quoters:
 
-| Method                      | Returns                             | Notes                                                |
-| --------------------------- | ----------------------------------- | ---------------------------------------------------- |
-| `GetRFQQuotes(ctx, params)` | `(*RFQQuotesResponse, error)`       | Lists quotes for one or more request IDs             |
-| `AcceptRFQQuote(ctx, req)`  | `error`                             | Requester accepts a quote; server returns plain OK   |
-| `ApproveRFQOrder(ctx, req)` | `(*ApproveRFQOrderResponse, error)` | Quoter approves the matched order; returns trade IDs |
+| Method                                | Returns                             | Role      | Notes                                                |
+| ------------------------------------- | ----------------------------------- | --------- | ---------------------------------------------------- |
+| `CreateRFQRequest(ctx, params)`       | `(*RFQRequestResponse, error)`      | Requester | Initiates a new RFQ request                          |
+| `CancelRFQRequest(ctx, requestID)`    | `error`                             | Requester | Cancels an open RFQ request                          |
+| `GetRFQRequests(ctx, params)`         | `(*RFQRequestsResponse, error)`     | Both      | Lists filtered RFQ requests                          |
+| `CreateRFQQuote(ctx, params)`         | `(*RFQQuoteResponse, error)`        | Quoter    | Responds to a request with a quote                   |
+| `CancelRFQQuote(ctx, quoteID)`        | `error`                             | Quoter    | Cancels an open RFQ quote                            |
+| `GetRFQQuotes(ctx, params)`           | `(*RFQQuotesResponse, error)`       | Both      | Lists filtered RFQ quotes                            |
+| `AcceptRFQQuote(ctx, req)`            | `error`                             | Requester | Accepts a quote; server returns plain "OK"           |
+| `ApproveRFQOrder(ctx, req)`           | `(*ApproveRFQOrderResponse, error)` | Quoter    | Approves the matched order; returns trade IDs        |
 
 ### Market Price
 
