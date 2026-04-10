@@ -6,7 +6,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-var BinaryPartition = []*big.Int{big.NewInt(1), big.NewInt(2)}
+func BinaryPartition() []*big.Int {
+	return []*big.Int{big.NewInt(1), big.NewInt(2)}
+}
 
 type SplitPositionRequest struct {
 	CollateralToken    common.Address
@@ -25,7 +27,7 @@ func SplitBinary(
 		CollateralToken:    collateral,
 		ParentCollectionID: common.Hash{},
 		ConditionID:        conditionID,
-		Partition:          BinaryPartition,
+		Partition:          BinaryPartition(),
 		Amount:             amount,
 	}
 }
@@ -47,7 +49,7 @@ func MergeBinary(
 		CollateralToken:    collateral,
 		ParentCollectionID: common.Hash{},
 		ConditionID:        conditionID,
-		Partition:          BinaryPartition,
+		Partition:          BinaryPartition(),
 		Amount:             amount,
 	}
 }
@@ -64,7 +66,7 @@ func RedeemBinary(collateral common.Address, conditionID common.Hash) RedeemPosi
 		CollateralToken:    collateral,
 		ParentCollectionID: common.Hash{},
 		ConditionID:        conditionID,
-		IndexSets:          BinaryPartition,
+		IndexSets:          BinaryPartition(),
 	}
 }
 
