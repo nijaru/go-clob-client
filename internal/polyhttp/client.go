@@ -161,7 +161,11 @@ func (c *Client) doJSON(
 		fullURL += "?" + query.Encode()
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, fullURL, bytes.NewReader(requestBody))
+	var bodyReader io.Reader
+	if len(requestBody) > 0 {
+		bodyReader = bytes.NewReader(requestBody)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, fullURL, bodyReader)
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
