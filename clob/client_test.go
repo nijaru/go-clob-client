@@ -276,7 +276,7 @@ func TestGetJSONRetriesTransientServerFailures(t *testing.T) {
 	}
 }
 
-func TestCreateAPIKeyDoesNotRetryNonceGETRequests(t *testing.T) {
+func TestCreateAPIKeyUsesNoncePOSTWithoutRetry(t *testing.T) {
 	t.Parallel()
 
 	var calls int
@@ -284,6 +284,9 @@ func TestCreateAPIKeyDoesNotRetryNonceGETRequests(t *testing.T) {
 		if r.URL.Path != createAPIKeyEndpoint {
 			http.NotFound(w, r)
 			return
+		}
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %s, want POST", r.Method)
 		}
 		calls++
 		http.Error(w, `{"error":"temporary"}`, http.StatusInternalServerError)

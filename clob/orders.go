@@ -14,7 +14,7 @@ import (
 // CreateAPIKey creates a new Polymarket API key using L1 authentication.
 func (c *SignerClient) CreateAPIKey(ctx context.Context, nonce int64) (*Credentials, error) {
 	var raw apiKeyRaw
-	err := c.getJSONWithNonce(ctx, createAPIKeyEndpoint, nil, polyhttp.AuthL1, nonce, &raw)
+	err := c.postJSONWithNonce(ctx, createAPIKeyEndpoint, nil, polyhttp.AuthL1, nonce, &raw)
 	if err != nil {
 		return nil, err
 	}
