@@ -99,9 +99,14 @@ func NewAuthenticatedClient(config Config) (*AuthenticatedClient, error) {
 	if err != nil {
 		return nil, err
 	}
+	decodedSecret, err := polyauth.DecodeAPISecret(config.Credentials.Secret)
+	if err != nil {
+		return nil, fmt.Errorf("invalid API secret: %w", err)
+	}
 	authClient := &AuthenticatedClient{
 		SignerClient:      sc,
 		creds:             config.Credentials,
+		decodedSecret:     decodedSecret,
 		builderAuth:       config.BuilderAuth,
 		heartbeatInterval: config.HeartbeatInterval,
 	}

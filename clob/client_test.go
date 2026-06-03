@@ -103,6 +103,43 @@ func TestAuthenticatedClientShutdown(t *testing.T) {
 	}
 }
 
+func TestNewAuthenticatedClientDecodesAPISecret(t *testing.T) {
+	t.Parallel()
+
+	privateKey := "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c"
+	client, err := NewAuthenticatedClient(Config{
+		PrivateKey: privateKey,
+		Credentials: &Credentials{
+			Key:        "key",
+			Secret:     "c2VjcmV0",
+			Passphrase: "pass",
+		},
+		DisableAutoHeartbeat: true,
+	})
+	if err != nil {
+		t.Fatalf("new authenticated client: %v", err)
+	}
+	if got := string(client.decodedSecret); got != "secret" {
+		t.Fatalf("decoded secret = %q, want secret", got)
+	}
+	if err := client.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	_, err = NewAuthenticatedClient(Config{
+		PrivateKey: privateKey,
+		Credentials: &Credentials{
+			Key:        "key",
+			Secret:     "*",
+			Passphrase: "pass",
+		},
+		DisableAutoHeartbeat: true,
+	})
+	if err == nil {
+		t.Fatal("expected invalid API secret error")
+	}
+}
+
 func TestAuthenticatedClientShutdownTimeout(t *testing.T) {
 	t.Parallel()
 
