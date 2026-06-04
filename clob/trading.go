@@ -15,8 +15,9 @@ import (
 )
 
 const (
-	protocolName    = "Polymarket CTF Exchange"
-	protocolVersion = "1"
+	protocolName      = "Polymarket CTF Exchange"
+	protocolVersion   = "1"
+	protocolVersionV2 = "2"
 )
 
 var tokenScaleFactor = udecimal.MustFromInt64(1000000, 0) // 10^6
@@ -61,7 +62,7 @@ func (c *SignerClient) CreateOrder(
 		return nil, err
 	}
 
-	return c.buildSignedLimitOrder(userOrder, CreateOrderOptions{
+	return c.buildSignedLimitOrder(ctx, userOrder, CreateOrderOptions{
 		TickSize: tickSize,
 		NegRisk:  new(isNegRisk),
 	})
@@ -119,7 +120,7 @@ func (c *SignerClient) CreateMarketOrder(
 		return nil, err
 	}
 
-	return c.buildSignedMarketOrder(userOrder, CreateOrderOptions{
+	return c.buildSignedMarketOrder(ctx, userOrder, CreateOrderOptions{
 		TickSize: tickSize,
 		NegRisk:  new(isNegRisk),
 	})
@@ -294,6 +295,7 @@ func (c *Client) CalculateMarketPrice(
 }
 
 func (c *SignerClient) buildSignedLimitOrder(
+	ctx context.Context,
 	userOrder OrderArgs,
 	options CreateOrderOptions,
 ) (*SignedOrder, error) {
@@ -328,7 +330,7 @@ func (c *SignerClient) buildSignedLimitOrder(
 		return nil, fmt.Errorf("invalid side %q", userOrder.Side)
 	}
 
-	return c.signOrder(orderBuildInput{
+	return c.signOrder(ctx, orderBuildInput{
 		TokenID:       userOrder.TokenID,
 		MakerAmount:   toTokenDecimals(rawMakerAmount),
 		TakerAmount:   toTokenDecimals(rawTakerAmount),
@@ -343,6 +345,7 @@ func (c *SignerClient) buildSignedLimitOrder(
 }
 
 func (c *SignerClient) buildSignedMarketOrder(
+	ctx context.Context,
 	userOrder MarketOrderArgs,
 	options CreateOrderOptions,
 ) (*SignedOrder, error) {
@@ -385,7 +388,7 @@ func (c *SignerClient) buildSignedMarketOrder(
 		return nil, fmt.Errorf("invalid side %q", userOrder.Side)
 	}
 
-	return c.signOrder(orderBuildInput{
+	return c.signOrder(ctx, orderBuildInput{
 		TokenID:       userOrder.TokenID,
 		MakerAmount:   toTokenDecimals(rawMakerAmount),
 		TakerAmount:   toTokenDecimals(rawTakerAmount),
@@ -412,15 +415,10 @@ type orderBuildInput struct {
 	SignatureType SignatureType
 }
 
-func (c *SignerClient) signOrder(input orderBuildInput) (*SignedOrder, error) {
+func (c *SignerClient) signOrder(ctx context.Context, input orderBuildInput) (*SignedOrder, error) {
 	contracts, err := getContractConfig(c.chainID)
 	if err != nil {
 		return nil, err
-	}
-
-	verifyingContract := contracts.Exchange
-	if input.NegRisk {
-		verifyingContract = contracts.NegRiskExchange
 	}
 
 	signerAddress := c.signer.Address().Hex()
@@ -429,7 +427,37 @@ func (c *SignerClient) signOrder(input orderBuildInput) (*SignedOrder, error) {
 		maker = c.funderAddress
 	}
 
+	salt, err := c.saltGenerator()
+	if err != nil {
+		return nil, fmt.Errorf("generate order salt: %w", err)
+	}
+
+	version, err := c.resolveVersion(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("resolve protocol version: %w", err)
+	}
+
+	switch version {
+	case 2:
+		return c.signOrderV2(input, contracts, signerAddress, maker, salt)
+	default:
+		return c.signOrderV1(input, contracts, signerAddress, maker, salt)
+	}
+}
+
+func (c *SignerClient) signOrderV1(
+	input orderBuildInput,
+	contracts contractConfig,
+	signerAddress, maker string,
+	salt uint64,
+) (*SignedOrder, error) {
+	verifyingContract := contracts.Exchange
+	if input.NegRisk {
+		verifyingContract = contracts.NegRiskExchange
+	}
+
 	order := SignedOrder{
+		Version:       1,
 		Maker:         maker,
 		Signer:        signerAddress,
 		Taker:         input.Taker,
@@ -441,17 +469,56 @@ func (c *SignerClient) signOrder(input orderBuildInput) (*SignedOrder, error) {
 		FeeRateBps:    strconv.FormatInt(input.FeeRateBps, 10),
 		Side:          input.Side,
 		SignatureType: input.SignatureType,
+		Salt:          strconv.FormatUint(salt, 10),
 	}
-
-	salt, err := c.saltGenerator()
-	if err != nil {
-		return nil, fmt.Errorf("generate order salt: %w", err)
-	}
-	order.Salt = strconv.FormatUint(salt, 10)
 
 	signature, err := polyauth.SignTypedData(
 		c.signer,
 		buildOrderTypedData(c.chainID, verifyingContract, order),
+	)
+	if err != nil {
+		return nil, err
+	}
+	order.Signature = signature
+
+	return &order, nil
+}
+
+func (c *SignerClient) signOrderV2(
+	input orderBuildInput,
+	contracts contractConfig,
+	signerAddress, maker string,
+	salt uint64,
+) (*SignedOrder, error) {
+	verifyingContract := contracts.ExchangeV2
+	if input.NegRisk {
+		verifyingContract = contracts.NegRiskExchangeV2
+	}
+	if verifyingContract == "" {
+		return nil, fmt.Errorf("V2 exchange contract not configured for chain %d", c.chainID)
+	}
+
+	timestampMs := time.Now().UnixMilli()
+
+	order := SignedOrder{
+		Version:       2,
+		Maker:         maker,
+		Signer:        signerAddress,
+		TokenID:       input.TokenID,
+		MakerAmount:   input.MakerAmount.StringFixed(0),
+		TakerAmount:   input.TakerAmount.StringFixed(0),
+		Expiration:    strconv.FormatUint(input.Expiration, 10),
+		Side:          input.Side,
+		SignatureType: input.SignatureType,
+		Salt:          strconv.FormatUint(salt, 10),
+		Timestamp:     strconv.FormatInt(timestampMs, 10),
+		Metadata:      "0x0000000000000000000000000000000000000000000000000000000000000000",
+		Builder:       "0x0000000000000000000000000000000000000000000000000000000000000000",
+	}
+
+	signature, err := polyauth.SignTypedData(
+		c.signer,
+		buildOrderTypedDataV2(c.chainID, verifyingContract, order),
 	)
 	if err != nil {
 		return nil, err
@@ -509,6 +576,56 @@ func buildOrderTypedData(
 			"feeRateBps":    order.FeeRateBps,
 			"side":          strconv.Itoa(sideValue(order.Side)),
 			"signatureType": strconv.Itoa(int(order.SignatureType)),
+		},
+	}
+}
+
+func buildOrderTypedDataV2(
+	chainID int64,
+	verifyingContract string,
+	order SignedOrder,
+) apitypes.TypedData {
+	return apitypes.TypedData{
+		Types: apitypes.Types{
+			"EIP712Domain": {
+				{Name: "name", Type: "string"},
+				{Name: "version", Type: "string"},
+				{Name: "chainId", Type: "uint256"},
+				{Name: "verifyingContract", Type: "address"},
+			},
+			"Order": {
+				{Name: "salt", Type: "uint256"},
+				{Name: "maker", Type: "address"},
+				{Name: "signer", Type: "address"},
+				{Name: "tokenId", Type: "uint256"},
+				{Name: "makerAmount", Type: "uint256"},
+				{Name: "takerAmount", Type: "uint256"},
+				{Name: "side", Type: "uint8"},
+				{Name: "signatureType", Type: "uint8"},
+				{Name: "timestamp", Type: "uint256"},
+				{Name: "metadata", Type: "bytes32"},
+				{Name: "builder", Type: "bytes32"},
+			},
+		},
+		PrimaryType: "Order",
+		Domain: apitypes.TypedDataDomain{
+			Name:              protocolName,
+			Version:           protocolVersionV2,
+			ChainId:           ethmath.NewHexOrDecimal256(chainID),
+			VerifyingContract: verifyingContract,
+		},
+		Message: apitypes.TypedDataMessage{
+			"salt":          order.Salt,
+			"maker":         order.Maker,
+			"signer":        order.Signer,
+			"tokenId":       order.TokenID,
+			"makerAmount":   order.MakerAmount,
+			"takerAmount":   order.TakerAmount,
+			"side":          strconv.Itoa(sideValue(order.Side)),
+			"signatureType": strconv.Itoa(int(order.SignatureType)),
+			"timestamp":     order.Timestamp,
+			"metadata":      order.Metadata,
+			"builder":       order.Builder,
 		},
 	}
 }

@@ -420,6 +420,8 @@ func newTradingTestServer(t *testing.T, postHandler http.HandlerFunc) *httptest.
 		w.Header().Set("Content-Type", "application/json")
 
 		switch r.URL.Path {
+		case versionEndpoint:
+			_, _ = w.Write([]byte(`{"version":1}`))
 		case tickSizeEndpoint:
 			_, _ = w.Write([]byte(`{"minimum_tick_size":"0.01"}`))
 		case feeRateEndpoint:

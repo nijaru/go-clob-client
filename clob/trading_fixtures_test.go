@@ -65,6 +65,8 @@ func newTradingFixtureServer(t *testing.T) *httptest.Server {
 		w.Header().Set("Content-Type", "application/json")
 
 		switch r.URL.Path {
+		case versionEndpoint:
+			_, _ = w.Write([]byte(`{"version":1}`))
 		case tickSizeEndpoint:
 			_, _ = w.Write([]byte(`{"minimum_tick_size":"0.001"}`))
 		case feeRateEndpoint:
@@ -139,6 +141,7 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 				}, &CreateOrderOptions{TickSize: TickSizeTenth, NegRisk: new(false)})
 			},
 			expect: SignedOrder{
+				Version:       1,
 				Salt:          "1",
 				Maker:         "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
 				Signer:        "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
@@ -174,6 +177,7 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 				}, &CreateOrderOptions{TickSize: TickSizeTenth, NegRisk: new(false)})
 			},
 			expect: SignedOrder{
+				Version:       1,
 				Salt:          "1",
 				Maker:         "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
 				Signer:        "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
@@ -210,6 +214,7 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 				}, &CreateOrderOptions{TickSize: TickSizeHundredth, NegRisk: new(false)})
 			},
 			expect: SignedOrder{
+				Version:       1,
 				Salt:          "1",
 				Maker:         "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
 				Signer:        "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
@@ -247,6 +252,7 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 				}, &CreateOrderOptions{TickSize: TickSizeHundredth, NegRisk: new(false)})
 			},
 			expect: SignedOrder{
+				Version:       1,
 				Salt:          "1",
 				Maker:         "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
 				Signer:        "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
@@ -287,6 +293,7 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 				}, &CreateOrderOptions{TickSize: TickSizeThousandth, NegRisk: new(true)})
 			},
 			expect: SignedOrder{
+				Version:       1,
 				Salt:          "1",
 				Maker:         "0xaDEFf2158d668f64308C62ef227C5CcaCAAf976D",
 				Signer:        "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",

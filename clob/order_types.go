@@ -2,7 +2,6 @@ package clob
 
 import (
 	"fmt"
-	"math"
 	"strconv"
 
 	json "github.com/go-json-experiment/json"
@@ -291,124 +290,170 @@ type MarketOrderArgs struct {
 }
 
 // SignedOrder is the Polymarket wire format for a signed order payload.
+// Supports both V1 and V2 protocol versions.
+// V1 fields: Taker, Nonce, FeeRateBps (excluded from JSON when Version == 2)
+// V2 fields: Timestamp, Metadata, Builder (excluded from JSON when Version == 1)
+// The Version field is never serialized.
 type SignedOrder struct {
+	// Version tracks the protocol version (1 or 2). Zero means V1.
+	Version int `json:"-"`
+
+	// Common fields (both versions).
 	Salt          string        `json:"salt"`
 	Maker         string        `json:"maker"`
 	Signer        string        `json:"signer"`
-	Taker         string        `json:"taker"`
 	TokenID       string        `json:"tokenId"`
 	MakerAmount   string        `json:"makerAmount"`
 	TakerAmount   string        `json:"takerAmount"`
 	Expiration    string        `json:"expiration"`
-	Nonce         string        `json:"nonce"`
-	FeeRateBps    string        `json:"feeRateBps"`
 	Side          Side          `json:"side"`
 	SignatureType SignatureType `json:"signatureType"`
 	Signature     string        `json:"signature"`
+
+	// V1-only fields.
+	Taker      string `json:"taker,omitempty"`
+	Nonce      string `json:"nonce,omitempty"`
+	FeeRateBps string `json:"feeRateBps,omitempty"`
+
+	// V2-only fields.
+	Timestamp string `json:"-"`
+	Metadata  string `json:"-"`
+	Builder   string `json:"-"`
 }
 
 // MarshalJSON encodes the signed order with the salt as a JSON number.
+// The wire format differs between V1 and V2; Version selects the shape.
 func (o SignedOrder) MarshalJSON() ([]byte, error) {
 	salt, err := strconv.ParseUint(o.Salt, 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("parse order salt: %w", err)
 	}
 
-	type wireSignedOrder struct {
-		Salt          uint64        `json:"salt"`
-		Maker         string        `json:"maker"`
-		Signer        string        `json:"signer"`
-		Taker         string        `json:"taker"`
-		TokenID       string        `json:"tokenId"`
-		MakerAmount   string        `json:"makerAmount"`
-		TakerAmount   string        `json:"takerAmount"`
-		Expiration    string        `json:"expiration"`
-		Nonce         string        `json:"nonce"`
-		FeeRateBps    string        `json:"feeRateBps"`
-		Side          Side          `json:"side"`
-		SignatureType SignatureType `json:"signatureType"`
-		Signature     string        `json:"signature"`
+	switch o.Version {
+	case 2:
+		type wireV2 struct {
+			Salt          uint64        `json:"salt"`
+			Maker         string        `json:"maker"`
+			Signer        string        `json:"signer"`
+			TokenID       string        `json:"tokenId"`
+			MakerAmount   string        `json:"makerAmount"`
+			TakerAmount   string        `json:"takerAmount"`
+			Side          Side          `json:"side"`
+			SignatureType SignatureType `json:"signatureType"`
+			Expiration    string        `json:"expiration"`
+			Timestamp     string        `json:"timestamp"`
+			Metadata      string        `json:"metadata"`
+			Builder       string        `json:"builder"`
+			Signature     string        `json:"signature"`
+		}
+		return json.Marshal(wireV2{
+			Salt:          salt,
+			Maker:         o.Maker,
+			Signer:        o.Signer,
+			TokenID:       o.TokenID,
+			MakerAmount:   o.MakerAmount,
+			TakerAmount:   o.TakerAmount,
+			Side:          o.Side,
+			SignatureType: o.SignatureType,
+			Expiration:    o.Expiration,
+			Timestamp:     o.Timestamp,
+			Metadata:      o.Metadata,
+			Builder:       o.Builder,
+			Signature:     o.Signature,
+		})
+	default:
+		type wireV1 struct {
+			Salt          uint64        `json:"salt"`
+			Maker         string        `json:"maker"`
+			Signer        string        `json:"signer"`
+			Taker         string        `json:"taker"`
+			TokenID       string        `json:"tokenId"`
+			MakerAmount   string        `json:"makerAmount"`
+			TakerAmount   string        `json:"takerAmount"`
+			Expiration    string        `json:"expiration"`
+			Nonce         string        `json:"nonce"`
+			FeeRateBps    string        `json:"feeRateBps"`
+			Side          Side          `json:"side"`
+			SignatureType SignatureType `json:"signatureType"`
+			Signature     string        `json:"signature"`
+		}
+		return json.Marshal(wireV1{
+			Salt:          salt,
+			Maker:         o.Maker,
+			Signer:        o.Signer,
+			Taker:         o.Taker,
+			TokenID:       o.TokenID,
+			MakerAmount:   o.MakerAmount,
+			TakerAmount:   o.TakerAmount,
+			Expiration:    o.Expiration,
+			Nonce:         o.Nonce,
+			FeeRateBps:    o.FeeRateBps,
+			Side:          o.Side,
+			SignatureType: o.SignatureType,
+			Signature:     o.Signature,
+		})
 	}
-
-	return json.Marshal(wireSignedOrder{
-		Salt:          salt,
-		Maker:         o.Maker,
-		Signer:        o.Signer,
-		Taker:         o.Taker,
-		TokenID:       o.TokenID,
-		MakerAmount:   o.MakerAmount,
-		TakerAmount:   o.TakerAmount,
-		Expiration:    o.Expiration,
-		Nonce:         o.Nonce,
-		FeeRateBps:    o.FeeRateBps,
-		Side:          o.Side,
-		SignatureType: o.SignatureType,
-		Signature:     o.Signature,
-	})
 }
 
-// UnmarshalJSON handles the diverse salt format from the API.
-// The salt may arrive as a JSON number (integer or float) or a string.
+// UnmarshalJSON handles both V1 and V2 order wire formats.
+// V2 orders have timestamp/metadata/builder but no taker/nonce/feeRateBps.
+// V1 orders have taker/nonce/feeRateBps but no timestamp/metadata/builder.
 func (o *SignedOrder) UnmarshalJSON(data []byte) error {
-	type wireSignedOrder struct {
-		Salt          any           `json:"salt"`
-		Maker         string        `json:"maker"`
-		Signer        string        `json:"signer"`
-		Taker         string        `json:"taker"`
-		TokenID       string        `json:"tokenId"`
-		MakerAmount   string        `json:"makerAmount"`
-		TakerAmount   string        `json:"takerAmount"`
-		Expiration    string        `json:"expiration"`
-		Nonce         string        `json:"nonce"`
-		FeeRateBps    string        `json:"feeRateBps"`
-		Side          Side          `json:"side"`
-		SignatureType SignatureType `json:"signatureType"`
-		Signature     string        `json:"signature"`
-	}
-
-	var decoded wireSignedOrder
-	if err := json.Unmarshal(data, &decoded); err != nil {
+	// Use a map to detect which fields are present.
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
 
-	salt, err := parseSaltValue(decoded.Salt)
-	if err != nil {
-		return fmt.Errorf("parse order salt: %w", err)
-	}
-	o.Salt = salt
-	o.Maker = decoded.Maker
-	o.Signer = decoded.Signer
-	o.Taker = decoded.Taker
-	o.TokenID = decoded.TokenID
-	o.MakerAmount = decoded.MakerAmount
-	o.TakerAmount = decoded.TakerAmount
-	o.Expiration = decoded.Expiration
-	o.Nonce = decoded.Nonce
-	o.FeeRateBps = decoded.FeeRateBps
-	o.Side = decoded.Side
-	o.SignatureType = decoded.SignatureType
-	o.Signature = decoded.Signature
-	return nil
-}
-
-// parseSaltValue converts the polymorphic JSON salt value to a decimal string.
-// The API may return the salt as a JSON number (integer or float64) or as a string.
-// Using fmt.Sprint on a float64 is unsafe: fmt.Sprint(1e20) => "1e+20", breaking
-// strconv.ParseUint in MarshalJSON. We convert float64 -> uint64 explicitly.
-func parseSaltValue(v any) (string, error) {
-	switch val := v.(type) {
-	case string:
-		return val, nil
-	case float64:
-		if val < 0 || val > math.MaxUint64 || math.IsNaN(val) || math.IsInf(val, 0) {
-			return "", fmt.Errorf("salt value %v is out of uint64 range", val)
+	parseStr := func(key string) string {
+		if v, ok := raw[key]; ok {
+			switch val := v.(type) {
+			case string:
+				return val
+			case float64:
+				return strconv.FormatFloat(val, 'f', -1, 64)
+			}
 		}
-		return strconv.FormatUint(uint64(val), 10), nil
-	case nil:
-		return "0", nil
-	default:
-		return "", fmt.Errorf("unexpected salt type %T", v)
+		return ""
 	}
+
+	o.Salt = parseStr("salt")
+	o.Maker = parseStr("maker")
+	o.Signer = parseStr("signer")
+	o.TokenID = parseStr("tokenId")
+	o.MakerAmount = parseStr("makerAmount")
+	o.TakerAmount = parseStr("takerAmount")
+	o.Expiration = parseStr("expiration")
+	o.Signature = parseStr("signature")
+
+	if v, ok := raw["side"]; ok {
+		o.Side = Side(fmt.Sprint(v))
+	}
+	if v, ok := raw["signatureType"]; ok {
+		switch val := v.(type) {
+		case float64:
+			o.SignatureType = SignatureType(val)
+		case string:
+			if n, err := strconv.Atoi(val); err == nil {
+				o.SignatureType = SignatureType(n)
+			}
+		}
+	}
+
+	// Detect version by field presence.
+	if _, has := raw["timestamp"]; has {
+		o.Version = 2
+		o.Timestamp = parseStr("timestamp")
+		o.Metadata = parseStr("metadata")
+		o.Builder = parseStr("builder")
+	} else {
+		o.Version = 1
+		o.Taker = parseStr("taker")
+		o.Nonce = parseStr("nonce")
+		o.FeeRateBps = parseStr("feeRateBps")
+	}
+
+	return nil
 }
 
 // PostOrderRequest is the authenticated order-post payload.
