@@ -32,6 +32,8 @@ const (
 		"address verifyingContract,bytes32 salt)" + orderTypeString
 )
 
+const zeroBytes32 = "0x0000000000000000000000000000000000000000000000000000000000000000"
+
 var tokenScaleFactor = udecimal.MustFromInt64(1000000, 0) // 10^6
 
 var roundingConfig = map[TickSize]roundConfig{
@@ -220,6 +222,7 @@ func (c *AuthenticatedClient) BuildPostOrderRequest(
 		Owner:     creds.Key,
 		OrderType: orderType,
 		PostOnly:  postOnly,
+		DeferExec: order.DeferExec,
 	}, nil
 }
 
@@ -353,6 +356,9 @@ func (c *SignerClient) buildSignedLimitOrder(
 		Taker:         normalizeTaker(userOrder.Taker),
 		NegRisk:       derefBool(options.NegRisk),
 		SignatureType: c.signatureType,
+		Metadata:      userOrder.Metadata,
+		BuilderCode:   userOrder.BuilderCode,
+		DeferExec:     userOrder.DeferExec,
 	})
 }
 
@@ -411,6 +417,9 @@ func (c *SignerClient) buildSignedMarketOrder(
 		Taker:         normalizeTaker(userOrder.Taker),
 		NegRisk:       derefBool(options.NegRisk),
 		SignatureType: c.signatureType,
+		Metadata:      userOrder.Metadata,
+		BuilderCode:   userOrder.BuilderCode,
+		DeferExec:     userOrder.DeferExec,
 	})
 }
 
@@ -425,6 +434,11 @@ type orderBuildInput struct {
 	Taker         string
 	NegRisk       bool
 	SignatureType SignatureType
+
+	// V2-only fields.
+	Metadata    string
+	BuilderCode string
+	DeferExec   bool
 }
 
 func (c *SignerClient) signOrder(ctx context.Context, input orderBuildInput) (*SignedOrder, error) {
@@ -512,6 +526,15 @@ func (c *SignerClient) signOrderV2(
 
 	timestampMs := time.Now().UnixMilli()
 
+	metadata := input.Metadata
+	if metadata == "" {
+		metadata = zeroBytes32
+	}
+	builderCode := input.BuilderCode
+	if builderCode == "" {
+		builderCode = zeroBytes32
+	}
+
 	order := SignedOrder{
 		Version:       2,
 		Maker:         maker,
@@ -524,8 +547,9 @@ func (c *SignerClient) signOrderV2(
 		SignatureType: input.SignatureType,
 		Salt:          strconv.FormatUint(salt, 10),
 		Timestamp:     strconv.FormatInt(timestampMs, 10),
-		Metadata:      "0x0000000000000000000000000000000000000000000000000000000000000000",
-		Builder:       "0x0000000000000000000000000000000000000000000000000000000000000000",
+		Metadata:      metadata,
+		Builder:       builderCode,
+		DeferExec:     input.DeferExec,
 	}
 
 	typedData := buildOrderTypedDataV2(c.chainID, verifyingContract, order)

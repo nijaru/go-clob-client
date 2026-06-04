@@ -270,6 +270,11 @@ type OrderArgs struct {
 	Nonce      uint64
 	Expiration uint64
 	Taker      string
+
+	// V2-only fields (ignored for V1 orders).
+	Metadata    string // 0x-prefixed 32-byte hex; defaults to zero
+	BuilderCode string // 0x-prefixed 32-byte hex; defaults to zero
+	DeferExec   bool   // defers execution on the exchange
 }
 
 // MarketOrderArgs contains the inputs for building a market order.
@@ -287,6 +292,11 @@ type MarketOrderArgs struct {
 	Nonce      uint64
 	Taker      string
 	OrderType  OrderType
+
+	// V2-only fields (ignored for V1 orders).
+	Metadata    string
+	BuilderCode string
+	DeferExec   bool
 }
 
 // SignedOrder is the Polymarket wire format for a signed order payload.
@@ -319,6 +329,9 @@ type SignedOrder struct {
 	Timestamp string `json:"-"`
 	Metadata  string `json:"-"`
 	Builder   string `json:"-"`
+
+	// DeferExec flows through to PostOrderRequest; not part of the order wire format.
+	DeferExec bool `json:"-"`
 }
 
 // MarshalJSON encodes the signed order with the salt as a JSON number.
@@ -462,6 +475,7 @@ type PostOrderRequest struct {
 	Owner     string      `json:"owner"`
 	OrderType OrderType   `json:"orderType"`
 	PostOnly  bool        `json:"postOnly,omitzero"`
+	DeferExec bool        `json:"deferExec,omitzero"`
 }
 
 // OpenOrderParams filters authenticated open-order queries.
