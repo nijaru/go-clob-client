@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -191,6 +193,98 @@ func (c *AuthenticatedClient) CreateAndPostMarketOrder(
 	}
 
 	return c.PostOrder(ctx, request)
+}
+
+// BuildAndPostOrder builds, signs, and posts a limit order with version mismatch retry.
+// If the server rejects the order due to a version mismatch, this automatically
+// invalidates the version cache, rebuilds, re-signs, and retries once.
+func (c *AuthenticatedClient) BuildAndPostOrder(
+	ctx context.Context,
+	userOrder OrderArgs,
+	options *CreateOrderOptions,
+	orderType OrderType,
+	postOnly bool,
+) (*PostOrderResponse, error) {
+	order, err := c.CreateOrder(ctx, userOrder, options)
+	if err != nil {
+		return nil, err
+	}
+
+	request, err := c.BuildPostOrderRequest(*order, orderType, postOnly)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.PostOrder(ctx, request)
+	if err != nil && isVersionMismatch(err) {
+		c.invalidateVersion()
+		order, err = c.CreateOrder(ctx, userOrder, options)
+		if err != nil {
+			return nil, err
+		}
+		request, err = c.BuildPostOrderRequest(*order, orderType, postOnly)
+		if err != nil {
+			return nil, err
+		}
+		return c.PostOrder(ctx, request)
+	}
+	return resp, err
+}
+
+// BuildAndPostMarketOrder builds, signs, and posts a market order with version mismatch retry.
+func (c *AuthenticatedClient) BuildAndPostMarketOrder(
+	ctx context.Context,
+	userOrder MarketOrderArgs,
+	options *CreateOrderOptions,
+	orderType OrderType,
+) (*PostOrderResponse, error) {
+	if orderType == "" {
+		orderType = userOrder.OrderType
+	}
+	if orderType == "" {
+		orderType = OrderTypeFOK
+	}
+	if orderType != OrderTypeFOK && orderType != OrderTypeFAK {
+		return nil, fmt.Errorf("market orders only support FOK or FAK order types")
+	}
+	userOrder.OrderType = orderType
+
+	order, err := c.CreateMarketOrder(ctx, userOrder, options)
+	if err != nil {
+		return nil, err
+	}
+
+	request, err := c.BuildPostOrderRequest(*order, orderType, false)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.PostOrder(ctx, request)
+	if err != nil && isVersionMismatch(err) {
+		c.invalidateVersion()
+		order, err = c.CreateMarketOrder(ctx, userOrder, options)
+		if err != nil {
+			return nil, err
+		}
+		request, err = c.BuildPostOrderRequest(*order, orderType, false)
+		if err != nil {
+			return nil, err
+		}
+		return c.PostOrder(ctx, request)
+	}
+	return resp, err
+}
+
+// isVersionMismatch checks if the error indicates an order version mismatch.
+func isVersionMismatch(err error) bool {
+	return err != nil && strings.Contains(err.Error(), ORDER_VERSION_MISMATCH_ERROR)
+}
+
+// invalidateVersion clears the cached protocol version so the next
+// call to resolveVersion will re-fetch from the server.
+func (c *Client) invalidateVersion() {
+	c.version.Store(0)
+	c.versionOnce = sync.Once{}
 }
 
 // BuildPostOrderRequest wraps a signed order in the authenticated post-order payload.
