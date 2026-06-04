@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"math"
 	"math/big"
 	"strconv"
 	"strings"
@@ -476,8 +477,31 @@ func (c *SignerClient) buildSignedMarketOrder(
 	case SideBuy:
 		switch userOrder.AmountKind {
 		case AmountUSDC:
+			// Adjust amount for V2 fees if user balance is provided.
+			adjustedAmount := amount
+			if !userOrder.UserUSDCBalance.IsZero() {
+				feeInfo, err := c.GetFeeInfo(ctx, userOrder.TokenID)
+				if err == nil {
+					builderTakerFeeRate := 0.0
+					if userOrder.BuilderCode != "" {
+						builderTakerFeeRate = 0.0 // TODO: fetch from builder_fee_rate endpoint
+					}
+					adj, err := adjustMarketBuyAmount(
+						amount,
+						userOrder.UserUSDCBalance,
+						price,
+						feeInfo.Rate,
+						feeInfo.Exponent,
+						builderTakerFeeRate,
+					)
+					if err != nil {
+						return nil, err
+					}
+					adjustedAmount = adj
+				}
+			}
 			// Preserve the full USDC amount; only the derived share quantity is quantized.
-			rawMakerAmount = amount
+			rawMakerAmount = adjustedAmount
 			val, err := rawMakerAmount.Div(price)
 			if err != nil {
 				return nil, fmt.Errorf("calculation error: %w", err)
@@ -1097,6 +1121,66 @@ func decimalPlaces(value udecimal.Decimal) uint8 {
 
 func toTokenDecimals(value udecimal.Decimal) udecimal.Decimal {
 	return value.Mul(tokenScaleFactor).Trunc(0)
+}
+
+// adjustMarketBuyAmount shrinks a USDC buy amount to fit within the user's
+// balance after accounting for platform and builder taker fees.
+// Fee formula: platform_fee_rate = rate * (price * (1 - price))^exponent.
+// This matches the Rust SDK's adjust_market_buy_amount.
+func adjustMarketBuyAmount(
+	amount udecimal.Decimal,
+	userBalance udecimal.Decimal,
+	price udecimal.Decimal,
+	feeRate float64,
+	feeExponent uint32,
+	builderTakerFeeRate float64,
+) (udecimal.Decimal, error) {
+	one := udecimal.MustFromInt64(1, 0)
+	base := price.Mul(one.Sub(price))
+
+	// platform_fee_rate = rate * base^exponent
+	baseF64 := base.InexactFloat64()
+	expF64 := float64(feeExponent)
+	platformFeeRateVal := feeRate * math.Pow(baseF64, expF64)
+	platformFeeRate := udecimal.MustFromFloat64(platformFeeRateVal)
+
+	// platform_fee = amount / price * platform_fee_rate
+	amountDivPrice, err := amount.Div(price)
+	if err != nil {
+		return udecimal.Zero, err
+	}
+	platformFee := amountDivPrice.Mul(platformFeeRate)
+
+	// total_cost = amount + platform_fee + amount * builder_taker_fee_rate
+	builderFee := amount.Mul(udecimal.MustFromFloat64(builderTakerFeeRate))
+	totalCost := amount.Add(platformFee).Add(builderFee)
+
+	var raw udecimal.Decimal
+	if userBalance.Cmp(totalCost) <= 0 {
+		// Balance insufficient: shrink amount to fit
+		// divisor = 1 + platform_fee_rate / price + builder_taker_fee_rate
+		feeRateDivPrice, err := platformFeeRate.Div(price)
+		if err != nil {
+			return udecimal.Zero, err
+		}
+		divisor := one.Add(feeRateDivPrice).Add(udecimal.MustFromFloat64(builderTakerFeeRate))
+		val, err := userBalance.Div(divisor)
+		if err != nil {
+			return udecimal.Zero, err
+		}
+		raw = val
+	} else {
+		raw = amount
+	}
+
+	adjusted := raw.Trunc(6) // USDC_DECIMALS = 6
+	if adjusted.IsZero() {
+		return udecimal.Zero, fmt.Errorf(
+			"user balance %s too small to cover fees at price %s",
+			userBalance, price,
+		)
+	}
+	return adjusted, nil
 }
 
 func parseTickSize(value TickSize) (udecimal.Decimal, error) {

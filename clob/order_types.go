@@ -293,6 +293,12 @@ type MarketOrderArgs struct {
 	Taker      string
 	OrderType  OrderType
 
+	// UserUSDCBalance is the user's available USDC balance.
+	// When set on a BUY market order with AmountUSDC, the SDK shrinks the
+	// USDC amount to cover platform + builder taker fees so the order
+	// stays within the user's balance.
+	UserUSDCBalance udecimal.Decimal
+
 	// V2-only fields (ignored for V1 orders).
 	Metadata    string
 	BuilderCode string
