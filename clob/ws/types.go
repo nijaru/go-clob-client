@@ -1,6 +1,12 @@
 package ws
 
-import "github.com/nijaru/go-clob-client/clob"
+import (
+	"strings"
+
+	json "github.com/go-json-experiment/json"
+
+	"github.com/nijaru/go-clob-client/clob"
+)
 
 // Channel represents a WebSocket channel type.
 type Channel string
@@ -209,7 +215,21 @@ const (
 type TradeStatus string
 
 const (
-	TradeStatusMatched  TradeStatus = "matched"
-	TradeStatusRetrying TradeStatus = "RETRYING"
-	TradeStatusFailed   TradeStatus = "FAILED"
+	TradeStatusMatched   TradeStatus = "MATCHED"
+	TradeStatusMined     TradeStatus = "MINED"
+	TradeStatusConfirmed TradeStatus = "CONFIRMED"
+	TradeStatusRetrying  TradeStatus = "RETRYING"
+	TradeStatusFailed    TradeStatus = "FAILED"
 )
+
+// UnmarshalJSON implements case-insensitive deserialization for TradeStatus,
+// matching the Rust SDK's serde alias behavior (e.g. both "matched" and "MATCHED"
+// decode to TradeStatusMatched).
+func (s *TradeStatus) UnmarshalJSON(data []byte) error {
+	var raw string
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	*s = TradeStatus(strings.ToUpper(raw))
+	return nil
+}

@@ -123,7 +123,7 @@ func TestHandleMessageAllEventTypes(t *testing.T) {
 			Price:     "0.55",
 			Size:      "25",
 			Side:      clob.SideSell,
-			Status:    "matched",
+			Status:    TradeStatusMatched,
 			Timestamp: "4",
 		}},
 	}

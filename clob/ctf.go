@@ -132,7 +132,8 @@ func (c *SignerClient) SplitPosition(
 	ctx context.Context,
 	req SplitPositionRequest,
 ) (*TxReceipt, error) {
-	data, err := ctfABI.Pack("splitPosition",
+	data, err := ctfABI.Pack(
+		"splitPosition",
 		req.CollateralToken,
 		req.ParentCollectionID,
 		req.ConditionID,
@@ -159,7 +160,8 @@ func (c *SignerClient) MergePositions(
 	ctx context.Context,
 	req MergePositionsRequest,
 ) (*TxReceipt, error) {
-	data, err := ctfABI.Pack("mergePositions",
+	data, err := ctfABI.Pack(
+		"mergePositions",
 		req.CollateralToken,
 		req.ParentCollectionID,
 		req.ConditionID,
@@ -186,7 +188,8 @@ func (c *SignerClient) RedeemPositions(
 	ctx context.Context,
 	req RedeemPositionsRequest,
 ) (*TxReceipt, error) {
-	data, err := ctfABI.Pack("redeemPositions",
+	data, err := ctfABI.Pack(
+		"redeemPositions",
 		req.CollateralToken,
 		req.ParentCollectionID,
 		req.ConditionID,
@@ -212,7 +215,8 @@ func (c *SignerClient) RedeemNegRisk(
 	ctx context.Context,
 	req RedeemNegRiskRequest,
 ) (*TxReceipt, error) {
-	data, err := negRiskABI.Pack("redeemPositions",
+	data, err := negRiskABI.Pack(
+		"redeemPositions",
 		req.ConditionID,
 		req.Amounts,
 	)
