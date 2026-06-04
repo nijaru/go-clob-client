@@ -5,10 +5,13 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"math/big"
 	"strconv"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	ethmath "github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"github.com/nijaru/go-clob-client/internal/polyauth"
 	"github.com/quagmt/udecimal"
@@ -18,6 +21,15 @@ const (
 	protocolName      = "Polymarket CTF Exchange"
 	protocolVersion   = "1"
 	protocolVersionV2 = "2"
+
+	// EIP-1271 deposit wallet constants (Solady-style wrapping).
+	depositWalletName    = "DepositWallet"
+	depositWalletVersion = "1"
+	orderTypeString      = "Order(uint256 salt,address maker,address signer,uint256 tokenId," +
+		"uint256 makerAmount,uint256 takerAmount,uint8 side,uint8 signatureType," +
+		"uint256 timestamp,bytes32 metadata,bytes32 builder)"
+	soladyTypeString = "TypedDataSign(Order contents,string name,string version,uint256 chainId," +
+		"address verifyingContract,bytes32 salt)" + orderTypeString
 )
 
 var tokenScaleFactor = udecimal.MustFromInt64(1000000, 0) // 10^6
@@ -516,16 +528,131 @@ func (c *SignerClient) signOrderV2(
 		Builder:       "0x0000000000000000000000000000000000000000000000000000000000000000",
 	}
 
-	signature, err := polyauth.SignTypedData(
-		c.signer,
-		buildOrderTypedDataV2(c.chainID, verifyingContract, order),
-	)
+	typedData := buildOrderTypedDataV2(c.chainID, verifyingContract, order)
+
+	var signature string
+	var err error
+	if input.SignatureType == SignatureTypePoly1271 {
+		signature, err = signPoly1271Order(c.signer, typedData, c.chainID)
+	} else {
+		signature, err = polyauth.SignTypedData(c.signer, typedData)
+	}
 	if err != nil {
 		return nil, err
 	}
 	order.Signature = signature
 
 	return &order, nil
+}
+
+// signPoly1271Order produces a Solady-style EIP-1271 wrapped signature for
+// deposit wallet orders. The inner ECDSA signature is wrapped with the app
+// domain separator, contents hash, and the EIP-712 type string so the deposit
+// wallet's isValidSignature check can reconstruct the original typed-data digest.
+func signPoly1271Order(
+	signer *polyauth.Signer,
+	typedData apitypes.TypedData,
+	chainID int64,
+) (string, error) {
+	// Compute the domain separator hash.
+	domainSeparator, _, err := apitypes.TypedDataAndHash(apitypes.TypedData{
+		Types:       typedData.Types,
+		PrimaryType: "EIP712Domain",
+		Domain:      typedData.Domain,
+		Message:     apitypes.TypedDataMessage{},
+	})
+	if err != nil {
+		return "", fmt.Errorf("hash domain separator: %w", err)
+	}
+
+	// Compute the contents hash (hashStruct of the Order).
+	contentsHash, _, err := apitypes.TypedDataAndHash(apitypes.TypedData{
+		Types:       typedData.Types,
+		PrimaryType: "Order",
+		Domain:      typedData.Domain,
+		Message:     typedData.Message,
+	})
+	if err != nil {
+		return "", fmt.Errorf("hash order contents: %w", err)
+	}
+
+	// ABI-encode the TypedDataSign struct fields and hash.
+	typedDataSignStructHash := crypto.Keccak256(
+		abiEncodeTypedDataSign(
+			contentsHash,
+			chainID,
+			signer.Address(),
+		),
+	)
+
+	// EIP-712 final digest: 0x19 || 0x01 || domainSeparator || typedDataSignStructHash.
+	var digestInput [66]byte
+	digestInput[0] = 0x19
+	digestInput[1] = 0x01
+	copy(digestInput[2:34], domainSeparator)
+	copy(digestInput[34:66], typedDataSignStructHash)
+	digest := crypto.Keccak256(digestInput[:])
+
+	// Sign the digest.
+	sig, err := crypto.Sign(digest, signer.PrivateKey())
+	if err != nil {
+		return "", fmt.Errorf("sign poly1271 digest: %w", err)
+	}
+	sig[64] += 27 // EIP-155 recovery ID
+
+	// Build the wrapped signature: 0x || innerSig || domainSep || contentsHash || typeString || typeLen(u16 BE).
+	orderTypeBytes := []byte(orderTypeString)
+	typeLen := uint16(len(orderTypeBytes))
+	wrapped := make([]byte, 0, 2+130+64+64+len(orderTypeBytes)*2+4)
+	wrapped = append(wrapped, "0x"...)
+	wrapped = appendHex(wrapped, sig)
+	wrapped = appendHex(wrapped, domainSeparator)
+	wrapped = appendHex(wrapped, contentsHash)
+	wrapped = appendHex(wrapped, orderTypeBytes)
+	wrapped = appendHex(wrapped, []byte{byte(typeLen >> 8), byte(typeLen)})
+
+	return string(wrapped), nil
+}
+
+// abiEncodeTypedDataSign ABI-encodes the fields of the Solady TypedDataSign
+// struct: (bytes32 contents, string name, string version, uint256 chainId,
+//
+//	address verifyingContract, bytes32 salt).
+//
+// Each field is padded to 32 bytes. The tuple has 7 elements:
+//   - keccak256(soladyTypeString) (type hash)
+//   - contentsHash
+//   - keccak256(depositWalletName)
+//   - keccak256(depositWalletVersion)
+//   - chainId
+//   - signer address
+//   - salt (zero)
+func abiEncodeTypedDataSign(contentsHash []byte, chainID int64, signer common.Address) []byte {
+	buf := make([]byte, 32*7)
+	// [0:32] keccak256(soladyTypeString) — the EIP-712 type hash
+	copy(buf[0:32], crypto.Keccak256([]byte(soladyTypeString)))
+	// [32:64] contents hash (hashStruct of the Order)
+	copy(buf[32:64], contentsHash)
+	// [64:96] keccak256(depositWalletName)
+	copy(buf[64:96], crypto.Keccak256([]byte(depositWalletName)))
+	// [96:128] keccak256(depositWalletVersion)
+	copy(buf[96:128], crypto.Keccak256([]byte(depositWalletVersion)))
+	// [128:160] chainId (uint256, right-aligned)
+	chainIDBytes := new(big.Int).SetInt64(chainID).Bytes()
+	copy(buf[160-len(chainIDBytes):160], chainIDBytes)
+	// [160:192] signer address (20 bytes, left-padded to 32)
+	copy(buf[192-20:192], signer.Bytes())
+	// [192:224] salt (bytes32) = zero
+	return buf
+}
+
+// appendHex appends the hex encoding of data (no 0x prefix) to dst.
+func appendHex(dst, data []byte) []byte {
+	const hexChars = "0123456789abcdef"
+	for _, b := range data {
+		dst = append(dst, hexChars[b>>4], hexChars[b&0x0f])
+	}
+	return dst
 }
 
 func buildOrderTypedData(
