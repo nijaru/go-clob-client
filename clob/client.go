@@ -477,7 +477,8 @@ func (c *Client) resolveVersion(ctx context.Context) (uint32, error) {
 		}
 	})
 	if err != nil {
-		return 0, err
+		// Default to V2 when version endpoint is unavailable.
+		return 2, nil
 	}
 	return uint32(c.version.Load()), nil
 }

@@ -109,6 +109,34 @@ type FeeRateResponse struct {
 	BaseFee int64 `json:"base_fee"`
 }
 
+// FeeInfo holds V2 fee parameters for a market.
+// Fee is applied as: Rate * (price * (1 - price))^Exponent.
+type FeeInfo struct {
+	Rate     float64 `json:"rate"`
+	Exponent uint32  `json:"exponent"`
+}
+
+// FeeDetails is the wire format for fee info from /clob-markets.
+type FeeDetails struct {
+	Rate     float64 `json:"r"`
+	Exponent uint32  `json:"e"`
+}
+
+// ClobMarketInfoResponse is the wire format for /clob-markets/{condition_id}.
+type ClobMarketInfoResponse struct {
+	ConditionID  string            `json:"c"`
+	MinTickSize  string            `json:"mts"`
+	MinOrderSize string            `json:"mos"`
+	NegRisk      bool              `json:"nr"`
+	FeeDetails   *FeeDetails       `json:"fd"`
+	Tokens       []ClobMarketToken `json:"t"`
+}
+
+// ClobMarketToken is a token entry in the /clob-markets response.
+type ClobMarketToken struct {
+	TokenID string `json:"token_id"`
+}
+
 // MidpointResponse reports the mid-market price for a token.
 type MidpointResponse struct {
 	Mid string `json:"mid"`

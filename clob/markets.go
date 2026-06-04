@@ -417,3 +417,38 @@ func getTypedPage[T any](
 	err := client.getJSON(ctx, endpoint, query, polyhttp.AuthNone, &out)
 	return &out, err
 }
+
+// GetClobMarket fetches compact market info from /clob-markets/{conditionID}.
+func (c *Client) GetClobMarket(
+	ctx context.Context,
+	conditionID string,
+) (*ClobMarketInfoResponse, error) {
+	var out ClobMarketInfoResponse
+	err := c.getJSON(ctx, clobMarketEndpoint+"/"+conditionID, nil, polyhttp.AuthNone, &out)
+	return &out, err
+}
+
+// GetFeeInfo returns V2 fee parameters (rate + exponent) for a token.
+// Falls back to FeeRateBps if V2 fee info is not available.
+func (c *Client) GetFeeInfo(ctx context.Context, tokenID string) (*FeeInfo, error) {
+	// Try to get from clob-markets endpoint first
+	resp, err := c.GetClobMarket(ctx, tokenID)
+	if err == nil && resp.FeeDetails != nil {
+		return &FeeInfo{
+			Rate:     resp.FeeDetails.Rate,
+			Exponent: resp.FeeDetails.Exponent,
+		}, nil
+	}
+
+	// Fallback to V1 fee-rate endpoint
+	feeRate, err := c.GetFeeRateBps(ctx, tokenID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert V1 BPS to V2 format (rate = bps/10000, exponent = 1)
+	return &FeeInfo{
+		Rate:     float64(feeRate) / 10000.0,
+		Exponent: 1,
+	}, nil
+}
