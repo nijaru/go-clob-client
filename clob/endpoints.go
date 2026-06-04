@@ -2,6 +2,7 @@ package clob
 
 const (
 	timeEndpoint     = "/time"
+	versionEndpoint  = "/version"
 	geoblockEndpoint = "/api/geoblock"
 
 	initialCursor = "MA=="

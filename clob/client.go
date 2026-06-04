@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -43,6 +44,11 @@ type Client struct {
 	retryMax     int
 	retryBackoff time.Duration
 	rateLimiter  *rate.Limiter
+
+	// version caches the CLOB protocol version (1 or 2) from GET /version.
+	// Zero means not yet resolved.
+	version     atomic.Int32
+	versionOnce sync.Once
 }
 
 // SignerClient extends the base client with methods requiring an Ethereum signer (L1).
@@ -446,6 +452,40 @@ func (c *Client) InvalidateCaches() {
 // Host returns the base CLOB API host for the client.
 func (c *Client) Host() string {
 	return c.host
+}
+
+// GetVersion returns the CLOB protocol version (1 or 2) by querying GET /version.
+// The result is cached after the first call.
+func (c *Client) GetVersion(ctx context.Context) (int, error) {
+	v, err := c.resolveVersion(ctx)
+	return int(v), err
+}
+
+func (c *Client) resolveVersion(ctx context.Context) (uint32, error) {
+	if v := c.version.Load(); v != 0 {
+		return uint32(v), nil
+	}
+
+	var err error
+	c.versionOnce.Do(func() {
+		var resp struct {
+			Version uint32 `json:"version"`
+		}
+		err = c.getJSON(ctx, versionEndpoint, nil, polyhttp.AuthNone, &resp)
+		if err == nil && resp.Version > 0 {
+			c.version.Store(int32(resp.Version))
+		}
+	})
+	if err != nil {
+		return 0, err
+	}
+	return uint32(c.version.Load()), nil
+}
+
+// resolveContractConfig returns the contract config for the client's chain,
+// preferring V2 exchange addresses when available.
+func (c *Client) resolveContractConfig(negRisk bool) (contractConfig, error) {
+	return getContractConfig(c.chainID)
 }
 
 // SetCredentials updates the API credentials used for authenticated requests.

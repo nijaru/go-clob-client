@@ -7,15 +7,19 @@ import (
 )
 
 const (
-	// DefaultHost is the production Polymarket CLOB base URL.
+	// DefaultHost is the production Polymarket CLOB base URL (V1 protocol).
 	DefaultHost = "https://clob.polymarket.com"
+	// DefaultV2Host is the production Polymarket CLOB V2 base URL.
+	DefaultV2Host = "https://clob-v2.polymarket.com"
 	// DefaultRTDSHost is the production Polymarket RTDS WebSocket URL.
 	DefaultRTDSHost = "wss://rtds.polymarket.com"
 	// DefaultGeoblockHost is the production Polymarket site host for geoblock checks.
 	DefaultGeoblockHost = "https://polymarket.com"
 	// PolygonChainID is the Polygon mainnet chain ID used by Polymarket.
 	PolygonChainID = int64(137)
-	defaultUA      = "go-clob-client/clob"
+	// AmoyChainID is the Polygon Amoy testnet chain ID.
+	AmoyChainID = int64(80002)
+	defaultUA   = "go-clob-client/clob"
 )
 
 // SignatureType controls which signer/funder model Polymarket should expect for the account.
@@ -28,6 +32,8 @@ const (
 	SignatureTypePolyProxy
 	// SignatureTypePolyGnosisSafe uses the Polymarket safe-based signer model.
 	SignatureTypePolyGnosisSafe
+	// SignatureTypePoly1271 uses EIP-1271 smart contract wallet signatures (V2 orders only).
+	SignatureTypePoly1271
 
 	// SignatureTypeMagic is the legacy name for SignatureTypePolyProxy.
 	SignatureTypeMagic = SignatureTypePolyProxy
