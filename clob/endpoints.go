@@ -73,4 +73,6 @@ const (
 	rfqDataQuotesEndpoint    = "/rfq/data/quotes"
 
 	clobMarketEndpoint = "/clob-markets"
+
+	builderFeeRateEndpoint = "/fees/builder-fees/"
 )

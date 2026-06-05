@@ -427,7 +427,12 @@ func (c *SignerClient) buildSignedMarketOrder(
 				if err == nil {
 					builderTakerFeeRate := 0.0
 					if userOrder.BuilderCode != "" {
-						builderTakerFeeRate = 0.0 // TODO: fetch from builder_fee_rate endpoint
+						builderFee, err := c.GetBuilderFeeRate(ctx, userOrder.BuilderCode)
+						if err == nil {
+							builderTakerFeeRate = float64(
+								builderFee.BuilderTakerFeeRateBps,
+							) / 10000.0
+						}
 					}
 					adj, err := adjustMarketBuyAmount(
 						amount,

@@ -132,6 +132,12 @@ type ClobMarketToken struct {
 	TokenID string `json:"token_id"`
 }
 
+// BuilderFeeRateResponse reports the maker and taker fee rates for a builder code.
+type BuilderFeeRateResponse struct {
+	BuilderMakerFeeRateBps uint32 `json:"builder_maker_fee_rate_bps"`
+	BuilderTakerFeeRateBps uint32 `json:"builder_taker_fee_rate_bps"`
+}
+
 // MidpointResponse reports the mid-market price for a token.
 type MidpointResponse struct {
 	Mid string `json:"mid"`

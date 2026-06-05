@@ -423,3 +423,16 @@ func (c *Client) GetFeeInfo(ctx context.Context, tokenID string) (*FeeInfo, erro
 		Exponent: resp.FeeDetails.Exponent,
 	}, nil
 }
+
+// GetBuilderFeeRate returns the maker and taker fee rates for a builder code.
+func (c *Client) GetBuilderFeeRate(
+	ctx context.Context,
+	builderCode string,
+) (*BuilderFeeRateResponse, error) {
+	var out BuilderFeeRateResponse
+	err := c.getJSON(ctx, builderFeeRateEndpoint+builderCode, nil, polyhttp.AuthNone, &out)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
