@@ -38,21 +38,6 @@ func (c *AuthenticatedClient) DeleteReadonlyAPIKey(ctx context.Context, key stri
 	return out, err
 }
 
-// ValidateReadonlyAPIKey validates a readonly API key for the given address.
-func (c *Client) ValidateReadonlyAPIKey(
-	ctx context.Context,
-	address string,
-	key string,
-) (string, error) {
-	query := url.Values{}
-	query.Set("address", address)
-	query.Set("key", key)
-
-	var out string
-	err := c.getJSON(ctx, validateReadonlyAPIKeyEndpoint, query, polyhttp.AuthNone, &out)
-	return out, err
-}
-
 // GetNotifications returns all notifications for the authenticated account.
 func (c *AuthenticatedClient) GetNotifications(ctx context.Context) ([]Notification, error) {
 	query := url.Values{}

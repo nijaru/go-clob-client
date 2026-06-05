@@ -502,35 +502,3 @@ func TestTypedAuthenticatedSurfaces(t *testing.T) {
 		t.Fatalf("get user rewards and markets config: %+v %v", userRewards, err)
 	}
 }
-
-func TestValidateReadonlyAPIKeyUsesPublicEndpoint(t *testing.T) {
-	t.Parallel()
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := r.URL.Path; got != validateReadonlyAPIKeyEndpoint {
-			t.Fatalf("unexpected path: %s", got)
-		}
-		if got := r.URL.Query().Get("address"); got != "0xabc" {
-			t.Fatalf("unexpected address query: %s", got)
-		}
-		if got := r.URL.Query().Get("key"); got != "readonly-1" {
-			t.Fatalf("unexpected key query: %s", got)
-		}
-		w.Header().Set("Content-Type", "text/plain")
-		_, _ = w.Write([]byte("valid"))
-	}))
-	defer server.Close()
-
-	client, err := NewClient(Config{Host: server.URL})
-	if err != nil {
-		t.Fatalf("new client: %v", err)
-	}
-
-	result, err := client.ValidateReadonlyAPIKey(t.Context(), "0xabc", "readonly-1")
-	if err != nil {
-		t.Fatalf("validate readonly api key: %v", err)
-	}
-	if result != "valid" {
-		t.Fatalf("unexpected validation result: %q", result)
-	}
-}
