@@ -144,8 +144,12 @@ func (c *AuthenticatedClient) GetPreMigrationOrders(
 	ctx context.Context,
 	nextCursor string,
 ) (*Page[OpenOrder], error) {
+	query := url.Values{}
+	if nextCursor != "" {
+		query.Set("next_cursor", normalizedCursor(nextCursor))
+	}
 	var out Page[OpenOrder]
-	err := c.getJSON(ctx, preMigrationOrdersEndpoint, nil, polyhttp.AuthL2Builder, &out)
+	err := c.getJSON(ctx, preMigrationOrdersEndpoint, query, polyhttp.AuthL2Builder, &out)
 	return &out, err
 }
 

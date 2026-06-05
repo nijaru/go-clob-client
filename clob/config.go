@@ -93,7 +93,7 @@ type Config struct {
 	// Defaults to 1 second.
 	RetryBackoff time.Duration
 	// RateLimit is the maximum number of requests per second.
-	// Defaults to 5 req/s. Set to 0 to disable rate limiting.
+	// Defaults to 5 req/s. Set to a negative value to disable rate limiting.
 	RateLimit float64
 	// RateBurst is the maximum burst size for the rate limiter.
 	// Defaults to 10.
