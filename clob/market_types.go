@@ -104,11 +104,6 @@ type NegRiskResponse struct {
 	NegRisk bool `json:"neg_risk"`
 }
 
-// FeeRateResponse reports the market fee rate in basis points.
-type FeeRateResponse struct {
-	BaseFee int64 `json:"base_fee"`
-}
-
 // FeeInfo holds V2 fee parameters for a market.
 // Fee is applied as: Rate * (price * (1 - price))^Exponent.
 type FeeInfo struct {

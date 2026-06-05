@@ -100,41 +100,6 @@ func TestClearTickSizeCache(t *testing.T) {
 	}
 }
 
-func TestClearFeeRateCache(t *testing.T) {
-	t.Parallel()
-
-	client, err := NewClient(Config{})
-	if err != nil {
-		t.Fatalf("new client: %v", err)
-	}
-
-	// Populate cache directly (cache is populated by resolveFeeRateBps, not GetFeeRateBps)
-	client.feeRateMu.Lock()
-	client.feeRateCache["token-1"] = 50
-	client.feeRateTimestamps["token-1"] = time.Now()
-	client.feeRateMu.Unlock()
-
-	client.feeRateMu.RLock()
-	_, ok := client.feeRateCache["token-1"]
-	client.feeRateMu.RUnlock()
-	if !ok {
-		t.Fatal("expected token-1 in fee rate cache")
-	}
-
-	client.ClearFeeRateCache("token-1")
-
-	client.feeRateMu.RLock()
-	_, ok = client.feeRateCache["token-1"]
-	_, tsOK := client.feeRateTimestamps["token-1"]
-	client.feeRateMu.RUnlock()
-	if ok {
-		t.Error("expected token-1 removed from fee rate cache")
-	}
-	if tsOK {
-		t.Error("expected token-1 timestamp removed from fee rate cache")
-	}
-}
-
 func TestInvalidateCaches(t *testing.T) {
 	t.Parallel()
 
@@ -153,11 +118,6 @@ func TestInvalidateCaches(t *testing.T) {
 	client.negRiskCache["tok-1"] = true
 	client.negRiskTimestamps["tok-1"] = time.Now()
 	client.negRiskMu.Unlock()
-
-	client.feeRateMu.Lock()
-	client.feeRateCache["tok-1"] = 50
-	client.feeRateTimestamps["tok-1"] = time.Now()
-	client.feeRateMu.Unlock()
 
 	// Clear all
 	client.InvalidateCaches()
@@ -179,15 +139,6 @@ func TestInvalidateCaches(t *testing.T) {
 		t.Error("neg risk timestamps should be empty")
 	}
 	client.negRiskMu.RUnlock()
-
-	client.feeRateMu.RLock()
-	if len(client.feeRateCache) != 0 {
-		t.Error("fee rate cache should be empty")
-	}
-	if len(client.feeRateTimestamps) != 0 {
-		t.Error("fee rate timestamps should be empty")
-	}
-	client.feeRateMu.RUnlock()
 }
 
 func TestManualCacheSettersHonorTTL(t *testing.T) {
@@ -200,16 +151,12 @@ func TestManualCacheSettersHonorTTL(t *testing.T) {
 
 	client.SetTickSize("token-1", TickSizeHundredth)
 	client.SetNegRisk("token-1", true)
-	client.SetFeeRateBps("token-1", 50)
 
 	if client.tickSizeTimestamps["token-1"].IsZero() {
 		t.Fatal("expected tick size timestamp to be populated")
 	}
 	if client.negRiskTimestamps["token-1"].IsZero() {
 		t.Fatal("expected neg risk timestamp to be populated")
-	}
-	if client.feeRateTimestamps["token-1"].IsZero() {
-		t.Fatal("expected fee rate timestamp to be populated")
 	}
 
 	tickSize, err := client.resolveTickSize(t.Context(), "token-1", nil)
@@ -226,14 +173,6 @@ func TestManualCacheSettersHonorTTL(t *testing.T) {
 	}
 	if !negRisk {
 		t.Fatal("expected neg risk cache hit")
-	}
-
-	feeRate, err := client.resolveFeeRateBps(t.Context(), "token-1", 0)
-	if err != nil {
-		t.Fatalf("resolve fee rate: %v", err)
-	}
-	if feeRate != 50 {
-		t.Fatalf("fee rate = %d, want 50", feeRate)
 	}
 }
 

@@ -42,14 +42,14 @@ func TestCreateOrderBuildsSignedLimitOrder(t *testing.T) {
 		t.Fatalf("create order: %v", err)
 	}
 
-	if order.Salt != "42" {
-		t.Fatalf("unexpected salt: %s", order.Salt)
+	if order.Order.Salt != "42" {
+		t.Fatalf("unexpected salt: %s", order.Order.Salt)
 	}
-	if order.MakerAmount != "4500000" {
-		t.Fatalf("unexpected maker amount: %s", order.MakerAmount)
+	if order.Order.MakerAmount != "4500000" {
+		t.Fatalf("unexpected maker amount: %s", order.Order.MakerAmount)
 	}
-	if order.TakerAmount != "10000000" {
-		t.Fatalf("unexpected taker amount: %s", order.TakerAmount)
+	if order.Order.TakerAmount != "10000000" {
+		t.Fatalf("unexpected taker amount: %s", order.Order.TakerAmount)
 	}
 	if order.Signature == "" {
 		t.Fatal("expected non-empty signature")
@@ -273,10 +273,10 @@ func TestCreateMarketOrderDerivesPriceFromBook(t *testing.T) {
 		t.Fatalf("create market order: %v", err)
 	}
 
-	if order.MakerAmount != "2000000" {
-		t.Fatalf("unexpected maker amount: %s", order.MakerAmount)
+	if order.Order.MakerAmount != "2000000" {
+		t.Fatalf("unexpected maker amount: %s", order.Order.MakerAmount)
 	}
-	if order.TakerAmount == "" {
+	if order.Order.TakerAmount == "" {
 		t.Fatal("expected taker amount")
 	}
 }
@@ -374,11 +374,11 @@ func TestCreateMarketOrderPreservesUSDCPrecisionForBuy(t *testing.T) {
 		t.Fatalf("create market order: %v", err)
 	}
 
-	if order.MakerAmount != "100123456" {
-		t.Fatalf("unexpected maker amount: %s", order.MakerAmount)
+	if order.Order.MakerAmount != "100123456" {
+		t.Fatalf("unexpected maker amount: %s", order.Order.MakerAmount)
 	}
-	if order.TakerAmount != "178791800" {
-		t.Fatalf("unexpected taker amount: %s", order.TakerAmount)
+	if order.Order.TakerAmount != "178791800" {
+		t.Fatalf("unexpected taker amount: %s", order.Order.TakerAmount)
 	}
 }
 
@@ -420,12 +420,8 @@ func newTradingTestServer(t *testing.T, postHandler http.HandlerFunc) *httptest.
 		w.Header().Set("Content-Type", "application/json")
 
 		switch r.URL.Path {
-		case versionEndpoint:
-			_, _ = w.Write([]byte(`{"version":1}`))
 		case tickSizeEndpoint:
 			_, _ = w.Write([]byte(`{"minimum_tick_size":"0.01"}`))
-		case feeRateEndpoint:
-			_, _ = w.Write([]byte(`{"base_fee":0}`))
 		case negRiskEndpoint:
 			_, _ = w.Write([]byte(`{"neg_risk":false}`))
 		case orderBookEndpoint:

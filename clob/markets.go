@@ -341,25 +341,6 @@ func (c *Client) GetNegRisk(ctx context.Context, tokenID string) (*NegRiskRespon
 	return &out, err
 }
 
-// GetFeeRate returns the fee-rate response for a token.
-func (c *Client) GetFeeRate(ctx context.Context, tokenID string) (*FeeRateResponse, error) {
-	query := url.Values{}
-	query.Set("token_id", tokenID)
-
-	var out FeeRateResponse
-	err := c.getJSON(ctx, feeRateEndpoint, query, polyhttp.AuthNone, &out)
-	return &out, err
-}
-
-// GetFeeRateBps returns the fee rate in basis points for a token.
-func (c *Client) GetFeeRateBps(ctx context.Context, tokenID string) (int64, error) {
-	response, err := c.GetFeeRate(ctx, tokenID)
-	if err != nil {
-		return 0, err
-	}
-	return response.BaseFee, nil
-}
-
 // GetPricesHistory returns the typed price-history series for the supplied filter.
 func (c *Client) GetPricesHistory(
 	ctx context.Context,
@@ -429,26 +410,16 @@ func (c *Client) GetClobMarket(
 }
 
 // GetFeeInfo returns V2 fee parameters (rate + exponent) for a token.
-// Falls back to FeeRateBps if V2 fee info is not available.
 func (c *Client) GetFeeInfo(ctx context.Context, tokenID string) (*FeeInfo, error) {
-	// Try to get from clob-markets endpoint first
 	resp, err := c.GetClobMarket(ctx, tokenID)
-	if err == nil && resp.FeeDetails != nil {
-		return &FeeInfo{
-			Rate:     resp.FeeDetails.Rate,
-			Exponent: resp.FeeDetails.Exponent,
-		}, nil
-	}
-
-	// Fallback to V1 fee-rate endpoint
-	feeRate, err := c.GetFeeRateBps(ctx, tokenID)
 	if err != nil {
 		return nil, err
 	}
-
-	// Convert V1 BPS to V2 format (rate = bps/10000, exponent = 1)
+	if resp.FeeDetails == nil {
+		return nil, fmt.Errorf("no fee details for token %s", tokenID)
+	}
 	return &FeeInfo{
-		Rate:     float64(feeRate) / 10000.0,
-		Exponent: 1,
+		Rate:     resp.FeeDetails.Rate,
+		Exponent: resp.FeeDetails.Exponent,
 	}, nil
 }

@@ -19,7 +19,7 @@ func TestAcceptRFQQuoteMarshalJSON(t *testing.T) {
 		RequestID: "req-1",
 		QuoteID:   "quote-1",
 		Owner:     "0xabc",
-		SignedOrder: SignedOrder{
+		RFQSignedOrder: RFQSignedOrder{
 			Salt:          "1234567890",
 			Maker:         "0xmaker",
 			Signer:        "0xsigner",
@@ -79,7 +79,7 @@ func TestApproveRFQOrderMarshalJSON(t *testing.T) {
 		RequestID: "req-2",
 		QuoteID:   "quote-2",
 		Owner:     "0xdef",
-		SignedOrder: SignedOrder{
+		RFQSignedOrder: RFQSignedOrder{
 			Salt:       "999",
 			Expiration: "0",
 			Nonce:      "0",
@@ -110,7 +110,7 @@ func TestMarshalRFQOrderInvalidSalt(t *testing.T) {
 	req := AcceptRFQQuoteRequest{
 		RequestID: "req-1",
 		QuoteID:   "q-1",
-		SignedOrder: SignedOrder{
+		RFQSignedOrder: RFQSignedOrder{
 			Salt:       "not-a-number",
 			Expiration: "0",
 			Nonce:      "0",
@@ -132,7 +132,7 @@ func TestMarshalRFQOrderInvalidExpiration(t *testing.T) {
 	req := AcceptRFQQuoteRequest{
 		RequestID: "req-1",
 		QuoteID:   "q-1",
-		SignedOrder: SignedOrder{
+		RFQSignedOrder: RFQSignedOrder{
 			Salt:       "1",
 			Expiration: "abc",
 			Nonce:      "0",
@@ -256,7 +256,7 @@ func TestRFQSurfaces(t *testing.T) {
 	if err := client.AcceptRFQQuote(ctx, AcceptRFQQuoteRequest{
 		RequestID: "rfq-1",
 		QuoteID:   "quote-1",
-		SignedOrder: SignedOrder{
+		RFQSignedOrder: RFQSignedOrder{
 			Salt:       "123",
 			Expiration: "0",
 			Nonce:      "0",
@@ -269,7 +269,7 @@ func TestRFQSurfaces(t *testing.T) {
 	approved, err := client.ApproveRFQOrder(ctx, ApproveRFQOrderRequest{
 		RequestID: "rfq-1",
 		QuoteID:   "quote-1",
-		SignedOrder: SignedOrder{
+		RFQSignedOrder: RFQSignedOrder{
 			Salt:       "456",
 			Expiration: "0",
 			Nonce:      "0",

@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -36,19 +35,11 @@ type Client struct {
 	negRiskMu          *sync.RWMutex
 	negRiskCache       map[string]bool
 	negRiskTimestamps  map[string]time.Time
-	feeRateMu          *sync.RWMutex
-	feeRateCache       map[string]int64
-	feeRateTimestamps  map[string]time.Time
 
 	cacheTTL     time.Duration
 	retryMax     int
 	retryBackoff time.Duration
 	rateLimiter  *rate.Limiter
-
-	// version caches the CLOB protocol version (1 or 2) from GET /version.
-	// Zero means not yet resolved.
-	version     atomic.Int32
-	versionOnce sync.Once
 }
 
 // SignerClient extends the base client with methods requiring an Ethereum signer (L1).
@@ -154,9 +145,6 @@ func newBase(config Config) *Client {
 		negRiskMu:          &sync.RWMutex{},
 		negRiskCache:       make(map[string]bool),
 		negRiskTimestamps:  make(map[string]time.Time),
-		feeRateMu:          &sync.RWMutex{},
-		feeRateCache:       make(map[string]int64),
-		feeRateTimestamps:  make(map[string]time.Time),
 
 		cacheTTL:     config.TickSizeCacheTTL,
 		retryMax:     config.RetryMax,
@@ -381,19 +369,6 @@ func (c *Client) ClearTickSizeCache(tokenID string) {
 	delete(c.negRiskCache, tokenID)
 	delete(c.negRiskTimestamps, tokenID)
 	c.negRiskMu.Unlock()
-
-	c.feeRateMu.Lock()
-	delete(c.feeRateCache, tokenID)
-	delete(c.feeRateTimestamps, tokenID)
-	c.feeRateMu.Unlock()
-}
-
-// ClearFeeRateCache removes the cached fee rate for a specific token.
-func (c *Client) ClearFeeRateCache(tokenID string) {
-	c.feeRateMu.Lock()
-	delete(c.feeRateCache, tokenID)
-	delete(c.feeRateTimestamps, tokenID)
-	c.feeRateMu.Unlock()
 }
 
 // ClearNegRiskCache removes the cached negative risk flag for a specific token.
@@ -422,16 +397,7 @@ func (c *Client) SetNegRisk(tokenID string, negRisk bool) {
 	c.negRiskMu.Unlock()
 }
 
-// SetFeeRateBps pre-populates the fee rate cache for tokenID.
-func (c *Client) SetFeeRateBps(tokenID string, bps int64) {
-	now := time.Now()
-	c.feeRateMu.Lock()
-	c.feeRateCache[tokenID] = bps
-	c.feeRateTimestamps[tokenID] = now
-	c.feeRateMu.Unlock()
-}
-
-// InvalidateCaches clears all internal caches (tick size, neg risk, fee rate).
+// InvalidateCaches clears all internal caches (tick size, neg risk).
 func (c *Client) InvalidateCaches() {
 	c.tickSizeMu.Lock()
 	c.tickSizeCache = make(map[string]TickSize)
@@ -442,11 +408,6 @@ func (c *Client) InvalidateCaches() {
 	c.negRiskCache = make(map[string]bool)
 	c.negRiskTimestamps = make(map[string]time.Time)
 	c.negRiskMu.Unlock()
-
-	c.feeRateMu.Lock()
-	c.feeRateCache = make(map[string]int64)
-	c.feeRateTimestamps = make(map[string]time.Time)
-	c.feeRateMu.Unlock()
 }
 
 // Host returns the base CLOB API host for the client.
@@ -454,37 +415,7 @@ func (c *Client) Host() string {
 	return c.host
 }
 
-// GetVersion returns the CLOB protocol version (1 or 2) by querying GET /version.
-// The result is cached after the first call.
-func (c *Client) GetVersion(ctx context.Context) (int, error) {
-	v, err := c.resolveVersion(ctx)
-	return int(v), err
-}
-
-func (c *Client) resolveVersion(ctx context.Context) (uint32, error) {
-	if v := c.version.Load(); v != 0 {
-		return uint32(v), nil
-	}
-
-	var err error
-	c.versionOnce.Do(func() {
-		var resp struct {
-			Version uint32 `json:"version"`
-		}
-		err = c.getJSON(ctx, versionEndpoint, nil, polyhttp.AuthNone, &resp)
-		if err == nil && resp.Version > 0 {
-			c.version.Store(int32(resp.Version))
-		}
-	})
-	if err != nil {
-		// Default to V2 when version endpoint is unavailable.
-		return 2, nil
-	}
-	return uint32(c.version.Load()), nil
-}
-
-// resolveContractConfig returns the contract config for the client's chain,
-// preferring V2 exchange addresses when available.
+// resolveContractConfig returns the contract config for the client's chain.
 func (c *Client) resolveContractConfig(negRisk bool) (contractConfig, error) {
 	return getContractConfig(c.chainID)
 }

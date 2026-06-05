@@ -65,12 +65,8 @@ func newTradingFixtureServer(t *testing.T) *httptest.Server {
 		w.Header().Set("Content-Type", "application/json")
 
 		switch r.URL.Path {
-		case versionEndpoint:
-			_, _ = w.Write([]byte(`{"version":1}`))
 		case tickSizeEndpoint:
 			_, _ = w.Write([]byte(`{"minimum_tick_size":"0.001"}`))
-		case feeRateEndpoint:
-			_, _ = w.Write([]byte(`{"base_fee":0}`))
 		case negRiskEndpoint:
 			_, _ = w.Write([]byte(`{"neg_risk":false}`))
 		case orderBookEndpoint:
@@ -114,10 +110,11 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 	defer server.Close()
 
 	type fixture struct {
-		name   string
-		client Config
-		build  func(*SignerClient) (*SignedOrder, error)
-		expect SignedOrder
+		name    string
+		client  Config
+		build   func(*SignerClient) (*SignedOrder, error)
+		want    Order // check EIP-712 fields
+		wantExp string
 	}
 
 	fixtures := []fixture{
@@ -140,22 +137,17 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 					Side:    SideBuy,
 				}, &CreateOrderOptions{TickSize: TickSizeTenth, NegRisk: new(false)})
 			},
-			expect: SignedOrder{
-				Version:       1,
+			want: Order{
 				Salt:          "1",
 				Maker:         "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
 				Signer:        "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-				Taker:         zeroAddress,
 				TokenID:       "123",
 				MakerAmount:   "50000000",
 				TakerAmount:   "100000000",
-				Expiration:    "0",
-				Nonce:         "0",
-				FeeRateBps:    "0",
 				Side:          SideBuy,
 				SignatureType: SignatureTypeEOA,
-				Signature:     "0x27aafd2229f338a19b15f5507ed35953a98cfc7da5a99594621d348ffa41f32f09d7cb64c6a8513a6ddec3bd007c03cf78e1e2d60d8111624f19b76e9fbfc6961b",
 			},
+			wantExp: "0",
 		},
 		{
 			name: "limit-sell-eoa",
@@ -176,22 +168,17 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 					Side:    SideSell,
 				}, &CreateOrderOptions{TickSize: TickSizeTenth, NegRisk: new(false)})
 			},
-			expect: SignedOrder{
-				Version:       1,
+			want: Order{
 				Salt:          "1",
 				Maker:         "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
 				Signer:        "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-				Taker:         zeroAddress,
 				TokenID:       "123",
 				MakerAmount:   "100000000",
 				TakerAmount:   "50000000",
-				Expiration:    "0",
-				Nonce:         "0",
-				FeeRateBps:    "0",
 				Side:          SideSell,
 				SignatureType: SignatureTypeEOA,
-				Signature:     "0xd1f188271157eefc7d0499334130355e04e2c90d65477b160aa1f7d9333d213e618bef27311956d7733a5dc5fd9cb3898c4b0b9536e2c1c05a72bc4396efeda91c",
 			},
+			wantExp: "0",
 		},
 		{
 			name: "market-buy-eoa",
@@ -213,22 +200,17 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 					OrderType: OrderTypeFOK,
 				}, &CreateOrderOptions{TickSize: TickSizeHundredth, NegRisk: new(false)})
 			},
-			expect: SignedOrder{
-				Version:       1,
+			want: Order{
 				Salt:          "1",
 				Maker:         "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
 				Signer:        "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-				Taker:         zeroAddress,
 				TokenID:       "123",
 				MakerAmount:   "100000000",
 				TakerAmount:   "178571400",
-				Expiration:    "0",
-				Nonce:         "0",
-				FeeRateBps:    "0",
 				Side:          SideBuy,
 				SignatureType: SignatureTypeEOA,
-				Signature:     "0xf4bee7f8bb53140b8ce26dfa9399005f04ccaa83dd96e8f7a9d21f5b0d7c5ed41b05e358b0eeb9ba2ac8389dea2917cb3c5c547f87c1e0855ee6db100296b5501b",
 			},
+			wantExp: "0",
 		},
 		{
 			name: "market-sell-eoa",
@@ -251,22 +233,17 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 					OrderType:  OrderTypeFOK,
 				}, &CreateOrderOptions{TickSize: TickSizeHundredth, NegRisk: new(false)})
 			},
-			expect: SignedOrder{
-				Version:       1,
+			want: Order{
 				Salt:          "1",
 				Maker:         "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
 				Signer:        "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-				Taker:         zeroAddress,
 				TokenID:       "123",
 				MakerAmount:   "100000000",
 				TakerAmount:   "56000000",
-				Expiration:    "0",
-				Nonce:         "0",
-				FeeRateBps:    "0",
 				Side:          SideSell,
 				SignatureType: SignatureTypeEOA,
-				Signature:     "0xd30829eaae6f1fcef3f3d8177a598e71c0b77e938aad04f61a43b6c1c3bfc23d3f32685c2df956840d84e47a76ec64c8cb17ce63d6513ccff9e9e324740738361b",
 			},
+			wantExp: "0",
 		},
 		{
 			name: "limit-buy-neg-risk-proxy-funder",
@@ -288,26 +265,19 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 					Price:   udecimal.MustParse("0.512"),
 					Size:    udecimal.MustParse("100"),
 					Side:    SideBuy,
-					Nonce:   2,
-					Taker:   "0xf7fB45986800e2D259BAa25B56466bd02dA37a44",
 				}, &CreateOrderOptions{TickSize: TickSizeThousandth, NegRisk: new(true)})
 			},
-			expect: SignedOrder{
-				Version:       1,
+			want: Order{
 				Salt:          "1",
 				Maker:         "0xaDEFf2158d668f64308C62ef227C5CcaCAAf976D",
 				Signer:        "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-				Taker:         "0xf7fB45986800e2D259BAa25B56466bd02dA37a44",
 				TokenID:       "123",
 				MakerAmount:   "51200000",
 				TakerAmount:   "100000000",
-				Expiration:    "0",
-				Nonce:         "2",
-				FeeRateBps:    "0",
 				Side:          SideBuy,
 				SignatureType: SignatureTypePolyProxy,
-				Signature:     "0x2bcecd7034ad97abe202a4bf23c8b0ba1c73285561e22bbeac2a32f89d28d2886b4607aef711ff67c831881b5773e04fc5ec25a2ed24fb17098a89b16e09077e1c",
 			},
+			wantExp: "0",
 		},
 	}
 
@@ -324,17 +294,60 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 				t.Fatalf("build order: %v", err)
 			}
 
-			if fixture.expect.Signature == "" {
-				t.Fatalf("fill fixture signature for %s: %+v", fixture.name, *order)
+			if order.Signature == "" {
+				t.Fatal("signature should not be empty")
 			}
 
-			if *order != fixture.expect {
+			// Check EIP-712 fields.
+			if order.Order.Salt != fixture.want.Salt {
+				t.Fatalf("salt = %s, want %s", order.Order.Salt, fixture.want.Salt)
+			}
+			if order.Order.Maker != fixture.want.Maker {
+				t.Fatalf("maker = %s, want %s", order.Order.Maker, fixture.want.Maker)
+			}
+			if order.Order.Signer != fixture.want.Signer {
+				t.Fatalf("signer = %s, want %s", order.Order.Signer, fixture.want.Signer)
+			}
+			if order.Order.TokenID != fixture.want.TokenID {
+				t.Fatalf("tokenID = %s, want %s", order.Order.TokenID, fixture.want.TokenID)
+			}
+			if order.Order.MakerAmount != fixture.want.MakerAmount {
 				t.Fatalf(
-					"unexpected order for %s:\nwant: %+v\ngot:  %+v",
-					fixture.name,
-					fixture.expect,
-					*order,
+					"makerAmount = %s, want %s",
+					order.Order.MakerAmount,
+					fixture.want.MakerAmount,
 				)
+			}
+			if order.Order.TakerAmount != fixture.want.TakerAmount {
+				t.Fatalf(
+					"takerAmount = %s, want %s",
+					order.Order.TakerAmount,
+					fixture.want.TakerAmount,
+				)
+			}
+			if order.Order.Side != fixture.want.Side {
+				t.Fatalf("side = %s, want %s", order.Order.Side, fixture.want.Side)
+			}
+			if order.Order.SignatureType != fixture.want.SignatureType {
+				t.Fatalf(
+					"signatureType = %d, want %d",
+					order.Order.SignatureType,
+					fixture.want.SignatureType,
+				)
+			}
+			// V2 fields: timestamp is dynamic, metadata/builder default to zero
+			if order.Order.Timestamp == "" {
+				t.Fatal("timestamp should not be empty")
+			}
+			if order.Order.Metadata != zeroBytes32 {
+				t.Fatalf("metadata = %s, want %s", order.Order.Metadata, zeroBytes32)
+			}
+			if order.Order.Builder != zeroBytes32 {
+				t.Fatalf("builder = %s, want %s", order.Order.Builder, zeroBytes32)
+			}
+
+			if order.Expiration != fixture.wantExp {
+				t.Fatalf("expiration = %s, want %s", order.Expiration, fixture.wantExp)
 			}
 		})
 	}

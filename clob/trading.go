@@ -8,8 +8,6 @@ import (
 	"math"
 	"math/big"
 	"strconv"
-	"strings"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -21,9 +19,8 @@ import (
 )
 
 const (
-	protocolName      = "Polymarket CTF Exchange"
-	protocolVersion   = "1"
-	protocolVersionV2 = "2"
+	protocolName    = "Polymarket CTF Exchange"
+	protocolVersion = "2"
 
 	// EIP-1271 deposit wallet constants (Solady-style wrapping).
 	depositWalletName    = "DepositWallet"
@@ -61,12 +58,6 @@ func (c *SignerClient) CreateOrder(
 		return nil, err
 	}
 
-	feeRateBps, err := c.resolveFeeRateBps(ctx, userOrder.TokenID, userOrder.FeeRateBps)
-	if err != nil {
-		return nil, err
-	}
-	userOrder.FeeRateBps = feeRateBps
-
 	if err := validatePrice(userOrder.Price, tickSize); err != nil {
 		return nil, err
 	}
@@ -99,12 +90,6 @@ func (c *SignerClient) CreateMarketOrder(
 	if err != nil {
 		return nil, err
 	}
-
-	feeRateBps, err := c.resolveFeeRateBps(ctx, userOrder.TokenID, userOrder.FeeRateBps)
-	if err != nil {
-		return nil, err
-	}
-	userOrder.FeeRateBps = feeRateBps
 
 	if userOrder.OrderType == "" {
 		userOrder.OrderType = OrderTypeFOK
@@ -156,7 +141,7 @@ func (c *AuthenticatedClient) CreateAndPostOrder(
 		return nil, err
 	}
 
-	request, err := c.BuildPostOrderRequest(*order, orderType, postOnly)
+	request, err := c.BuildPostOrderRequest(*order, orderType, postOnly, userOrder.DeferExec)
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +173,7 @@ func (c *AuthenticatedClient) CreateAndPostMarketOrder(
 		return nil, err
 	}
 
-	request, err := c.BuildPostOrderRequest(*order, orderType, false)
+	request, err := c.BuildPostOrderRequest(*order, orderType, false, userOrder.DeferExec)
 	if err != nil {
 		return nil, err
 	}
@@ -197,8 +182,6 @@ func (c *AuthenticatedClient) CreateAndPostMarketOrder(
 }
 
 // BuildAndPostOrder builds, signs, and posts a limit order with version mismatch retry.
-// If the server rejects the order due to a version mismatch, this automatically
-// invalidates the version cache, rebuilds, re-signs, and retries once.
 func (c *AuthenticatedClient) BuildAndPostOrder(
 	ctx context.Context,
 	userOrder OrderArgs,
@@ -211,25 +194,12 @@ func (c *AuthenticatedClient) BuildAndPostOrder(
 		return nil, err
 	}
 
-	request, err := c.BuildPostOrderRequest(*order, orderType, postOnly)
+	request, err := c.BuildPostOrderRequest(*order, orderType, postOnly, userOrder.DeferExec)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := c.PostOrder(ctx, request)
-	if err != nil && isVersionMismatch(err) {
-		c.invalidateVersion()
-		order, err = c.CreateOrder(ctx, userOrder, options)
-		if err != nil {
-			return nil, err
-		}
-		request, err = c.BuildPostOrderRequest(*order, orderType, postOnly)
-		if err != nil {
-			return nil, err
-		}
-		return c.PostOrder(ctx, request)
-	}
-	return resp, err
+	return c.PostOrder(ctx, request)
 }
 
 // BuildAndPostMarketOrder builds, signs, and posts a market order with version mismatch retry.
@@ -255,37 +225,12 @@ func (c *AuthenticatedClient) BuildAndPostMarketOrder(
 		return nil, err
 	}
 
-	request, err := c.BuildPostOrderRequest(*order, orderType, false)
+	request, err := c.BuildPostOrderRequest(*order, orderType, false, userOrder.DeferExec)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := c.PostOrder(ctx, request)
-	if err != nil && isVersionMismatch(err) {
-		c.invalidateVersion()
-		order, err = c.CreateMarketOrder(ctx, userOrder, options)
-		if err != nil {
-			return nil, err
-		}
-		request, err = c.BuildPostOrderRequest(*order, orderType, false)
-		if err != nil {
-			return nil, err
-		}
-		return c.PostOrder(ctx, request)
-	}
-	return resp, err
-}
-
-// isVersionMismatch checks if the error indicates an order version mismatch.
-func isVersionMismatch(err error) bool {
-	return err != nil && strings.Contains(err.Error(), ORDER_VERSION_MISMATCH_ERROR)
-}
-
-// invalidateVersion clears the cached protocol version so the next
-// call to resolveVersion will re-fetch from the server.
-func (c *Client) invalidateVersion() {
-	c.version.Store(0)
-	c.versionOnce = sync.Once{}
+	return c.PostOrder(ctx, request)
 }
 
 // BuildPostOrderRequest wraps a signed order in the authenticated post-order payload.
@@ -293,6 +238,7 @@ func (c *AuthenticatedClient) BuildPostOrderRequest(
 	order SignedOrder,
 	orderType OrderType,
 	postOnly bool,
+	deferExec bool,
 ) (PostOrderRequest, error) {
 	creds := c.credentials()
 	if creds == nil {
@@ -317,7 +263,7 @@ func (c *AuthenticatedClient) BuildPostOrderRequest(
 		Owner:     creds.Key,
 		OrderType: orderType,
 		PostOnly:  postOnly,
-		DeferExec: order.DeferExec,
+		DeferExec: deferExec,
 	}, nil
 }
 
@@ -445,10 +391,7 @@ func (c *SignerClient) buildSignedLimitOrder(
 		MakerAmount:   toTokenDecimals(rawMakerAmount),
 		TakerAmount:   toTokenDecimals(rawTakerAmount),
 		Side:          userOrder.Side,
-		FeeRateBps:    userOrder.FeeRateBps,
-		Nonce:         userOrder.Nonce,
 		Expiration:    userOrder.Expiration,
-		Taker:         normalizeTaker(userOrder.Taker),
 		NegRisk:       derefBool(options.NegRisk),
 		SignatureType: c.signatureType,
 		Metadata:      userOrder.Metadata,
@@ -529,10 +472,7 @@ func (c *SignerClient) buildSignedMarketOrder(
 		MakerAmount:   toTokenDecimals(rawMakerAmount),
 		TakerAmount:   toTokenDecimals(rawTakerAmount),
 		Side:          userOrder.Side,
-		FeeRateBps:    userOrder.FeeRateBps,
-		Nonce:         userOrder.Nonce,
 		Expiration:    0,
-		Taker:         normalizeTaker(userOrder.Taker),
 		NegRisk:       derefBool(options.NegRisk),
 		SignatureType: c.signatureType,
 		Metadata:      userOrder.Metadata,
@@ -546,17 +486,12 @@ type orderBuildInput struct {
 	MakerAmount   udecimal.Decimal
 	TakerAmount   udecimal.Decimal
 	Side          Side
-	FeeRateBps    int64
-	Nonce         uint64
 	Expiration    uint64
-	Taker         string
 	NegRisk       bool
 	SignatureType SignatureType
-
-	// V2-only fields.
-	Metadata    string
-	BuilderCode string
-	DeferExec   bool
+	Metadata      string
+	BuilderCode   string
+	DeferExec     bool
 }
 
 func (c *SignerClient) signOrder(ctx context.Context, input orderBuildInput) (*SignedOrder, error) {
@@ -576,70 +511,12 @@ func (c *SignerClient) signOrder(ctx context.Context, input orderBuildInput) (*S
 		return nil, fmt.Errorf("generate order salt: %w", err)
 	}
 
-	version, err := c.resolveVersion(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("resolve protocol version: %w", err)
-	}
-
-	switch version {
-	case 2:
-		return c.signOrderV2(input, contracts, signerAddress, maker, salt)
-	default:
-		return c.signOrderV1(input, contracts, signerAddress, maker, salt)
-	}
-}
-
-func (c *SignerClient) signOrderV1(
-	input orderBuildInput,
-	contracts contractConfig,
-	signerAddress, maker string,
-	salt uint64,
-) (*SignedOrder, error) {
 	verifyingContract := contracts.Exchange
 	if input.NegRisk {
 		verifyingContract = contracts.NegRiskExchange
 	}
-
-	order := SignedOrder{
-		Version:       1,
-		Maker:         maker,
-		Signer:        signerAddress,
-		Taker:         input.Taker,
-		TokenID:       input.TokenID,
-		MakerAmount:   input.MakerAmount.StringFixed(0),
-		TakerAmount:   input.TakerAmount.StringFixed(0),
-		Expiration:    strconv.FormatUint(input.Expiration, 10),
-		Nonce:         strconv.FormatUint(input.Nonce, 10),
-		FeeRateBps:    strconv.FormatInt(input.FeeRateBps, 10),
-		Side:          input.Side,
-		SignatureType: input.SignatureType,
-		Salt:          strconv.FormatUint(salt, 10),
-	}
-
-	signature, err := polyauth.SignTypedData(
-		c.signer,
-		buildOrderTypedData(c.chainID, verifyingContract, order),
-	)
-	if err != nil {
-		return nil, err
-	}
-	order.Signature = signature
-
-	return &order, nil
-}
-
-func (c *SignerClient) signOrderV2(
-	input orderBuildInput,
-	contracts contractConfig,
-	signerAddress, maker string,
-	salt uint64,
-) (*SignedOrder, error) {
-	verifyingContract := contracts.ExchangeV2
-	if input.NegRisk {
-		verifyingContract = contracts.NegRiskExchangeV2
-	}
 	if verifyingContract == "" {
-		return nil, fmt.Errorf("V2 exchange contract not configured for chain %d", c.chainID)
+		return nil, fmt.Errorf("exchange contract not configured for chain %d", c.chainID)
 	}
 
 	timestampMs := time.Now().UnixMilli()
@@ -654,26 +531,25 @@ func (c *SignerClient) signOrderV2(
 	}
 
 	order := SignedOrder{
-		Version:       2,
-		Maker:         maker,
-		Signer:        signerAddress,
-		TokenID:       input.TokenID,
-		MakerAmount:   input.MakerAmount.StringFixed(0),
-		TakerAmount:   input.TakerAmount.StringFixed(0),
-		Expiration:    strconv.FormatUint(input.Expiration, 10),
-		Side:          input.Side,
-		SignatureType: input.SignatureType,
-		Salt:          strconv.FormatUint(salt, 10),
-		Timestamp:     strconv.FormatInt(timestampMs, 10),
-		Metadata:      metadata,
-		Builder:       builderCode,
-		DeferExec:     input.DeferExec,
+		Order: Order{
+			Salt:          strconv.FormatUint(salt, 10),
+			Maker:         maker,
+			Signer:        signerAddress,
+			TokenID:       input.TokenID,
+			MakerAmount:   input.MakerAmount.StringFixed(0),
+			TakerAmount:   input.TakerAmount.StringFixed(0),
+			Side:          input.Side,
+			SignatureType: input.SignatureType,
+			Timestamp:     strconv.FormatInt(timestampMs, 10),
+			Metadata:      metadata,
+			Builder:       builderCode,
+		},
+		Expiration: strconv.FormatUint(input.Expiration, 10),
 	}
 
-	typedData := buildOrderTypedDataV2(c.chainID, verifyingContract, order)
+	typedData := buildOrderTypedData(c.chainID, verifyingContract, order)
 
 	var signature string
-	var err error
 	if input.SignatureType == SignatureTypePoly1271 {
 		signature, err = signPoly1271Order(c.signer, typedData, c.chainID)
 	} else {
@@ -814,58 +690,6 @@ func buildOrderTypedData(
 				{Name: "salt", Type: "uint256"},
 				{Name: "maker", Type: "address"},
 				{Name: "signer", Type: "address"},
-				{Name: "taker", Type: "address"},
-				{Name: "tokenId", Type: "uint256"},
-				{Name: "makerAmount", Type: "uint256"},
-				{Name: "takerAmount", Type: "uint256"},
-				{Name: "expiration", Type: "uint256"},
-				{Name: "nonce", Type: "uint256"},
-				{Name: "feeRateBps", Type: "uint256"},
-				{Name: "side", Type: "uint8"},
-				{Name: "signatureType", Type: "uint8"},
-			},
-		},
-		PrimaryType: "Order",
-		Domain: apitypes.TypedDataDomain{
-			Name:              protocolName,
-			Version:           protocolVersion,
-			ChainId:           ethmath.NewHexOrDecimal256(chainID),
-			VerifyingContract: verifyingContract,
-		},
-		Message: apitypes.TypedDataMessage{
-			"salt":          order.Salt,
-			"maker":         order.Maker,
-			"signer":        order.Signer,
-			"taker":         order.Taker,
-			"tokenId":       order.TokenID,
-			"makerAmount":   order.MakerAmount,
-			"takerAmount":   order.TakerAmount,
-			"expiration":    order.Expiration,
-			"nonce":         order.Nonce,
-			"feeRateBps":    order.FeeRateBps,
-			"side":          strconv.Itoa(sideValue(order.Side)),
-			"signatureType": strconv.Itoa(int(order.SignatureType)),
-		},
-	}
-}
-
-func buildOrderTypedDataV2(
-	chainID int64,
-	verifyingContract string,
-	order SignedOrder,
-) apitypes.TypedData {
-	return apitypes.TypedData{
-		Types: apitypes.Types{
-			"EIP712Domain": {
-				{Name: "name", Type: "string"},
-				{Name: "version", Type: "string"},
-				{Name: "chainId", Type: "uint256"},
-				{Name: "verifyingContract", Type: "address"},
-			},
-			"Order": {
-				{Name: "salt", Type: "uint256"},
-				{Name: "maker", Type: "address"},
-				{Name: "signer", Type: "address"},
 				{Name: "tokenId", Type: "uint256"},
 				{Name: "makerAmount", Type: "uint256"},
 				{Name: "takerAmount", Type: "uint256"},
@@ -879,22 +703,22 @@ func buildOrderTypedDataV2(
 		PrimaryType: "Order",
 		Domain: apitypes.TypedDataDomain{
 			Name:              protocolName,
-			Version:           protocolVersionV2,
+			Version:           protocolVersion,
 			ChainId:           ethmath.NewHexOrDecimal256(chainID),
 			VerifyingContract: verifyingContract,
 		},
 		Message: apitypes.TypedDataMessage{
-			"salt":          order.Salt,
-			"maker":         order.Maker,
-			"signer":        order.Signer,
-			"tokenId":       order.TokenID,
-			"makerAmount":   order.MakerAmount,
-			"takerAmount":   order.TakerAmount,
-			"side":          strconv.Itoa(sideValue(order.Side)),
-			"signatureType": strconv.Itoa(int(order.SignatureType)),
-			"timestamp":     order.Timestamp,
-			"metadata":      order.Metadata,
-			"builder":       order.Builder,
+			"salt":          order.Order.Salt,
+			"maker":         order.Order.Maker,
+			"signer":        order.Order.Signer,
+			"tokenId":       order.Order.TokenID,
+			"makerAmount":   order.Order.MakerAmount,
+			"takerAmount":   order.Order.TakerAmount,
+			"side":          strconv.Itoa(sideValue(order.Order.Side)),
+			"signatureType": strconv.Itoa(int(order.Order.SignatureType)),
+			"timestamp":     order.Order.Timestamp,
+			"metadata":      order.Order.Metadata,
+			"builder":       order.Order.Builder,
 		},
 	}
 }
@@ -1050,42 +874,6 @@ func (c *Client) resolveNegRisk(
 	c.negRiskMu.Unlock()
 
 	return response.NegRisk, nil
-}
-
-func (c *Client) resolveFeeRateBps(
-	ctx context.Context,
-	tokenID string,
-	userFeeRateBps int64,
-) (int64, error) {
-	c.feeRateMu.RLock()
-	cached, ok := c.feeRateCache[tokenID]
-	ts := c.feeRateTimestamps[tokenID]
-	c.feeRateMu.RUnlock()
-
-	var marketFeeRateBps int64
-	if ok && (c.cacheTTL == 0 || time.Since(ts) < c.cacheTTL) {
-		marketFeeRateBps = cached
-	} else {
-		bps, err := c.GetFeeRateBps(ctx, tokenID)
-		if err != nil {
-			return 0, err
-		}
-		c.feeRateMu.Lock()
-		c.feeRateCache[tokenID] = bps
-		c.feeRateTimestamps[tokenID] = time.Now()
-		c.feeRateMu.Unlock()
-		marketFeeRateBps = bps
-	}
-
-	if marketFeeRateBps > 0 && userFeeRateBps != 0 && userFeeRateBps != marketFeeRateBps {
-		return 0, fmt.Errorf(
-			"invalid user provided fee rate: %d, fee rate for the market must be %d",
-			userFeeRateBps,
-			marketFeeRateBps,
-		)
-	}
-
-	return marketFeeRateBps, nil
 }
 
 func roundDown(value udecimal.Decimal, places uint8) udecimal.Decimal {

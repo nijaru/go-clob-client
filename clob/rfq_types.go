@@ -72,13 +72,23 @@ type CreateRFQQuoteParams struct {
 	UserType  int              `json:"userType"`
 }
 
-// AcceptRFQQuoteRequest is the payload for accepting a specific quote.
-// It includes the signed order from the requester.
-type AcceptRFQQuoteRequest struct {
-	RequestID string `json:"requestId"`
-	QuoteID   string `json:"quoteId"`
-	Owner     string `json:"owner"`
-	SignedOrder
+// RFQSignedOrder is the V1-style signed order used in RFQ accept/approve payloads.
+// RFQ endpoints use V1 wire format (taker, nonce, feeRateBps) independently
+// of the main order signing path.
+type RFQSignedOrder struct {
+	Salt          string        `json:"salt"`
+	Maker         string        `json:"maker"`
+	Signer        string        `json:"signer"`
+	Taker         string        `json:"taker"`
+	TokenID       string        `json:"tokenId"`
+	MakerAmount   string        `json:"makerAmount"`
+	TakerAmount   string        `json:"takerAmount"`
+	Expiration    string        `json:"expiration"`
+	Nonce         string        `json:"nonce"`
+	FeeRateBps    string        `json:"feeRateBps"`
+	Side          Side          `json:"side"`
+	SignatureType SignatureType `json:"signatureType"`
+	Signature     string        `json:"signature"`
 }
 
 // wireRFQOrder is the shared wire format for RFQ accept/approve payloads.
@@ -101,7 +111,7 @@ type wireRFQOrder struct {
 }
 
 // marshalRFQOrder encodes an RFQ accept/approve payload with numeric salt, expiration, and nonce.
-func marshalRFQOrder(requestID, quoteID, owner string, o SignedOrder) ([]byte, error) {
+func marshalRFQOrder(requestID, quoteID, owner string, o RFQSignedOrder) ([]byte, error) {
 	salt, err := strconv.ParseUint(o.Salt, 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("parse order salt: %w", err)
@@ -134,9 +144,18 @@ func marshalRFQOrder(requestID, quoteID, owner string, o SignedOrder) ([]byte, e
 	})
 }
 
+// AcceptRFQQuoteRequest is the payload for accepting a specific quote.
+// It includes the signed order from the requester.
+type AcceptRFQQuoteRequest struct {
+	RequestID string `json:"requestId"`
+	QuoteID   string `json:"quoteId"`
+	Owner     string `json:"owner"`
+	RFQSignedOrder
+}
+
 // MarshalJSON encodes the accept request with salt and expiration as JSON numbers.
 func (r AcceptRFQQuoteRequest) MarshalJSON() ([]byte, error) {
-	return marshalRFQOrder(r.RequestID, r.QuoteID, r.Owner, r.SignedOrder)
+	return marshalRFQOrder(r.RequestID, r.QuoteID, r.Owner, r.RFQSignedOrder)
 }
 
 // AcceptRFQQuoteResponse is the response for accepting a quote.
@@ -154,22 +173,22 @@ type ApproveRFQOrderRequest struct {
 	RequestID string `json:"requestId"`
 	QuoteID   string `json:"quoteId"`
 	Owner     string `json:"owner"`
-	SignedOrder
+	RFQSignedOrder
 }
 
 // MarshalJSON encodes the approve request with salt and expiration as JSON numbers.
 func (r ApproveRFQOrderRequest) MarshalJSON() ([]byte, error) {
-	return marshalRFQOrder(r.RequestID, r.QuoteID, r.Owner, r.SignedOrder)
+	return marshalRFQOrder(r.RequestID, r.QuoteID, r.Owner, r.RFQSignedOrder)
 }
 
-// RFQRequestResponse is the response for creating an RFQ request.
+// RFQRequestResponse is the response for creating a RFQ request.
 type RFQRequestResponse struct {
 	RequestID string `json:"requestId"`
 	Expiry    int64  `json:"expiry,omitzero"`
 	Error     string `json:"error,omitzero"`
 }
 
-// RFQQuoteResponse is the response for creating an RFQ quote.
+// RFQQuoteResponse is the response for creating a RFQ quote.
 type RFQQuoteResponse struct {
 	QuoteID string `json:"quoteId"`
 	Error   string `json:"error,omitzero"`

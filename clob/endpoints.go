@@ -2,12 +2,7 @@ package clob
 
 const (
 	timeEndpoint     = "/time"
-	versionEndpoint  = "/version"
 	geoblockEndpoint = "/api/geoblock"
-
-	// ORDER_VERSION_MISMATCH_ERROR is the error string returned by the CLOB API
-	// when the posted order was signed with the wrong protocol version.
-	ORDER_VERSION_MISMATCH_ERROR = "order_version_mismatch"
 
 	initialCursor = "MA=="
 	endCursor     = "LTE="
@@ -42,7 +37,6 @@ const (
 	lastTradesPricesEndpoint          = "/last-trades-prices"
 	tickSizeEndpoint                  = "/tick-size"
 	negRiskEndpoint                   = "/neg-risk"
-	feeRateEndpoint                   = "/fee-rate"
 	priceHistoryEndpoint              = "/prices-history"
 	marketTradesEventsEndpoint        = "/live-activity/events/"
 
