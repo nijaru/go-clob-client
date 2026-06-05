@@ -104,7 +104,6 @@ func (c *SignerClient) CreateMarketOrder(
 			userOrder.TokenID,
 			userOrder.Side,
 			userOrder.Amount,
-			userOrder.AmountKind,
 			userOrder.OrderType,
 		)
 		if err != nil {
@@ -268,21 +267,15 @@ func (c *AuthenticatedClient) BuildPostOrderRequest(
 }
 
 // CalculateMarketPrice derives a marketable price from the current order book.
-// amountKind controls how amount is interpreted for BUY orders:
-// AmountUSDC accumulates USDC notional (size×price) until ≥ amount;
-// AmountShares accumulates share count (size) until ≥ amount.
-// SideSell always interprets amount as shares; passing AmountUSDC for a sell is an error.
+// For BUY orders, amount is the USDC notional to spend; for SELL orders, amount
+// is the number of shares to sell.
 func (c *Client) CalculateMarketPrice(
 	ctx context.Context,
 	tokenID string,
 	side Side,
 	amount udecimal.Decimal,
-	amountKind AmountKind,
 	orderType OrderType,
 ) (udecimal.Decimal, error) {
-	if side == SideSell && amountKind == AmountUSDC {
-		return udecimal.Zero, fmt.Errorf("sell orders must specify amount in shares, not USDC")
-	}
 	if amount.Cmp(udecimal.Zero) <= 0 {
 		return udecimal.Zero, fmt.Errorf("amount must be positive")
 	}
@@ -331,10 +324,11 @@ func (c *Client) CalculateMarketPrice(
 	// Top of the book is at the end of the array (API returns Bids ASC, Asks DESC).
 	for i := len(parsedLevels) - 1; i >= 0; i-- {
 		level := parsedLevels[i]
-		if side == SideBuy && amountKind == AmountUSDC {
+		if side == SideBuy {
+			// BUY: amount is USDC notional, accumulate size * price
 			sum = sum.Add(level.Size.Mul(level.Price))
 		} else {
-			// SideSell always uses shares; SideBuy + AmountShares also uses shares.
+			// SELL: amount is shares, accumulate size
 			sum = sum.Add(level.Size)
 		}
 
@@ -418,54 +412,43 @@ func (c *SignerClient) buildSignedMarketOrder(
 
 	switch userOrder.Side {
 	case SideBuy:
-		switch userOrder.AmountKind {
-		case AmountUSDC:
-			// Adjust amount for V2 fees if user balance is provided.
-			adjustedAmount := amount
-			if !userOrder.UserUSDCBalance.IsZero() {
-				feeInfo, err := c.GetFeeInfo(ctx, userOrder.TokenID)
-				if err == nil {
-					builderTakerFeeRate := 0.0
-					if userOrder.BuilderCode != "" {
-						builderFee, err := c.GetBuilderFeeRate(ctx, userOrder.BuilderCode)
-						if err == nil {
-							builderTakerFeeRate = float64(
-								builderFee.BuilderTakerFeeRateBps,
-							) / 10000.0
-						}
+		// BUY: Amount is USDC notional. Adjust for fees if MaxSpend is set.
+		adjustedAmount := amount
+		if userOrder.MaxSpend != nil && !userOrder.MaxSpend.IsZero() {
+			feeInfo, err := c.GetFeeInfo(ctx, userOrder.TokenID)
+			if err == nil {
+				builderTakerFeeRate := 0.0
+				if userOrder.BuilderCode != "" {
+					builderFee, err := c.GetBuilderFeeRate(ctx, userOrder.BuilderCode)
+					if err == nil {
+						builderTakerFeeRate = float64(
+							builderFee.BuilderTakerFeeRateBps,
+						) / 10000.0
 					}
-					adj, err := adjustMarketBuyAmount(
-						amount,
-						userOrder.UserUSDCBalance,
-						price,
-						feeInfo.Rate,
-						feeInfo.Exponent,
-						builderTakerFeeRate,
-					)
-					if err != nil {
-						return nil, err
-					}
-					adjustedAmount = adj
 				}
+				adj, err := adjustMarketBuyAmount(
+					amount,
+					*userOrder.MaxSpend,
+					price,
+					feeInfo.Rate,
+					feeInfo.Exponent,
+					builderTakerFeeRate,
+				)
+				if err != nil {
+					return nil, err
+				}
+				adjustedAmount = adj
 			}
-			// Preserve the full USDC amount; only the derived share quantity is quantized.
-			rawMakerAmount = adjustedAmount
-			val, err := rawMakerAmount.Div(price)
-			if err != nil {
-				return nil, fmt.Errorf("calculation error: %w", err)
-			}
-			rawTakerAmount = roundToAmount(val, roundConfig)
-		case AmountShares:
-			// Buy exactly Amount shares; compute USDC cost from price.
-			rawTakerAmount = roundDown(amount, roundConfig.Size)
-			rawMakerAmount = roundToAmount(rawTakerAmount.Mul(price), roundConfig)
-		default:
-			return nil, fmt.Errorf("invalid amount kind %d", userOrder.AmountKind)
 		}
+		// Preserve the full USDC amount; only the derived share quantity is quantized.
+		rawMakerAmount = adjustedAmount
+		val, err := rawMakerAmount.Div(price)
+		if err != nil {
+			return nil, fmt.Errorf("calculation error: %w", err)
+		}
+		rawTakerAmount = roundToAmount(val, roundConfig)
 	case SideSell:
-		if userOrder.AmountKind == AmountUSDC {
-			return nil, fmt.Errorf("sell orders must specify amount in shares, not USDC")
-		}
+		// SELL: Amount is shares.
 		rawMakerAmount = roundDown(amount, roundConfig.Size)
 		rawTakerAmount = roundToAmount(rawMakerAmount.Mul(price), roundConfig)
 	default:
@@ -756,9 +739,6 @@ func validateMarketOrderArgs(order MarketOrderArgs) error {
 	}
 	if order.Side != SideBuy && order.Side != SideSell {
 		return fmt.Errorf("invalid side %q", order.Side)
-	}
-	if order.Side == SideSell && order.AmountKind == AmountUSDC {
-		return fmt.Errorf("sell orders must specify amount in shares, not USDC")
 	}
 	return nil
 }

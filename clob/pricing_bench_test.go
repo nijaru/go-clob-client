@@ -46,12 +46,7 @@ func BenchmarkCalculateMarketPrice(b *testing.B) {
 	b.Run("buy_usdc", func(b *testing.B) {
 		for b.Loop() {
 			price, err := client.CalculateMarketPrice(
-				ctx,
-				"tok",
-				SideBuy,
-				MustDec("100"),
-				AmountUSDC,
-				OrderTypeFOK,
+				ctx, "tok", SideBuy, MustDec("100"), OrderTypeFOK,
 			)
 			if err != nil {
 				b.Fatal(err)
@@ -65,12 +60,7 @@ func BenchmarkCalculateMarketPrice(b *testing.B) {
 	b.Run("sell_shares", func(b *testing.B) {
 		for b.Loop() {
 			price, err := client.CalculateMarketPrice(
-				ctx,
-				"tok",
-				SideSell,
-				MustDec("50"),
-				AmountShares,
-				OrderTypeFOK,
+				ctx, "tok", SideSell, MustDec("50"), OrderTypeFOK,
 			)
 			if err != nil {
 				b.Fatal(err)

@@ -363,12 +363,11 @@ func TestCreateMarketOrderPreservesUSDCPrecisionForBuy(t *testing.T) {
 	client.saltGenerator = func() (uint64, error) { return 42, nil }
 
 	order, err := client.CreateMarketOrder(t.Context(), MarketOrderArgs{
-		TokenID:    "100",
-		Price:      udecimal.MustParse("0.56"),
-		Amount:     udecimal.MustParse("100.123456"),
-		AmountKind: AmountUSDC,
-		Side:       SideBuy,
-		OrderType:  OrderTypeFOK,
+		TokenID:   "100",
+		Price:     udecimal.MustParse("0.56"),
+		Amount:    udecimal.MustParse("100.123456"),
+		Side:      SideBuy,
+		OrderType: OrderTypeFOK,
 	}, nil)
 	if err != nil {
 		t.Fatalf("create market order: %v", err)

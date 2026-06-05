@@ -139,20 +139,6 @@ type CancelOrdersResponse struct {
 	NotCanceled map[string]string `json:"notCanceled"`
 }
 
-// AmountKind specifies how Amount is interpreted in a market order.
-type AmountKind uint8
-
-const (
-	// AmountUSDC treats Amount as a USDC value to spend (buys only).
-	// The number of shares purchased is computed from the market price.
-	// This is the default (zero value) and matches the current behavior for SideBuy.
-	AmountUSDC AmountKind = iota
-	// AmountShares treats Amount as a number of shares.
-	// For SideSell: always use this. For SideBuy: buy exactly Amount shares,
-	// spending Amount * price USDC.
-	AmountShares
-)
-
 // Side is the taker or maker side for an order or trade.
 type Side string
 
@@ -276,22 +262,25 @@ type OrderArgs struct {
 // MarketOrderArgs contains the inputs for building a market order.
 type MarketOrderArgs struct {
 	TokenID string
-	// Amount is the quantity to trade. Its interpretation depends on AmountKind:
-	// AmountUSDC (default): for SideBuy, spend exactly Amount USDC; shares are derived from price.
-	// AmountShares: for SideBuy, buy exactly Amount shares, spending Amount*price USDC;
-	//               for SideSell, sell exactly Amount shares.
-	Amount     udecimal.Decimal
-	AmountKind AmountKind
-	Side       Side
-	Price      udecimal.Decimal
-	OrderType  OrderType
+	// Amount is the quantity to trade:
+	//   BUY:  Amount is the USDC notional to spend. Shares are derived from price.
+	//   SELL: Amount is the number of shares to sell.
+	Amount udecimal.Decimal
+	Side   Side
+	Price  udecimal.Decimal
 
-	// UserUSDCBalance is the user's available USDC balance.
-	// When set on a BUY market order with AmountUSDC, the SDK shrinks the
-	// USDC amount to cover platform + builder taker fees so the order
-	// stays within the user's balance.
-	UserUSDCBalance udecimal.Decimal
+	// MaxSpend is an optional all-in USD spend cap for BUY market orders,
+	// including platform and builder taker fees.
+	//
+	// When set, the SDK keeps Amount unchanged if MaxSpend covers Amount plus
+	// fees. If fees push total spend above MaxSpend, the SDK reduces the signed
+	// buy amount so total spend fits within MaxSpend.
+	//
+	// Set MaxSpend equal to Amount when fees should come out of Amount.
+	// Leave unset to pay fees on top of Amount.
+	MaxSpend *udecimal.Decimal
 
+	OrderType   OrderType
 	Metadata    string
 	BuilderCode string
 	DeferExec   bool
