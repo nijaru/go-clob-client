@@ -7,7 +7,7 @@
 > [!WARNING]
 > Unofficial, community-maintained SDK. Not extensively tested in production trading environments. Use at your own risk.
 
-Go SDK for the [Polymarket](https://polymarket.com) CLOB and Data APIs. Targets the latest stable Go release and tracks feature parity with the [official Rust SDK](https://github.com/Polymarket/rs-clob-client).
+Go SDK for the [Polymarket](https://polymarket.com) CLOB and Data APIs. Targets the latest stable Go release and tracks feature parity with the [official Rust SDK](https://github.com/Polymarket/rs-clob-client-v2).
 
 ## Features
 
@@ -293,7 +293,7 @@ if errors.Is(err, clob.ErrUnauthorized) {
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Primary reference for API parity is the [Rust SDK](https://github.com/Polymarket/rs-clob-client).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Primary reference for API parity is the [Rust SDK](https://github.com/Polymarket/rs-clob-client-v2).
 
 ## Security
 
