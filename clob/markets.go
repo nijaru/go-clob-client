@@ -436,3 +436,40 @@ func (c *Client) GetBuilderFeeRate(
 	}
 	return &out, nil
 }
+
+// GetVersion returns the protocol version from the /version endpoint.
+func (c *Client) GetVersion(ctx context.Context) (uint32, error) {
+	var out struct {
+		Version uint32 `json:"version"`
+	}
+	err := c.getJSON(ctx, versionEndpoint, nil, polyhttp.AuthNone, &out)
+	if err != nil {
+		return 0, err
+	}
+	return out.Version, nil
+}
+
+// GetFeeRate returns the base fee rate in BPS for a token from the /fee-rate endpoint.
+func (c *Client) GetFeeRate(ctx context.Context, tokenID string) (*FeeRateResponse, error) {
+	var out FeeRateResponse
+	query := url.Values{}
+	query.Set("token_id", tokenID)
+	err := c.getJSON(ctx, feeRateEndpoint, query, polyhttp.AuthNone, &out)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetMarketByToken returns the condition ID and token pair for a market by token ID.
+func (c *Client) GetMarketByToken(
+	ctx context.Context,
+	tokenID string,
+) (*MarketByTokenResponse, error) {
+	var out MarketByTokenResponse
+	err := c.getJSON(ctx, marketsByTokenEndpoint+tokenID, nil, polyhttp.AuthNone, &out)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}

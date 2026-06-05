@@ -75,4 +75,9 @@ const (
 	clobMarketEndpoint = "/clob-markets"
 
 	builderFeeRateEndpoint = "/fees/builder-fees/"
+
+	versionEndpoint            = "/version"
+	feeRateEndpoint            = "/fee-rate"
+	preMigrationOrdersEndpoint = "/data/pre-migration-orders"
+	marketsByTokenEndpoint     = "/markets-by-token/"
 )

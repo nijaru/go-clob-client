@@ -139,6 +139,54 @@ func (c *AuthenticatedClient) GetOrder(ctx context.Context, orderID string) (*Op
 	return &out, err
 }
 
+// GetPreMigrationOrders returns orders from the V1→V2 migration period.
+func (c *AuthenticatedClient) GetPreMigrationOrders(
+	ctx context.Context,
+	nextCursor string,
+) (*Page[OpenOrder], error) {
+	var out Page[OpenOrder]
+	err := c.getJSON(ctx, preMigrationOrdersEndpoint, nil, polyhttp.AuthL2Builder, &out)
+	return &out, err
+}
+
+// GetPreMigrationOrdersPage returns a single page of pre-migration orders.
+func (c *AuthenticatedClient) GetPreMigrationOrdersPage(
+	ctx context.Context,
+	nextCursor string,
+) (*Page[OpenOrder], error) {
+	query := url.Values{}
+	query.Set("next_cursor", normalizedCursor(nextCursor))
+	var out Page[OpenOrder]
+	err := c.getJSON(ctx, preMigrationOrdersEndpoint, query, polyhttp.AuthL2Builder, &out)
+	return &out, err
+}
+
+// IterPreMigrationOrders returns an iterator over all pre-migration orders.
+func (c *AuthenticatedClient) IterPreMigrationOrders(
+	ctx context.Context,
+) iter.Seq2[OpenOrder, error] {
+	return func(yield func(OpenOrder, error) bool) {
+		cursor := initialCursor
+		for cursor != endCursor {
+			page, err := c.GetPreMigrationOrdersPage(ctx, cursor)
+			if err != nil {
+				yield(OpenOrder{}, err)
+				return
+			}
+			for _, order := range page.Data {
+				if !yield(order, nil) {
+					return
+				}
+			}
+			nextCursor, done := nextPageCursor(cursor, page.NextCursor)
+			if done {
+				return
+			}
+			cursor = nextCursor
+		}
+	}
+}
+
 // GetTrades returns all paginated authenticated trades that match the provided filters.
 func (c *AuthenticatedClient) GetTrades(ctx context.Context, params TradeParams) ([]Trade, error) {
 	trades := make([]Trade, 0, 128)

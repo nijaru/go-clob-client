@@ -138,6 +138,18 @@ type BuilderFeeRateResponse struct {
 	BuilderTakerFeeRateBps uint32 `json:"builder_taker_fee_rate_bps"`
 }
 
+// FeeRateResponse reports the base fee rate in BPS for a token.
+type FeeRateResponse struct {
+	BaseFee uint32 `json:"base_fee"`
+}
+
+// MarketByTokenResponse identifies the condition and token pair for a market.
+type MarketByTokenResponse struct {
+	ConditionID      string `json:"condition_id"`
+	PrimaryTokenID   string `json:"primary_token_id"`
+	SecondaryTokenID string `json:"secondary_token_id"`
+}
+
 // MidpointResponse reports the mid-market price for a token.
 type MidpointResponse struct {
 	Mid string `json:"mid"`
