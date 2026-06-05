@@ -358,3 +358,134 @@ type BuilderLeaderboardParams struct {
 type BuilderVolumeParams struct {
 	TimePeriod TimePeriod
 }
+
+// MarketPositionDetail holds one wallet's position in a specific market.
+type MarketPositionDetail struct {
+	Wallet       string  `json:"proxyWallet,omitzero"`
+	Name         string  `json:"name,omitzero"`
+	ProfileImage string  `json:"profileImage,omitzero"`
+	Verified     bool    `json:"verified,omitzero"`
+	TokenID      string  `json:"asset,omitzero"`
+	ConditionID  string  `json:"conditionId,omitzero"`
+	AvgPrice     Decimal `json:"avgPrice,omitzero"`
+	Size         Decimal `json:"size,omitzero"`
+	CurPrice     Decimal `json:"currPrice,omitzero"`
+	CurrentValue Decimal `json:"currentValue,omitzero"`
+	CashPnl      Decimal `json:"cashPnl,omitzero"`
+	TotalBought  Decimal `json:"totalBought,omitzero"`
+	RealizedPnl  Decimal `json:"realizedPnl,omitzero"`
+	TotalPnl     Decimal `json:"totalPnl,omitzero"`
+	Outcome      string  `json:"outcome,omitzero"`
+	OutcomeIndex int     `json:"outcomeIndex,omitzero"`
+}
+
+// MetaMarketPosition groups all wallet positions for a single token in a market.
+type MetaMarketPosition struct {
+	Token     string                 `json:"token,omitzero"`
+	Positions []MarketPositionDetail `json:"positions,omitzero"`
+}
+
+// MarketPositionStatus filters market-position queries by lifecycle state.
+type MarketPositionStatus string
+
+const (
+	MarketPositionStatusOpen   MarketPositionStatus = "open"
+	MarketPositionStatusClosed MarketPositionStatus = "closed"
+	MarketPositionStatusAll    MarketPositionStatus = "all"
+)
+
+// MarketPositionSortBy controls ordering in market-position queries.
+type MarketPositionSortBy string
+
+const (
+	MarketPositionSortByCashPnl      MarketPositionSortBy = "cashPnl"
+	MarketPositionSortByTotalPnl     MarketPositionSortBy = "totalPnl"
+	MarketPositionSortBySize         MarketPositionSortBy = "size"
+	MarketPositionSortByAvgPrice     MarketPositionSortBy = "avgPrice"
+	MarketPositionSortByCurrentValue MarketPositionSortBy = "currentValue"
+)
+
+// MarketPositionParams filters the /v1/market-positions endpoint.
+type MarketPositionParams struct {
+	Market        string
+	User          string
+	Status        MarketPositionStatus
+	SortBy        MarketPositionSortBy
+	SortDirection SortDirection
+	Limit         int
+	Offset        int
+}
+
+// ComboPositionStatus represents the lifecycle state of a combo position.
+type ComboPositionStatus string
+
+const (
+	ComboPositionStatusOpen         ComboPositionStatus = "OPEN"
+	ComboPositionStatusPartial      ComboPositionStatus = "PARTIAL"
+	ComboPositionStatusResolvedWin  ComboPositionStatus = "RESOLVED_WIN"
+	ComboPositionStatusResolvedLoss ComboPositionStatus = "RESOLVED_LOSS"
+)
+
+// ComboPositionMarketEvent holds event metadata for a combo leg's market.
+type ComboPositionMarketEvent struct {
+	EventID    string `json:"eventId,omitzero"`
+	EventSlug  string `json:"eventSlug,omitzero"`
+	EventTitle string `json:"eventTitle,omitzero"`
+	EventImage string `json:"eventImage,omitzero"`
+}
+
+// ComboPositionMarket holds market metadata for a combo leg.
+type ComboPositionMarket struct {
+	MarketID    string                    `json:"marketId,omitzero"`
+	Slug        string                    `json:"slug,omitzero"`
+	Title       string                    `json:"title,omitzero"`
+	Outcome     string                    `json:"outcome,omitzero"`
+	ImageURL    string                    `json:"imageUrl,omitzero"`
+	IconURL     string                    `json:"iconUrl,omitzero"`
+	Category    string                    `json:"category,omitzero"`
+	Subcategory string                    `json:"subcategory,omitzero"`
+	Tags        []string                  `json:"tags,omitzero"`
+	EndDate     string                    `json:"endDate,omitzero"`
+	Event       *ComboPositionMarketEvent `json:"event,omitzero"`
+}
+
+// ComboPositionLeg represents one leg of a combo position.
+type ComboPositionLeg struct {
+	LegIndex        int                  `json:"legIndex"`
+	LegPositionID   string               `json:"legPositionId"`
+	LegConditionID  string               `json:"legConditionId"`
+	LegOutcomeIndex int                  `json:"legOutcomeIndex"`
+	LegOutcomeLabel string               `json:"legOutcomeLabel,omitzero"`
+	LegStatus       ComboPositionStatus  `json:"legStatus"`
+	LegResolvedAt   string               `json:"legResolvedAt,omitzero"`
+	LegCurrentPrice *Decimal             `json:"legCurrentPrice,omitzero"`
+	Market          *ComboPositionMarket `json:"market,omitzero"`
+}
+
+// ComboPosition represents a multi-leg combo position.
+type ComboPosition struct {
+	ConditionID       string              `json:"conditionId"`
+	PositionID        string              `json:"positionId"`
+	ModuleID          int                 `json:"moduleId"`
+	UserAddress       string              `json:"userAddress"`
+	Shares            Decimal             `json:"shares"`
+	EntryAvgPriceUsdc *Decimal            `json:"entryAvgPriceUsdc,omitzero"`
+	EntryCostUsdc     *Decimal            `json:"entryCostUsdc,omitzero"`
+	Status            ComboPositionStatus `json:"status"`
+	FirstEntryAt      string              `json:"firstEntryAt"`
+	ResolvedAt        string              `json:"resolvedAt,omitzero"`
+	LegsTotal         int                 `json:"legsTotal"`
+	LegsResolved      int                 `json:"legsResolved"`
+	LegsPending       int                 `json:"legsPending"`
+	Legs              []ComboPositionLeg  `json:"legs"`
+}
+
+// ComboPositionParams filters the /v1/positions/combos endpoint.
+type ComboPositionParams struct {
+	User        string
+	Status      ComboPositionStatus
+	ConditionID string
+	PositionID  string
+	Limit       int
+	Offset      int
+}

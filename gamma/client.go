@@ -167,10 +167,7 @@ func (c *Client) IterMarkets(
 ) iter.Seq2[Market, error] {
 	return func(yield func(Market, error) bool) {
 		offset := params.Offset
-		limit := params.Limit
-		if limit <= 0 {
-			limit = 100
-		}
+		limit := iteratorLimit(params.Limit, 20, 100)
 
 		for {
 			p := params
@@ -293,10 +290,7 @@ func (c *Client) GetEvents(ctx context.Context, params EventFilterParams) ([]Eve
 func (c *Client) IterEvents(ctx context.Context, params EventFilterParams) iter.Seq2[Event, error] {
 	return func(yield func(Event, error) bool) {
 		offset := params.Offset
-		limit := params.Limit
-		if limit <= 0 {
-			limit = 100
-		}
+		limit := iteratorLimit(params.Limit, 20, 100)
 
 		for {
 			p := params
@@ -467,10 +461,7 @@ func (c *Client) IterComments(
 ) iter.Seq2[Comment, error] {
 	return func(yield func(Comment, error) bool) {
 		offset := params.Offset
-		limit := params.Limit
-		if limit <= 0 {
-			limit = 100
-		}
+		limit := iteratorLimit(params.Limit, 20, 100)
 
 		for {
 			p := params
@@ -525,4 +516,131 @@ func (c *Client) GetPublicProfile(ctx context.Context, address string) (*PublicP
 	var out PublicProfile
 	err := c.http.GetJSON(ctx, profileEndpoint, query, polyhttp.AuthNone, &out)
 	return &out, err
+}
+
+// GetSeriesPage returns a single page of series.
+func (c *Client) GetSeriesPage(
+	ctx context.Context,
+	p SeriesFilterParams,
+) ([]Series, error) {
+	query := gammaQuery(p.Limit, p.Offset)
+	setBool(query, "ascending", p.Ascending)
+	setBool(query, "closed", p.Closed)
+	setBool(query, "excludeEvents", p.ExcludeEvents)
+	setString(query, "locale", p.Locale)
+	setString(query, "order", p.Order)
+	setString(query, "recurrence", p.Recurrence)
+	setString(query, "slug", p.Slug)
+
+	var out []Series
+	err := c.http.GetJSON(ctx, seriesEndpoint, query, polyhttp.AuthNone, &out)
+	return out, err
+}
+
+// ListSeries returns all series matching the provided filters.
+func (c *Client) ListSeries(ctx context.Context, p SeriesFilterParams) ([]Series, error) {
+	var all []Series
+	for s, err := range c.IterSeries(ctx, p) {
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, s)
+	}
+	return all, nil
+}
+
+// IterSeries returns an iterator over series.
+func (c *Client) IterSeries(
+	ctx context.Context,
+	p SeriesFilterParams,
+) iter.Seq2[Series, error] {
+	return func(yield func(Series, error) bool) {
+		offset := p.Offset
+		limit := iteratorLimit(p.Limit, 20, 100)
+		for {
+			q := p
+			q.Limit = limit
+			q.Offset = offset
+			items, err := c.GetSeriesPage(ctx, q)
+			if err != nil {
+				yield(Series{}, err)
+				return
+			}
+			if len(items) == 0 {
+				return
+			}
+			for _, item := range items {
+				if !yield(item, nil) {
+					return
+				}
+			}
+			if len(items) < limit {
+				return
+			}
+			offset += len(items)
+		}
+	}
+}
+
+// GetTeamsPage returns a single page of teams.
+func (c *Client) GetTeamsPage(
+	ctx context.Context,
+	p TeamFilterParams,
+) ([]Team, error) {
+	query := gammaQuery(p.Limit, p.Offset)
+	setString(query, "abbreviation", p.Abbreviation)
+	setBool(query, "ascending", p.Ascending)
+	setString(query, "league", p.League)
+	setString(query, "name", p.Name)
+	setString(query, "order", p.Order)
+	setInt(query, "providerId", p.ProviderID)
+
+	var out []Team
+	err := c.http.GetJSON(ctx, teamsEndpoint, query, polyhttp.AuthNone, &out)
+	return out, err
+}
+
+// ListTeams returns all teams matching the provided filters.
+func (c *Client) ListTeams(ctx context.Context, p TeamFilterParams) ([]Team, error) {
+	var all []Team
+	for t, err := range c.IterTeams(ctx, p) {
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, t)
+	}
+	return all, nil
+}
+
+// IterTeams returns an iterator over teams.
+func (c *Client) IterTeams(
+	ctx context.Context,
+	p TeamFilterParams,
+) iter.Seq2[Team, error] {
+	return func(yield func(Team, error) bool) {
+		offset := p.Offset
+		limit := iteratorLimit(p.Limit, 20, 100)
+		for {
+			q := p
+			q.Limit = limit
+			q.Offset = offset
+			items, err := c.GetTeamsPage(ctx, q)
+			if err != nil {
+				yield(Team{}, err)
+				return
+			}
+			if len(items) == 0 {
+				return
+			}
+			for _, item := range items {
+				if !yield(item, nil) {
+					return
+				}
+			}
+			if len(items) < limit {
+				return
+			}
+			offset += len(items)
+		}
+	}
 }

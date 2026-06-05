@@ -462,3 +462,28 @@ type CommentFilterParams struct {
 	Limit       int    `url:"limit,omitzero"`
 	Offset      int    `url:"offset,omitzero"`
 }
+
+// SeriesFilterParams defines filters for listing series.
+type SeriesFilterParams struct {
+	Ascending     *bool  `url:"ascending,omitzero"`
+	Closed        *bool  `url:"closed,omitzero"`
+	ExcludeEvents *bool  `url:"excludeEvents,omitzero"`
+	Locale        string `url:"locale,omitzero"`
+	Order         string `url:"order,omitzero"`
+	Recurrence    string `url:"recurrence,omitzero"`
+	Slug          string `url:"slug,omitzero"`
+	Limit         int    `url:"limit,omitzero"`
+	Offset        int    `url:"offset,omitzero"`
+}
+
+// TeamFilterParams defines filters for listing teams.
+type TeamFilterParams struct {
+	Abbreviation string `url:"abbreviation,omitzero"`
+	Ascending    *bool  `url:"ascending,omitzero"`
+	League       string `url:"league,omitzero"`
+	Name         string `url:"name,omitzero"`
+	Order        string `url:"order,omitzero"`
+	ProviderID   int    `url:"providerId,omitzero"`
+	Limit        int    `url:"limit,omitzero"`
+	Offset       int    `url:"offset,omitzero"`
+}

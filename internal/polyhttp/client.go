@@ -237,6 +237,13 @@ func (c *Client) doJSON(
 			*target = strings.TrimSpace(string(payload))
 		}
 		return nil
+	case *[]byte:
+		payload, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("read response body: %w", err)
+		}
+		*target = payload
+		return nil
 	default:
 		// For everything else, use streaming decode
 		if err := json.UnmarshalRead(resp.Body, out); err != nil {
