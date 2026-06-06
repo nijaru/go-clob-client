@@ -18,7 +18,6 @@ import (
 type orderLifecycleServer struct {
 	mu     sync.Mutex
 	orders map[string]openOrderRecord // keyed by order ID
-	trades map[string]tradeRecord
 	nextID int
 }
 
@@ -35,23 +34,10 @@ type openOrderRecord struct {
 	OrderType    string
 }
 
-type tradeRecord struct {
-	ID         string
-	OrderID    string
-	Market     string
-	AssetID    string
-	Side       string
-	Size       string
-	Price      string
-	Status     string
-	TraderSide string
-}
-
 func newOrderLifecycleServer(t *testing.T) (*httptest.Server, *orderLifecycleServer) {
 	t.Helper()
 	ols := &orderLifecycleServer{
 		orders: make(map[string]openOrderRecord),
-		trades: make(map[string]tradeRecord),
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -85,7 +71,7 @@ func newOrderLifecycleServer(t *testing.T) (*httptest.Server, *orderLifecycleSer
 			ols.handleGetOpenOrders(t, w, r)
 
 		case tradesEndpoint:
-			ols.handleGetTrades(t, w, r)
+			json.NewEncoder(w).Encode(Page[Trade]{Data: []Trade{}, NextCursor: "-1"})
 
 		case cancelAllEndpoint:
 			ols.handleCancelAll(t, w, r)
@@ -207,34 +193,6 @@ func (ols *orderLifecycleServer) handleGetOpenOrders(
 
 	json.NewEncoder(w).Encode(Page[OpenOrder]{
 		Data:       orders,
-		NextCursor: "-1",
-	})
-}
-
-func (ols *orderLifecycleServer) handleGetTrades(
-	t *testing.T,
-	w http.ResponseWriter,
-	r *http.Request,
-) {
-	t.Helper()
-	ols.mu.Lock()
-	defer ols.mu.Unlock()
-
-	var trades []Trade
-	for _, record := range ols.trades {
-		trades = append(trades, Trade{
-			ID:         record.ID,
-			AssetID:    record.AssetID,
-			Side:       Side(record.Side),
-			Size:       record.Size,
-			Price:      record.Price,
-			Status:     record.Status,
-			TraderSide: record.TraderSide,
-		})
-	}
-
-	json.NewEncoder(w).Encode(Page[Trade]{
-		Data:       trades,
 		NextCursor: "-1",
 	})
 }

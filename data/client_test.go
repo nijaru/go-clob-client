@@ -637,9 +637,9 @@ func TestIterPositions(t *testing.T) {
 		call++
 		switch call {
 		case 1:
-			xmlOrJSON(t, w, []Position{{Asset: "a"}, {Asset: "b"}})
+			writeTestJSON(t, w, []Position{{Asset: "a"}, {Asset: "b"}})
 		default:
-			xmlOrJSON(t, w, []Position{})
+			writeTestJSON(t, w, []Position{})
 		}
 	})
 	defer srv.Close()
@@ -662,9 +662,9 @@ func TestIterTrades(t *testing.T) {
 		call++
 		switch call {
 		case 1:
-			xmlOrJSON(t, w, []Trade{{Asset: "a"}, {Asset: "b"}})
+			writeTestJSON(t, w, []Trade{{Asset: "a"}, {Asset: "b"}})
 		default:
-			xmlOrJSON(t, w, []Trade{})
+			writeTestJSON(t, w, []Trade{})
 		}
 	})
 	defer srv.Close()
@@ -687,9 +687,9 @@ func TestIterActivity(t *testing.T) {
 		call++
 		switch call {
 		case 1:
-			xmlOrJSON(t, w, []Activity{{Type: ActivityTypeTrade}, {Type: ActivityTypeRedeem}})
+			writeTestJSON(t, w, []Activity{{Type: ActivityTypeTrade}, {Type: ActivityTypeRedeem}})
 		default:
-			xmlOrJSON(t, w, []Activity{})
+			writeTestJSON(t, w, []Activity{})
 		}
 	})
 	defer srv.Close()
@@ -712,9 +712,9 @@ func TestIterBuilderLeaderboard(t *testing.T) {
 		call++
 		switch call {
 		case 1:
-			xmlOrJSON(t, w, []BuilderLeaderboardEntry{{Builder: "a"}, {Builder: "b"}})
+			writeTestJSON(t, w, []BuilderLeaderboardEntry{{Builder: "a"}, {Builder: "b"}})
 		default:
-			xmlOrJSON(t, w, []BuilderLeaderboardEntry{})
+			writeTestJSON(t, w, []BuilderLeaderboardEntry{})
 		}
 	})
 	defer srv.Close()
@@ -768,7 +768,7 @@ func TestPositionsQueryParams(t *testing.T) {
 				t.Errorf("%s = %q, want %q", k, got, want)
 			}
 		}
-		xmlOrJSON(t, w, []Position{})
+		writeTestJSON(t, w, []Position{})
 	})
 	defer srv.Close()
 
@@ -805,7 +805,7 @@ func TestActivityQueryParams(t *testing.T) {
 				t.Errorf("%s = %q, want %q", k, got, want)
 			}
 		}
-		xmlOrJSON(t, w, []Activity{})
+		writeTestJSON(t, w, []Activity{})
 	})
 	defer srv.Close()
 
@@ -838,7 +838,7 @@ func TestLeaderboardQueryParams(t *testing.T) {
 				t.Errorf("%s = %q, want %q", k, got, want)
 			}
 		}
-		xmlOrJSON(t, w, []TraderLeaderboardEntry{})
+		writeTestJSON(t, w, []TraderLeaderboardEntry{})
 	})
 	defer srv.Close()
 
@@ -869,7 +869,7 @@ func TestComboPositionQueryParams(t *testing.T) {
 				t.Errorf("%s = %q, want %q", k, got, want)
 			}
 		}
-		xmlOrJSON(t, w, []ComboPosition{})
+		writeTestJSON(t, w, []ComboPosition{})
 	})
 	defer srv.Close()
 
@@ -902,7 +902,7 @@ func TestMarketPositionQueryParams(t *testing.T) {
 				t.Errorf("%s = %q, want %q", k, got, want)
 			}
 		}
-		xmlOrJSON(t, w, []MetaMarketPosition{})
+		writeTestJSON(t, w, []MetaMarketPosition{})
 	})
 	defer srv.Close()
 
@@ -920,8 +920,8 @@ func TestMarketPositionQueryParams(t *testing.T) {
 	}
 }
 
-// xmlOrJSON is a test helper that writes JSON to w with content-type header.
-func xmlOrJSON(t *testing.T, w http.ResponseWriter, v any) {
+// writeTestJSON is a test helper that writes JSON to w with content-type header.
+func writeTestJSON(t *testing.T, w http.ResponseWriter, v any) {
 	t.Helper()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(v)
