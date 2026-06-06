@@ -10,8 +10,174 @@ import (
 	"github.com/quagmt/udecimal"
 )
 
+// --- Unexported endpoints under test ---
+
+func TestGetMarketPositions(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/market-positions" {
+			t.Errorf("path = %s", r.URL.Path)
+		}
+		q := r.URL.Query()
+		if q.Get("market") != "m-1" {
+			t.Errorf("market = %q", q.Get("market"))
+		}
+		if q.Get("status") != "open" {
+			t.Errorf("status = %q", q.Get("status"))
+		}
+		if q.Get("sortBy") != "size" {
+			t.Errorf("sortBy = %q", q.Get("sortBy"))
+		}
+		if q.Get("limit") != "10" {
+			t.Errorf("limit = %q", q.Get("limit"))
+		}
+		json.NewEncoder(w).Encode([]MetaMarketPosition{{
+			Token: "0xabc",
+			Positions: []MarketPositionDetail{{
+				Wallet: "0x123", Size: udecimalMustParse("50"),
+			}},
+		}})
+	})
+
+	items, err := client.GetMarketPositions(t.Context(), MarketPositionParams{
+		Market: "m-1",
+		Status: MarketPositionStatusOpen,
+		SortBy: MarketPositionSortBySize,
+		Limit:  10,
+	})
+	if err != nil {
+		t.Fatalf("GetMarketPositions: %v", err)
+	}
+	if len(items) != 1 || items[0].Token != "0xabc" {
+		t.Errorf("unexpected: %+v", items)
+	}
+}
+
+func TestIterMarketPositions(t *testing.T) {
+	call := 0
+	srv, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		call++
+		switch call {
+		case 1:
+			json.NewEncoder(w).Encode([]MetaMarketPosition{
+				{Token: "a"}, {Token: "b"},
+			})
+		default:
+			json.NewEncoder(w).Encode([]MetaMarketPosition{})
+		}
+	})
+	defer srv.Close()
+
+	var tokens []string
+	for mp, err := range client.IterMarketPositions(t.Context(), MarketPositionParams{
+		Market: "m-1", Limit: 2,
+	}) {
+		if err != nil {
+			t.Fatalf("IterMarketPositions: %v", err)
+		}
+		tokens = append(tokens, mp.Token)
+	}
+	if len(tokens) != 2 {
+		t.Errorf("got %d tokens", len(tokens))
+	}
+}
+
+func TestGetComboPositions(t *testing.T) {
+	srv, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/positions/combos" {
+			t.Errorf("path = %s", r.URL.Path)
+		}
+		q := r.URL.Query()
+		if q.Get("user") != "0x123" {
+			t.Errorf("user = %q", q.Get("user"))
+		}
+		if q.Get("status") != "OPEN" {
+			t.Errorf("status = %q", q.Get("status"))
+		}
+		if q.Get("combo_condition_id") != "cid-1" {
+			t.Errorf("combo_condition_id = %q", q.Get("combo_condition_id"))
+		}
+		json.NewEncoder(w).Encode([]ComboPosition{{
+			ConditionID: "cid-1",
+			PositionID:  "pos-1",
+			Status:      ComboPositionStatusOpen,
+			LegsTotal:   2,
+		}})
+	})
+	defer srv.Close()
+
+	items, err := client.GetComboPositions(t.Context(), ComboPositionParams{
+		User:        "0x123",
+		Status:      ComboPositionStatusOpen,
+		ConditionID: "cid-1",
+	})
+	if err != nil {
+		t.Fatalf("GetComboPositions: %v", err)
+	}
+	if len(items) != 1 || items[0].Status != ComboPositionStatusOpen {
+		t.Errorf("unexpected: %+v", items)
+	}
+}
+
+func TestIterComboPositions(t *testing.T) {
+	call := 0
+	srv, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		call++
+		switch call {
+		case 1:
+			json.NewEncoder(w).Encode([]ComboPosition{
+				{PositionID: "a"}, {PositionID: "b"},
+			})
+		default:
+			json.NewEncoder(w).Encode([]ComboPosition{})
+		}
+	})
+	defer srv.Close()
+
+	var ids []string
+	for cp, err := range client.IterComboPositions(t.Context(), ComboPositionParams{
+		User: "0x123", Limit: 2,
+	}) {
+		if err != nil {
+			t.Fatalf("IterComboPositions: %v", err)
+		}
+		ids = append(ids, cp.PositionID)
+	}
+	if len(ids) != 2 {
+		t.Errorf("got %d ids", len(ids))
+	}
+}
+
+func TestDownloadAccountingSnapshot(t *testing.T) {
+	srv, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/accounting/snapshot" {
+			t.Errorf("path = %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("user") != "0x123" {
+			t.Errorf("user = %q", r.URL.Query().Get("user"))
+		}
+		w.Write([]byte("\x50\x4b\x03\x04"))
+	})
+	defer srv.Close()
+
+	data, err := client.DownloadAccountingSnapshot(t.Context(), "0x123")
+	if err != nil {
+		t.Fatalf("DownloadAccountingSnapshot: %v", err)
+	}
+	if len(data) != 4 {
+		t.Errorf("got %d bytes", len(data))
+	}
+}
+
 func udecimalMustParse(s string) Decimal {
 	return udecimal.MustParse(s)
+}
+
+// newTestServer creates an httptest server and data Client wired to it.
+func newTestServer(t *testing.T, handler http.HandlerFunc) (*httptest.Server, *Client) {
+	t.Helper()
+	srv := httptest.NewServer(handler)
+	t.Cleanup(srv.Close)
+	return srv, New(Config{Host: srv.URL})
 }
 
 func TestDataClient(t *testing.T) {
@@ -79,6 +245,22 @@ func TestDataClient(t *testing.T) {
 			json.NewEncoder(w).Encode([]ClosedPosition{
 				{Asset: "0x123", Title: "Closed", RealizedPNL: udecimalMustParse("50")},
 			})
+		case "/v1/market-positions":
+			json.NewEncoder(w).Encode([]MetaMarketPosition{{
+				Token: "0xabc",
+				Positions: []MarketPositionDetail{{
+					Wallet: "0x123", Size: udecimalMustParse("50"),
+				}},
+			}})
+		case "/v1/positions/combos":
+			json.NewEncoder(w).Encode([]ComboPosition{{
+				ConditionID: "cid-1",
+				PositionID:  "pos-1",
+				Status:      ComboPositionStatusOpen,
+				LegsTotal:   2,
+			}})
+		case "/v1/accounting/snapshot":
+			w.Write([]byte("\x50\x4b\x03\x04"))
 		}
 	}))
 	defer server.Close()
@@ -216,6 +398,38 @@ func TestDataClient(t *testing.T) {
 		}
 		if len(items) != 1 || items[0].RealizedPNL.String() != "50" {
 			t.Errorf("unexpected: %+v", items)
+		}
+	})
+
+	t.Run("GetMarketPositions", func(t *testing.T) {
+		items, err := client.GetMarketPositions(ctx, MarketPositionParams{
+			Market: "0xabc",
+		})
+		if err != nil {
+			t.Fatalf("GetMarketPositions: %v", err)
+		}
+		if len(items) != 1 || items[0].Token != "0xabc" {
+			t.Errorf("unexpected: %+v", items)
+		}
+	})
+
+	t.Run("GetComboPositions", func(t *testing.T) {
+		items, err := client.GetComboPositions(ctx, ComboPositionParams{User: "0x123"})
+		if err != nil {
+			t.Fatalf("GetComboPositions: %v", err)
+		}
+		if len(items) != 1 || items[0].Status != ComboPositionStatusOpen {
+			t.Errorf("unexpected: %+v", items)
+		}
+	})
+
+	t.Run("DownloadAccountingSnapshot", func(t *testing.T) {
+		data, err := client.DownloadAccountingSnapshot(ctx, "0x123")
+		if err != nil {
+			t.Fatalf("DownloadAccountingSnapshot: %v", err)
+		}
+		if len(data) != 4 {
+			t.Errorf("unexpected snapshot size: %d", len(data))
 		}
 	})
 
@@ -413,4 +627,302 @@ func TestDataClient(t *testing.T) {
 			t.Errorf("unexpected status: %d", apiErr.StatusCode)
 		}
 	})
+}
+
+// --- Iterator pagination tests ---
+
+func TestIterPositions(t *testing.T) {
+	call := 0
+	srv, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		call++
+		switch call {
+		case 1:
+			xmlOrJSON(t, w, []Position{{Asset: "a"}, {Asset: "b"}})
+		default:
+			xmlOrJSON(t, w, []Position{})
+		}
+	})
+	defer srv.Close()
+
+	var assets []string
+	for pos, iterErr := range client.IterPositions(t.Context(), PositionParams{User: "0x123", Limit: 2}) {
+		if iterErr != nil {
+			t.Fatalf("IterPositions: %v", iterErr)
+		}
+		assets = append(assets, pos.Asset)
+	}
+	if len(assets) != 2 {
+		t.Errorf("got %d positions", len(assets))
+	}
+}
+
+func TestIterTrades(t *testing.T) {
+	call := 0
+	srv, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		call++
+		switch call {
+		case 1:
+			xmlOrJSON(t, w, []Trade{{Asset: "a"}, {Asset: "b"}})
+		default:
+			xmlOrJSON(t, w, []Trade{})
+		}
+	})
+	defer srv.Close()
+
+	var count int
+	for _, iterErr := range client.IterTrades(t.Context(), TradeParams{User: "0x123", Limit: 2}) {
+		if iterErr != nil {
+			t.Fatalf("IterTrades: %v", iterErr)
+		}
+		count++
+	}
+	if count != 2 {
+		t.Errorf("got %d trades", count)
+	}
+}
+
+func TestIterActivity(t *testing.T) {
+	call := 0
+	srv, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		call++
+		switch call {
+		case 1:
+			xmlOrJSON(t, w, []Activity{{Type: ActivityTypeTrade}, {Type: ActivityTypeRedeem}})
+		default:
+			xmlOrJSON(t, w, []Activity{})
+		}
+	})
+	defer srv.Close()
+
+	var types []ActivityType
+	for a, iterErr := range client.IterActivity(t.Context(), ActivityParams{User: "0x123", Limit: 2}) {
+		if iterErr != nil {
+			t.Fatalf("IterActivity: %v", iterErr)
+		}
+		types = append(types, a.Type)
+	}
+	if len(types) != 2 {
+		t.Errorf("got %d activities", len(types))
+	}
+}
+
+func TestIterBuilderLeaderboard(t *testing.T) {
+	call := 0
+	srv, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		call++
+		switch call {
+		case 1:
+			xmlOrJSON(t, w, []BuilderLeaderboardEntry{{Builder: "a"}, {Builder: "b"}})
+		default:
+			xmlOrJSON(t, w, []BuilderLeaderboardEntry{})
+		}
+	})
+	defer srv.Close()
+
+	var builders []string
+	for b, iterErr := range client.IterBuilderLeaderboard(t.Context(), BuilderLeaderboardParams{}) {
+		if iterErr != nil {
+			t.Fatalf("IterBuilderLeaderboard: %v", iterErr)
+		}
+		builders = append(builders, b.Builder)
+	}
+	if len(builders) != 2 {
+		t.Errorf("got %d builders", len(builders))
+	}
+}
+
+func TestIterError(t *testing.T) {
+	srv, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	})
+	defer srv.Close()
+
+	for _, err := range client.IterPositions(t.Context(), PositionParams{User: "0x123"}) {
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		return
+	}
+}
+
+// --- Query param coverage ---
+
+func TestPositionsQueryParams(t *testing.T) {
+	boolPtr := func(v bool) *bool { return &v }
+	srv, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		checks := map[string]string{
+			"user":          "0x123",
+			"sizeThreshold": "10",
+			"redeemable":    "true",
+			"mergeable":     "true",
+			"sortBy":        "CURRENT",
+			"sortDirection": "DESC",
+			"title":         "test",
+			"limit":         "5",
+			"offset":        "10",
+		}
+		for k, want := range checks {
+			if got := q.Get(k); got != want {
+				t.Errorf("%s = %q, want %q", k, got, want)
+			}
+		}
+		xmlOrJSON(t, w, []Position{})
+	})
+	defer srv.Close()
+
+	_, err := client.GetPositions(t.Context(), PositionParams{
+		User:          "0x123",
+		SizeThreshold: "10",
+		Redeemable:    boolPtr(true),
+		Mergeable:     boolPtr(true),
+		SortBy:        PositionSortCurrent,
+		SortDirection: SortDesc,
+		Title:         "test",
+		Limit:         5,
+		Offset:        10,
+	})
+	if err != nil {
+		t.Fatalf("GetPositions: %v", err)
+	}
+}
+
+func TestActivityQueryParams(t *testing.T) {
+	srv, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		checks := map[string]string{
+			"user":          "0x123",
+			"type":          "TRADE,REDEEM",
+			"start":         "1000",
+			"end":           "2000",
+			"sortBy":        "TIMESTAMP",
+			"sortDirection": "ASC",
+			"side":          "BUY",
+		}
+		for k, want := range checks {
+			if got := q.Get(k); got != want {
+				t.Errorf("%s = %q, want %q", k, got, want)
+			}
+		}
+		xmlOrJSON(t, w, []Activity{})
+	})
+	defer srv.Close()
+
+	_, err := client.GetActivity(t.Context(), ActivityParams{
+		User:          "0x123",
+		ActivityTypes: []ActivityType{ActivityTypeTrade, ActivityTypeRedeem},
+		Start:         1000,
+		End:           2000,
+		SortBy:        ActivitySortTimestamp,
+		SortDirection: SortAsc,
+		Side:          SideBuy,
+	})
+	if err != nil {
+		t.Fatalf("GetActivity: %v", err)
+	}
+}
+
+func TestLeaderboardQueryParams(t *testing.T) {
+	srv, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		checks := map[string]string{
+			"category":   "OVERALL",
+			"timePeriod": "WEEK",
+			"orderBy":    "PNL",
+			"user":       "0x123",
+			"userName":   "trader1",
+		}
+		for k, want := range checks {
+			if got := q.Get(k); got != want {
+				t.Errorf("%s = %q, want %q", k, got, want)
+			}
+		}
+		xmlOrJSON(t, w, []TraderLeaderboardEntry{})
+	})
+	defer srv.Close()
+
+	_, err := client.GetLeaderboard(t.Context(), LeaderboardParams{
+		Category:   LeaderboardCategoryOverall,
+		TimePeriod: TimePeriodWeek,
+		SortBy:     LeaderboardOrderByPNL,
+		User:       "0x123",
+		UserName:   "trader1",
+	})
+	if err != nil {
+		t.Fatalf("GetLeaderboard: %v", err)
+	}
+}
+
+func TestComboPositionQueryParams(t *testing.T) {
+	srv, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		checks := map[string]string{
+			"user":               "0x123",
+			"status":             "OPEN",
+			"combo_condition_id": "cid-1",
+			"combo_position_id":  "pos-1",
+			"limit":              "5",
+		}
+		for k, want := range checks {
+			if got := q.Get(k); got != want {
+				t.Errorf("%s = %q, want %q", k, got, want)
+			}
+		}
+		xmlOrJSON(t, w, []ComboPosition{})
+	})
+	defer srv.Close()
+
+	_, err := client.GetComboPositions(t.Context(), ComboPositionParams{
+		User:        "0x123",
+		Status:      ComboPositionStatusOpen,
+		ConditionID: "cid-1",
+		PositionID:  "pos-1",
+		Limit:       5,
+	})
+	if err != nil {
+		t.Fatalf("GetComboPositions: %v", err)
+	}
+}
+
+func TestMarketPositionQueryParams(t *testing.T) {
+	srv, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		checks := map[string]string{
+			"market":        "m-1",
+			"user":          "0x123",
+			"status":        "open",
+			"sortBy":        "cashPnl",
+			"sortDirection": "ASC",
+			"limit":         "10",
+			"offset":        "5",
+		}
+		for k, want := range checks {
+			if got := q.Get(k); got != want {
+				t.Errorf("%s = %q, want %q", k, got, want)
+			}
+		}
+		xmlOrJSON(t, w, []MetaMarketPosition{})
+	})
+	defer srv.Close()
+
+	_, err := client.GetMarketPositions(t.Context(), MarketPositionParams{
+		Market:        "m-1",
+		User:          "0x123",
+		Status:        MarketPositionStatusOpen,
+		SortBy:        MarketPositionSortByCashPnl,
+		SortDirection: SortAsc,
+		Limit:         10,
+		Offset:        5,
+	})
+	if err != nil {
+		t.Fatalf("GetMarketPositions: %v", err)
+	}
+}
+
+// xmlOrJSON is a test helper that writes JSON to w with content-type header.
+func xmlOrJSON(t *testing.T, w http.ResponseWriter, v any) {
+	t.Helper()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(v)
 }
