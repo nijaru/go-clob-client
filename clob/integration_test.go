@@ -36,14 +36,14 @@ type openOrderRecord struct {
 }
 
 type tradeRecord struct {
-	ID       string
-	OrderID  string
-	Market   string
-	AssetID  string
-	Side     string
-	Size     string
-	Price    string
-	Status   string
+	ID         string
+	OrderID    string
+	Market     string
+	AssetID    string
+	Side       string
+	Size       string
+	Price      string
+	Status     string
 	TraderSide string
 }
 
@@ -104,7 +104,11 @@ func newOrderLifecycleServer(t *testing.T) (*httptest.Server, *orderLifecycleSer
 	return server, ols
 }
 
-func (ols *orderLifecycleServer) handlePostOrder(t *testing.T, w http.ResponseWriter, r *http.Request) {
+func (ols *orderLifecycleServer) handlePostOrder(
+	t *testing.T,
+	w http.ResponseWriter,
+	r *http.Request,
+) {
 	t.Helper()
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -147,7 +151,11 @@ func (ols *orderLifecycleServer) handlePostOrder(t *testing.T, w http.ResponseWr
 	json.NewEncoder(w).Encode(resp)
 }
 
-func (ols *orderLifecycleServer) handleGetOrder(t *testing.T, w http.ResponseWriter, r *http.Request) {
+func (ols *orderLifecycleServer) handleGetOrder(
+	t *testing.T,
+	w http.ResponseWriter,
+	r *http.Request,
+) {
 	t.Helper()
 	id := strings.TrimPrefix(r.URL.Path, orderEndpoint)
 
@@ -172,7 +180,11 @@ func (ols *orderLifecycleServer) handleGetOrder(t *testing.T, w http.ResponseWri
 	})
 }
 
-func (ols *orderLifecycleServer) handleGetOpenOrders(t *testing.T, w http.ResponseWriter, r *http.Request) {
+func (ols *orderLifecycleServer) handleGetOpenOrders(
+	t *testing.T,
+	w http.ResponseWriter,
+	r *http.Request,
+) {
 	t.Helper()
 	ols.mu.Lock()
 	defer ols.mu.Unlock()
@@ -194,12 +206,16 @@ func (ols *orderLifecycleServer) handleGetOpenOrders(t *testing.T, w http.Respon
 	}
 
 	json.NewEncoder(w).Encode(Page[OpenOrder]{
-		Data:      orders,
+		Data:       orders,
 		NextCursor: "-1",
 	})
 }
 
-func (ols *orderLifecycleServer) handleGetTrades(t *testing.T, w http.ResponseWriter, r *http.Request) {
+func (ols *orderLifecycleServer) handleGetTrades(
+	t *testing.T,
+	w http.ResponseWriter,
+	r *http.Request,
+) {
 	t.Helper()
 	ols.mu.Lock()
 	defer ols.mu.Unlock()
@@ -218,12 +234,16 @@ func (ols *orderLifecycleServer) handleGetTrades(t *testing.T, w http.ResponseWr
 	}
 
 	json.NewEncoder(w).Encode(Page[Trade]{
-		Data:      trades,
+		Data:       trades,
 		NextCursor: "-1",
 	})
 }
 
-func (ols *orderLifecycleServer) handleCancelOrder(t *testing.T, w http.ResponseWriter, r *http.Request) {
+func (ols *orderLifecycleServer) handleCancelOrder(
+	t *testing.T,
+	w http.ResponseWriter,
+	r *http.Request,
+) {
 	t.Helper()
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -256,7 +276,11 @@ func (ols *orderLifecycleServer) handleCancelOrder(t *testing.T, w http.Response
 	})
 }
 
-func (ols *orderLifecycleServer) handleCancelAll(t *testing.T, w http.ResponseWriter, _ *http.Request) {
+func (ols *orderLifecycleServer) handleCancelAll(
+	t *testing.T,
+	w http.ResponseWriter,
+	_ *http.Request,
+) {
 	t.Helper()
 	ols.mu.Lock()
 	defer ols.mu.Unlock()
@@ -473,7 +497,11 @@ func TestOrderLifecycle_PostOrderAuthHeaders(t *testing.T) {
 		case negRiskEndpoint:
 			w.Write([]byte(`{"neg_risk":false}`))
 		case orderBookEndpoint:
-			w.Write([]byte(`{"market":"m","asset_id":"100","timestamp":"1","bids":[{"price":"0.44","size":"10"}],"asks":[{"price":"0.46","size":"10"}],"min_order_size":"1","tick_size":"0.01","neg_risk":false,"last_trade_price":"0.45","hash":"h"}`))
+			w.Write(
+				[]byte(
+					`{"market":"m","asset_id":"100","timestamp":"1","bids":[{"price":"0.44","size":"10"}],"asks":[{"price":"0.46","size":"10"}],"min_order_size":"1","tick_size":"0.01","neg_risk":false,"last_trade_price":"0.45","hash":"h"}`,
+				),
+			)
 		case postOrderEndpoint:
 			capturedHeaders = r.Header.Clone()
 			w.Write([]byte(`{"success":true,"orderID":"o-1","status":"live"}`))
@@ -582,7 +610,11 @@ func TestOrderLifecycle_ServerError(t *testing.T) {
 		case negRiskEndpoint:
 			w.Write([]byte(`{"neg_risk":false}`))
 		case orderBookEndpoint:
-			w.Write([]byte(`{"market":"m","asset_id":"100","timestamp":"1","bids":[],"asks":[],"min_order_size":"1","tick_size":"0.01","neg_risk":false,"last_trade_price":"0.45","hash":"h"}`))
+			w.Write(
+				[]byte(
+					`{"market":"m","asset_id":"100","timestamp":"1","bids":[],"asks":[],"min_order_size":"1","tick_size":"0.01","neg_risk":false,"last_trade_price":"0.45","hash":"h"}`,
+				),
+			)
 		default:
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(`{"error":"internal"}`))
