@@ -280,6 +280,14 @@ type MarketOrderArgs struct {
 	// Leave unset to pay fees on top of Amount.
 	MaxSpend *udecimal.Decimal
 
+	// MaxPrice is an optional price cap for BUY market orders.
+	// The order will not fill above this price.
+	MaxPrice *udecimal.Decimal
+
+	// MinPrice is an optional price floor for SELL market orders.
+	// The order will not fill below this price.
+	MinPrice *udecimal.Decimal
+
 	OrderType   OrderType
 	Metadata    string
 	BuilderCode string

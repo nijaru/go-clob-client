@@ -72,6 +72,7 @@ type Market struct {
 	MarketGroup             int          `json:"marketGroup,omitzero"`
 	GroupItemTitle          string       `json:"groupItemTitle,omitzero"`
 	GroupItemThreshold      string       `json:"groupItemThreshold,omitzero"`
+	PositionIDs             []string     `json:"positionIds,omitzero"`
 	QuestionID              string       `json:"questionID,omitzero"`
 	UmaEndDate              string       `json:"umaEndDate,omitzero"`
 	UmaResolutionStatus     string       `json:"umaResolutionStatus,omitzero"`
@@ -125,6 +126,7 @@ type ClobReward struct {
 // Event represents a collection of markets.
 type Event struct {
 	ID               string     `json:"id"`
+	ParentEventID    string     `json:"parentEventId,omitzero"`
 	Ticker           string     `json:"ticker,omitzero"`
 	Slug             string     `json:"slug,omitzero"`
 	Title            string     `json:"title,omitzero"`

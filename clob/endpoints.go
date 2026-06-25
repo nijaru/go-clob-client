@@ -70,6 +70,7 @@ const (
 	rfqQuoteApproveEndpoint  = "/rfq/quote/approve"
 	rfqDataRequestsEndpoint  = "/rfq/data/requests"
 	rfqDataQuotesEndpoint    = "/rfq/data/quotes"
+	rfqComboMarketsEndpoint  = "/v1/rfq/combo-markets"
 
 	clobMarketEndpoint = "/clob-markets"
 

@@ -293,3 +293,192 @@ func TestRFQSurfaces(t *testing.T) {
 		t.Fatalf("cancel rfq request: %v", err)
 	}
 }
+
+func TestRFQErrorCodes(t *testing.T) {
+	t.Parallel()
+
+	// Verify all error codes are defined with expected values.
+	codes := map[RFQErrorCode]string{
+		RFQCodeAddressMismatch:                 "ADDRESS_MISMATCH",
+		RFQCodeAllowanceValidationFailed:       "ALLOWANCE_VALIDATION_FAILED",
+		RFQCodeBalanceValidationFailed:         "BALANCE_VALIDATION_FAILED",
+		RFQCodeContradictoryLegs:               "CONTRADICTORY_LEGS",
+		RFQCodeExpiredRFQ:                      "EXPIRED_RFQ",
+		RFQCodeInvalidAcceptance:               "INVALID_ACCEPTANCE",
+		RFQCodeInvalidConfirmation:             "INVALID_CONFIRMATION",
+		RFQCodeInvalidExecutionResult:          "INVALID_EXECUTION_RESULT",
+		RFQCodeInvalidIdentity:                 "INVALID_IDENTITY",
+		RFQCodeInvalidMessage:                  "INVALID_MESSAGE",
+		RFQCodeInvalidQuote:                    "INVALID_QUOTE",
+		RFQCodeInvalidRFQ:                      "INVALID_RFQ",
+		RFQCodeInvalidRFQState:                 "INVALID_RFQ_STATE",
+		RFQCodeInvalidRole:                     "INVALID_ROLE",
+		RFQCodeInvalidSignature:                "INVALID_SIGNATURE",
+		RFQCodeInternalError:                   "INTERNAL_ERROR",
+		RFQCodeLegMetadataUnavailable:          "LEG_METADATA_UNAVAILABLE",
+		RFQCodeMakerAlreadyResponded:           "MAKER_ALREADY_RESPONDED",
+		RFQCodeMakerNotRequired:                "MAKER_NOT_REQUIRED",
+		RFQCodePreExecBalanceReservationFailed: "PRE_EXECUTION_BALANCE_RESERVATION_FAILED",
+		RFQCodeQuoteMismatch:                   "QUOTE_MISMATCH",
+		RFQCodeQuoteUnavailable:                "QUOTE_UNAVAILABLE",
+		RFQCodeRateLimited:                     "RATE_LIMITED",
+		RFQCodeRequestFailed:                   "REQUEST_FAILED",
+		RFQCodeServiceUnavailable:              "SERVICE_UNAVAILABLE",
+		RFQCodeSubmissionWindowClosed:          "SUBMISSION_WINDOW_CLOSED",
+		RFQCodeTradeSubmissionFailed:           "TRADE_SUBMISSION_FAILED",
+		RFQCodeUnauthenticated:                 "UNAUTHENTICATED",
+		RFQCodeUnauthorizedRole:                "UNAUTHORIZED_ROLE",
+		RFQCodeUnknownRFQ:                      "UNKNOWN_RFQ",
+	}
+
+	for code, want := range codes {
+		if string(code) != want {
+			t.Errorf("RFQErrorCode %v = %q, want %q", code, string(code), want)
+		}
+	}
+}
+
+func TestRFQErrorInterface(t *testing.T) {
+	t.Parallel()
+
+	err := &RFQError{
+		Code:      RFQCodeInvalidQuote,
+		ErrorID:   "err-123",
+		Message:   "quote expired",
+		RequestID: "rfq-42",
+	}
+
+	want := "rfq error INVALID_QUOTE: quote expired (rfq=rfq-42)"
+	if got := err.Error(); got != want {
+		t.Errorf("RFQError.Error() = %q, want %q", got, want)
+	}
+
+	// Without request ID
+	err2 := &RFQError{
+		Code:    RFQCodeRateLimited,
+		Message: "too many requests",
+	}
+	want2 := "rfq error RATE_LIMITED: too many requests"
+	if got := err2.Error(); got != want2 {
+		t.Errorf("RFQError.Error() = %q, want %q", got, want2)
+	}
+}
+
+func TestComboMarketsSurface(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != rfqComboMarketsEndpoint {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+
+		// Verify query params
+		if got := r.URL.Query().Get("limit"); got != "50" {
+			t.Errorf("limit = %q, want 50", got)
+		}
+		if got := r.URL.Query().Get("exclude"); got != "cond1,cond2" {
+			t.Errorf("exclude = %q, want cond1,cond2", got)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		data, _ := json.Marshal(ComboMarketsPage{
+			Markets: []ComboMarket{
+				{
+					ID:            "market-1",
+					ConditionID:   "0xabc",
+					Slug:          "test-market",
+					Title:         "Test Market",
+					Outcomes:      []string{"Yes", "No"},
+					OutcomePrices: []string{"0.65", "0.35"},
+					PositionIDs:   []string{"pos-yes", "pos-no"},
+					Volume:        100000,
+					Tags:          []string{"politics", "election"},
+				},
+			},
+			NextCursor: "next-page",
+		})
+		w.Write(data)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Config{Host: server.URL})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+
+	ctx := t.Context()
+	page, err := client.ListComboMarkets(ctx, &ComboMarketFilterParams{
+		Limit:   50,
+		Exclude: []string{"cond1", "cond2"},
+	})
+	if err != nil {
+		t.Fatalf("list combo markets: %v", err)
+	}
+
+	if len(page.Markets) != 1 {
+		t.Fatalf("got %d markets, want 1", len(page.Markets))
+	}
+
+	m := page.Markets[0]
+	if m.ID != "market-1" {
+		t.Errorf("market ID = %q, want market-1", m.ID)
+	}
+	if m.ConditionID != "0xabc" {
+		t.Errorf("condition ID = %q, want 0xabc", m.ConditionID)
+	}
+
+	outcomes, err := m.ParsedOutcomes()
+	if err != nil {
+		t.Fatalf("parsed outcomes: %v", err)
+	}
+	if outcomes.Yes.Label != "Yes" {
+		t.Errorf("yes label = %q, want Yes", outcomes.Yes.Label)
+	}
+	if outcomes.Yes.Price != "0.65" {
+		t.Errorf("yes price = %q, want 0.65", outcomes.Yes.Price)
+	}
+	if outcomes.No.PositionID != "pos-no" {
+		t.Errorf("no position ID = %q, want pos-no", outcomes.No.PositionID)
+	}
+	if page.NextCursor != "next-page" {
+		t.Errorf("next cursor = %q, want next-page", page.NextCursor)
+	}
+}
+
+func TestRFQTradeEventJSON(t *testing.T) {
+	t.Parallel()
+
+	input := `{
+		"type": "RFQ_TRADE",
+		"rfq_id": "rfq-1",
+		"requester_id": "req-1",
+		"condition_id": "0xcond",
+		"leg_position_ids": ["pos-1", "pos-2"],
+		"direction": "BUY",
+		"side": "YES",
+		"price_e6": "650000",
+		"size_e6": "100000000",
+		"executed_at": 1700000000
+	}`
+
+	var event RFQTradeEvent
+	if err := json.Unmarshal([]byte(input), &event); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if event.RFQID != "rfq-1" {
+		t.Errorf("rfq_id = %q, want rfq-1", event.RFQID)
+	}
+	if event.Direction != RFQDirectionBuy {
+		t.Errorf("direction = %q, want BUY", event.Direction)
+	}
+	if event.Side != RFQSideYes {
+		t.Errorf("side = %q, want YES", event.Side)
+	}
+	if len(event.LegPositionIDs) != 2 {
+		t.Errorf("leg position IDs count = %d, want 2", len(event.LegPositionIDs))
+	}
+	if event.PriceE6 != "650000" {
+		t.Errorf("price_e6 = %q, want 650000", event.PriceE6)
+	}
+}

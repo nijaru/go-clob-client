@@ -190,6 +190,7 @@ type Activity struct {
 	Timestamp             int64        `json:"timestamp"`
 	ConditionID           string       `json:"conditionId,omitzero"`
 	Type                  ActivityType `json:"type"`
+	IsCombo               bool         `json:"isCombo,omitzero"`
 	Size                  Decimal      `json:"size"`
 	USDCSize              Decimal      `json:"usdcSize"`
 	TransactionHash       string       `json:"transactionHash"`

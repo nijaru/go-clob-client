@@ -2,6 +2,7 @@ package clob
 
 import (
 	"context"
+	"iter"
 	"net/url"
 	"strconv"
 	"strings"
@@ -188,4 +189,84 @@ func (c *AuthenticatedClient) ApproveRFQOrder(
 		return nil, err
 	}
 	return &resp, nil
+}
+
+// ListComboMarkets returns markets available for Combo trading.
+// No auth required.
+func (c *Client) ListComboMarkets(
+	ctx context.Context,
+	params *ComboMarketFilterParams,
+) (*ComboMarketsPage, error) {
+	query := url.Values{}
+	if params != nil {
+		if params.Limit > 0 {
+			query.Set("limit", strconv.Itoa(params.Limit))
+		}
+		if params.Cursor != "" {
+			query.Set("cursor", params.Cursor)
+		}
+		if len(params.Exclude) > 0 {
+			query.Set("exclude", strings.Join(params.Exclude, ","))
+		}
+	}
+
+	var resp ComboMarketsPage
+	if err := c.getJSON(ctx, rfqComboMarketsEndpoint, query, polyhttp.AuthNone, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// IterComboMarkets returns an iterator over all combo markets.
+func (c *Client) IterComboMarkets(
+	ctx context.Context,
+	params *ComboMarketFilterParams,
+) iter.Seq2[ComboMarket, error] {
+	return func(yield func(ComboMarket, error) bool) {
+		cursor := ""
+		limit := 100
+		if params != nil && params.Limit > 0 {
+			limit = params.Limit
+		}
+		var exclude []string
+		if params != nil {
+			exclude = params.Exclude
+		}
+
+		for {
+			page, err := c.ListComboMarkets(ctx, &ComboMarketFilterParams{
+				Limit:   limit,
+				Cursor:  cursor,
+				Exclude: exclude,
+			})
+			if err != nil {
+				yield(ComboMarket{}, err)
+				return
+			}
+			for _, market := range page.Markets {
+				if !yield(market, nil) {
+					return
+				}
+			}
+			if page.NextCursor == "" {
+				return
+			}
+			cursor = page.NextCursor
+		}
+	}
+}
+
+// GetAllComboMarkets returns all combo markets.
+func (c *Client) GetAllComboMarkets(
+	ctx context.Context,
+	params *ComboMarketFilterParams,
+) ([]ComboMarket, error) {
+	var markets []ComboMarket
+	for market, err := range c.IterComboMarkets(ctx, params) {
+		if err != nil {
+			return nil, err
+		}
+		markets = append(markets, market)
+	}
+	return markets, nil
 }

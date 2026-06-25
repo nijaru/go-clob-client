@@ -48,9 +48,103 @@ type RFQQuote struct {
 	UpdatedAt    string  `json:"updatedAt"`
 }
 
+// RFQErrorCode is a typed error code returned by the RFQ service.
+// Values match the upstream TypeScript and Python SDK enums.
+type RFQErrorCode string
+
+const (
+	RFQCodeAddressMismatch                 RFQErrorCode = "ADDRESS_MISMATCH"
+	RFQCodeAllowanceValidationFailed       RFQErrorCode = "ALLOWANCE_VALIDATION_FAILED"
+	RFQCodeBalanceValidationFailed         RFQErrorCode = "BALANCE_VALIDATION_FAILED"
+	RFQCodeContradictoryLegs               RFQErrorCode = "CONTRADICTORY_LEGS"
+	RFQCodeExpiredRFQ                      RFQErrorCode = "EXPIRED_RFQ"
+	RFQCodeInvalidAcceptance               RFQErrorCode = "INVALID_ACCEPTANCE"
+	RFQCodeInvalidConfirmation             RFQErrorCode = "INVALID_CONFIRMATION"
+	RFQCodeInvalidExecutionResult          RFQErrorCode = "INVALID_EXECUTION_RESULT"
+	RFQCodeInvalidIdentity                 RFQErrorCode = "INVALID_IDENTITY"
+	RFQCodeInvalidMessage                  RFQErrorCode = "INVALID_MESSAGE"
+	RFQCodeInvalidQuote                    RFQErrorCode = "INVALID_QUOTE"
+	RFQCodeInvalidRFQ                      RFQErrorCode = "INVALID_RFQ"
+	RFQCodeInvalidRFQState                 RFQErrorCode = "INVALID_RFQ_STATE"
+	RFQCodeInvalidRole                     RFQErrorCode = "INVALID_ROLE"
+	RFQCodeInvalidSignature                RFQErrorCode = "INVALID_SIGNATURE"
+	RFQCodeInternalError                   RFQErrorCode = "INTERNAL_ERROR"
+	RFQCodeLegMetadataUnavailable          RFQErrorCode = "LEG_METADATA_UNAVAILABLE"
+	RFQCodeMakerAlreadyResponded           RFQErrorCode = "MAKER_ALREADY_RESPONDED"
+	RFQCodeMakerNotRequired                RFQErrorCode = "MAKER_NOT_REQUIRED"
+	RFQCodePreExecBalanceReservationFailed RFQErrorCode = "PRE_EXECUTION_BALANCE_RESERVATION_FAILED"
+	RFQCodeQuoteMismatch                   RFQErrorCode = "QUOTE_MISMATCH"
+	RFQCodeQuoteUnavailable                RFQErrorCode = "QUOTE_UNAVAILABLE"
+	RFQCodeRateLimited                     RFQErrorCode = "RATE_LIMITED"
+	RFQCodeRequestFailed                   RFQErrorCode = "REQUEST_FAILED"
+	RFQCodeServiceUnavailable              RFQErrorCode = "SERVICE_UNAVAILABLE"
+	RFQCodeSubmissionWindowClosed          RFQErrorCode = "SUBMISSION_WINDOW_CLOSED"
+	RFQCodeTradeSubmissionFailed           RFQErrorCode = "TRADE_SUBMISSION_FAILED"
+	RFQCodeUnauthenticated                 RFQErrorCode = "UNAUTHENTICATED"
+	RFQCodeUnauthorizedRole                RFQErrorCode = "UNAUTHORIZED_ROLE"
+	RFQCodeUnknownRFQ                      RFQErrorCode = "UNKNOWN_RFQ"
+)
+
 const (
 	RFQStatusActive   = "active"
 	RFQStatusInactive = "inactive"
+)
+
+// RFQDirection is the direction of an RFQ (buy or sell).
+type RFQDirection string
+
+const (
+	RFQDirectionBuy  RFQDirection = "BUY"
+	RFQDirectionSell RFQDirection = "SELL"
+)
+
+// RFQSide is the outcome side of an RFQ.
+type RFQSide string
+
+const (
+	RFQSideYes RFQSide = "YES"
+	RFQSideNo  RFQSide = "NO"
+)
+
+// RFQQuoteSource is the source of an RFQ quote.
+type RFQQuoteSource string
+
+const (
+	RFQSourceCollateral RFQQuoteSource = "collateral"
+	RFQSourceInventory  RFQQuoteSource = "inventory"
+)
+
+// RFQRequestedSizeUnit is the unit for an RFQ requested size.
+type RFQRequestedSizeUnit string
+
+const (
+	RFQSizeUnitNotional RFQRequestedSizeUnit = "notional"
+	RFQSizeUnitShares   RFQRequestedSizeUnit = "shares"
+)
+
+// RFQRequestedSize is the size of an RFQ request.
+type RFQRequestedSize struct {
+	Unit  RFQRequestedSizeUnit `json:"unit"`
+	Value string               `json:"value"`
+}
+
+// RFQConfirmationDecision is the decision for an RFQ confirmation.
+type RFQConfirmationDecision string
+
+const (
+	RFQDecisionConfirm RFQConfirmationDecision = "CONFIRM"
+	RFQDecisionDecline RFQConfirmationDecision = "DECLINE"
+)
+
+// RFQExecutionStatus is the execution status of an RFQ trade.
+type RFQExecutionStatus string
+
+const (
+	RFQExecutionMatched   RFQExecutionStatus = "MATCHED"
+	RFQExecutionMined     RFQExecutionStatus = "MINED"
+	RFQExecutionConfirmed RFQExecutionStatus = "CONFIRMED"
+	RFQExecutionRetrying  RFQExecutionStatus = "RETRYING"
+	RFQExecutionFailed    RFQExecutionStatus = "FAILED"
 )
 
 // CreateRFQRequestParams contains the inputs for creating a new RFQ request.
@@ -233,4 +327,111 @@ type RFQQuoteFilterParams struct {
 	PriceMax    string   `url:"priceMax,omitzero"`
 	SortBy      string   `url:"sortBy,omitzero"`
 	SortDir     string   `url:"sortDir,omitzero"`
+}
+
+// RFQError is a structured error returned by the RFQ WebSocket or REST API.
+type RFQError struct {
+	Code        RFQErrorCode   `json:"code"`
+	ErrorID     string         `json:"errorId,omitzero"`
+	Message     string         `json:"error"`
+	RequestID   string         `json:"rfqId,omitzero"`
+	QuoteID     string         `json:"quoteId,omitzero"`
+	RequestType string         `json:"requestType,omitzero"`
+	Request     map[string]any `json:"request,omitzero"`
+}
+
+// Error implements the error interface.
+func (e *RFQError) Error() string {
+	if e.RequestID != "" {
+		return fmt.Sprintf("rfq error %s: %s (rfq=%s)", e.Code, e.Message, e.RequestID)
+	}
+	return fmt.Sprintf("rfq error %s: %s", e.Code, e.Message)
+}
+
+// ComboMarketOutcome is a single outcome in a Combo market catalog entry.
+type ComboMarketOutcome struct {
+	Label      string `json:"label"`
+	PositionID string `json:"positionId"`
+	Price      string `json:"price"`
+}
+
+// ComboMarketOutcomes contains the yes/no outcomes for a binary Combo market.
+type ComboMarketOutcomes struct {
+	Yes ComboMarketOutcome `json:"yes"`
+	No  ComboMarketOutcome `json:"no"`
+}
+
+// ComboMarket is a market available for Combo trading.
+// Wire format uses flat arrays for outcomes/prices; the [ComboMarketOutcomes]
+// accessor parses them into a structured yes/no pair.
+type ComboMarket struct {
+	ID            string   `json:"id"`
+	ConditionID   string   `json:"condition_id"`
+	Slug          string   `json:"slug"`
+	Title         string   `json:"title"`
+	Outcomes      []string `json:"outcomes"`
+	OutcomePrices []string `json:"outcome_prices"`
+	PositionIDs   []string `json:"position_ids"`
+	Image         string   `json:"image"`
+	Volume        float64  `json:"volume"`
+	Tags          []string `json:"tags"`
+}
+
+// ParsedOutcomes returns the yes/no outcome pair.
+// Returns an error if the market is not binary (exactly 2 outcomes).
+func (m *ComboMarket) ParsedOutcomes() (ComboMarketOutcomes, error) {
+	if len(m.Outcomes) != 2 {
+		return ComboMarketOutcomes{}, fmt.Errorf("expected 2 outcomes, got %d", len(m.Outcomes))
+	}
+	if len(m.PositionIDs) != 2 {
+		return ComboMarketOutcomes{}, fmt.Errorf(
+			"expected 2 position IDs, got %d",
+			len(m.PositionIDs),
+		)
+	}
+	if len(m.OutcomePrices) != 2 {
+		return ComboMarketOutcomes{}, fmt.Errorf(
+			"expected 2 outcome prices, got %d",
+			len(m.OutcomePrices),
+		)
+	}
+	return ComboMarketOutcomes{
+		Yes: ComboMarketOutcome{
+			Label:      m.Outcomes[0],
+			PositionID: m.PositionIDs[0],
+			Price:      m.OutcomePrices[0],
+		},
+		No: ComboMarketOutcome{
+			Label:      m.Outcomes[1],
+			PositionID: m.PositionIDs[1],
+			Price:      m.OutcomePrices[1],
+		},
+	}, nil
+}
+
+// ComboMarketsPage is a paginated response for combo market listings.
+type ComboMarketsPage struct {
+	Markets    []ComboMarket `json:"markets"`
+	NextCursor string        `json:"next_cursor,omitzero"`
+}
+
+// ComboMarketFilterParams contains the filters for listing combo markets.
+type ComboMarketFilterParams struct {
+	Limit   int      `url:"limit,omitzero"`
+	Cursor  string   `url:"cursor,omitzero"`
+	Exclude []string `url:"exclude,omitzero"`
+}
+
+// RFQTradeEvent is a confirmed combo trade broadcast visible to all authenticated quoters.
+type RFQTradeEvent struct {
+	Type           string       `json:"type"`
+	RFQID          string       `json:"rfq_id"`
+	RequesterID    string       `json:"requester_id"`
+	ConditionID    string       `json:"condition_id"`
+	LegPositionIDs []string     `json:"leg_position_ids"`
+	Direction      RFQDirection `json:"direction"`
+	Side           RFQSide      `json:"side"`
+	PriceE6        string       `json:"price_e6"`
+	SizeE6         string       `json:"size_e6"`
+	ExecutedAt     int64        `json:"executed_at"`
 }

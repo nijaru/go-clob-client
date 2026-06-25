@@ -897,3 +897,40 @@ func TestClient_EmptyArrayResponse(t *testing.T) {
 		t.Errorf("expected empty slice, got %v", markets)
 	}
 }
+
+func TestGammaNewFields(t *testing.T) {
+	t.Run("Event.ParentEventID", func(t *testing.T) {
+		_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+			writeJSON(w, Event{
+				ID:            "event-1",
+				ParentEventID: "parent-1",
+				Title:         "Sub Event",
+			})
+		})
+
+		e, err := client.GetEvent(t.Context(), "event-1")
+		if err != nil {
+			t.Fatalf("GetEvent: %v", err)
+		}
+		if e.ParentEventID != "parent-1" {
+			t.Errorf("ParentEventID = %q, want parent-1", e.ParentEventID)
+		}
+	})
+
+	t.Run("Market.PositionIDs", func(t *testing.T) {
+		_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+			writeJSON(w, Market{
+				ID:          "market-1",
+				PositionIDs: []string{"pos-1", "pos-2"},
+			})
+		})
+
+		m, err := client.GetMarket(t.Context(), "market-1")
+		if err != nil {
+			t.Fatalf("GetMarket: %v", err)
+		}
+		if len(m.PositionIDs) != 2 || m.PositionIDs[0] != "pos-1" {
+			t.Errorf("PositionIDs = %v, want [pos-1 pos-2]", m.PositionIDs)
+		}
+	})
+}
