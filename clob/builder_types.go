@@ -1,8 +1,11 @@
 package clob
 
 import (
+	"bytes"
 	"context"
 	"net/http"
+
+	json "github.com/go-json-experiment/json"
 )
 
 // BuilderHeaderRequest contains the request metadata needed to create builder headers.
@@ -30,6 +33,26 @@ type BuilderAPIKey struct {
 	Key       string `json:"key"`
 	CreatedAt string `json:"createdAt,omitzero"`
 	RevokedAt string `json:"revokedAt,omitzero"`
+}
+
+// UnmarshalJSON accepts both the current object shape and the legacy bare-key string shape.
+func (k *BuilderAPIKey) UnmarshalJSON(data []byte) error {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) > 0 && trimmed[0] == '"' {
+		var key string
+		if err := json.Unmarshal(trimmed, &key); err != nil {
+			return err
+		}
+		*k = BuilderAPIKey{Key: key}
+		return nil
+	}
+	type builderAPIKey BuilderAPIKey
+	var decoded builderAPIKey
+	if err := json.Unmarshal(trimmed, &decoded); err != nil {
+		return err
+	}
+	*k = BuilderAPIKey(decoded)
+	return nil
 }
 
 // BuilderTrade is a builder-specific trade record.

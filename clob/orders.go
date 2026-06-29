@@ -304,16 +304,13 @@ func (c *AuthenticatedClient) CancelAll(ctx context.Context) (*CancelOrdersRespo
 
 // CreateBuilderAPIKey creates a new builder API key using L2 authentication.
 func (c *AuthenticatedClient) CreateBuilderAPIKey(ctx context.Context) (*Credentials, error) {
-	var raw apiKeyRaw
+	var raw builderAPIKeyRaw
 	err := c.postJSON(ctx, createBuilderAPIKeyEndpoint, nil, polyhttp.AuthL2, &raw)
 	if err != nil {
 		return nil, err
 	}
-	return &Credentials{
-		Key:        raw.APIKey,
-		Secret:     raw.Secret,
-		Passphrase: raw.Passphrase,
-	}, nil
+	creds := raw.credentials()
+	return &creds, nil
 }
 
 // GetBuilderAPIKeys lists builder API keys for the authenticated account.
@@ -332,16 +329,26 @@ func (c *AuthenticatedClient) RevokeBuilderAPIKey(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return c.doJSON(
+	var response string
+	if err := c.doJSON(
 		ctx,
 		http.MethodDelete,
 		revokeBuilderAPIKeyEndpoint,
 		nil,
 		nil,
 		polyhttp.AuthNone,
-		nil,
+		&response,
 		headers,
-	)
+	); err != nil {
+		return err
+	}
+	if response != "" && response != "OK" {
+		return fmt.Errorf(
+			"revoke builder api key response did not match expected shape: %q",
+			response,
+		)
+	}
+	return nil
 }
 
 // IterBuilderTrades returns an iterator over builder trades matching the provided filters.

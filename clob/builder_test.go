@@ -181,6 +181,48 @@ func TestNewRemoteBuilderAuthValidation(t *testing.T) {
 	}
 }
 
+func TestRevokeBuilderAPIKeyRejectsUnexpectedSuccessPayload(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete || r.URL.Path != revokeBuilderAPIKeyEndpoint {
+			t.Fatalf("unexpected endpoint: %s %s", r.Method, r.URL.Path)
+		}
+		if r.Header.Get("POLY_BUILDER_API_KEY") != "builder-key" {
+			t.Fatalf("missing builder api key header on revoke")
+		}
+		_, _ = w.Write([]byte(`FAIL`))
+	}))
+	defer server.Close()
+
+	builderAuth, err := NewLocalBuilderAuth(Credentials{
+		Key:        "builder-key",
+		Secret:     "c2VjcmV0",
+		Passphrase: "builder-pass",
+	})
+	if err != nil {
+		t.Fatalf("new local builder auth: %v", err)
+	}
+
+	client, err := NewAuthenticatedClient(Config{
+		Host:       server.URL,
+		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
+		Credentials: &Credentials{
+			Key:        "api-key",
+			Secret:     "c2VjcmV0",
+			Passphrase: "pass",
+		},
+		BuilderAuth: builderAuth,
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+
+	if err := client.RevokeBuilderAPIKey(t.Context()); err == nil {
+		t.Fatal("expected unexpected revoke response error")
+	}
+}
+
 func TestBuilderAndHeartbeatEndpoints(t *testing.T) {
 	t.Parallel()
 
@@ -206,13 +248,17 @@ func TestBuilderAndHeartbeatEndpoints(t *testing.T) {
 				t.Fatalf("missing L2 api key header on create builder key")
 			}
 			_, _ = w.Write(
-				[]byte(`{"apiKey":"builder-key","secret":"c2VjcmV0","passphrase":"builder-pass"}`),
+				[]byte(`{"key":"builder-key","secret":"c2VjcmV0","passphrase":"builder-pass"}`),
 			)
 		case http.MethodGet + " " + getBuilderAPIKeysEndpoint:
 			if r.Header.Get("POLY_API_KEY") != "api-key" {
 				t.Fatalf("missing L2 api key header on get builder keys")
 			}
-			_, _ = w.Write([]byte(`[{"key":"builder-key","createdAt":"2026-03-12T18:00:00Z"}]`))
+			_, _ = w.Write(
+				[]byte(
+					`["legacy-builder-key",{"key":"builder-key","createdAt":"2026-03-12T18:00:00Z"}]`,
+				),
+			)
 		case http.MethodDelete + " " + revokeBuilderAPIKeyEndpoint:
 			if r.Header.Get("POLY_BUILDER_API_KEY") != "builder-key" {
 				t.Fatalf("missing builder api key header on revoke")
@@ -340,7 +386,7 @@ func TestBuilderAndHeartbeatEndpoints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get builder api keys: %v", err)
 	}
-	if len(keys) != 1 || keys[0].Key != "builder-key" {
+	if len(keys) != 2 || keys[0].Key != "legacy-builder-key" || keys[1].Key != "builder-key" {
 		t.Fatalf("unexpected builder api keys: %+v", keys)
 	}
 

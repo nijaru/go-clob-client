@@ -13,6 +13,25 @@ type apiKeyRaw struct {
 	Passphrase string `json:"passphrase"`
 }
 
+type builderAPIKeyRaw struct {
+	Key        string `json:"key"`
+	APIKey     string `json:"apiKey"`
+	Secret     string `json:"secret"`
+	Passphrase string `json:"passphrase"`
+}
+
+func (r builderAPIKeyRaw) credentials() Credentials {
+	key := r.Key
+	if key == "" {
+		key = r.APIKey
+	}
+	return Credentials{
+		Key:        key,
+		Secret:     r.Secret,
+		Passphrase: r.Passphrase,
+	}
+}
+
 // WSAuth contains the derived credentials for authenticated websocket subscriptions.
 type WSAuth struct {
 	Key        string `json:"apiKey"`
