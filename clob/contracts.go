@@ -32,14 +32,20 @@ var contractConfigs = map[int64]contractConfig{
 
 // Wallet factory contract addresses for CREATE2 address derivation.
 type walletConfig struct {
-	ProxyFactory string // EIP-1167 minimal proxy factory (Magic/email wallets); empty if unsupported
-	SafeFactory  string // Gnosis Safe factory
+	ProxyFactory                string // EIP-1167 minimal proxy factory (Magic/email wallets); empty if unsupported
+	SafeFactory                 string // Gnosis Safe factory
+	DepositWalletFactory        string // UUPS+Beacon deposit-wallet factory (Poly1271)
+	DepositWalletImplementation string // UUPS deposit-wallet implementation
+	DepositWalletBeacon         string // Beacon deposit-wallet beacon
 }
 
 var walletConfigs = map[int64]walletConfig{
 	137: {
-		ProxyFactory: "0xaB45c5A4B0c941a2F231C04C3f49182e1A254052",
-		SafeFactory:  "0xaacFeEa03eb1561C4e67d661e40682Bd20E3541b",
+		ProxyFactory:                "0xaB45c5A4B0c941a2F231C04C3f49182e1A254052",
+		SafeFactory:                 "0xaacFeEa03eb1561C4e67d661e40682Bd20E3541b",
+		DepositWalletFactory:        "0x00000000000Fb5C9ADea0298D729A0CB3823Cc07",
+		DepositWalletImplementation: "0x58CA52ebe0DadfdF531Cde7062e76746de4Db1eB",
+		DepositWalletBeacon:         "0x7A18EDfe055488A3128f01F563e5B479D92ffc3a",
 	},
 	80002: {
 		SafeFactory: "0xaacFeEa03eb1561C4e67d661e40682Bd20E3541b",

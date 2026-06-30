@@ -70,3 +70,46 @@ func TestDeriveWalletUnsupportedChain(t *testing.T) {
 		t.Error("expected error for unsupported chain")
 	}
 }
+
+func TestDeriveUUPSDepositWalletPolygon(t *testing.T) {
+	t.Parallel()
+	addr, err := clob.DeriveUUPSDepositWallet(testEOA, clob.PolygonChainID)
+	if err != nil {
+		t.Fatalf("derive: %v", err)
+	}
+	want := common.HexToAddress("0xdf8b9E8f9AB23f261F6e1B171B7454ae6E46Ba76")
+	if addr != want {
+		t.Errorf("uups deposit wallet = %s, want %s", addr.Hex(), want.Hex())
+	}
+}
+
+func TestDeriveBeaconDepositWalletPolygon(t *testing.T) {
+	t.Parallel()
+	addr, err := clob.DeriveBeaconDepositWallet(testEOA, clob.PolygonChainID)
+	if err != nil {
+		t.Fatalf("derive: %v", err)
+	}
+	want := common.HexToAddress("0xBc0fF067b7740Eff76C1ca93c875Ba6B890d6B50")
+	if addr != want {
+		t.Errorf("beacon deposit wallet = %s, want %s", addr.Hex(), want.Hex())
+	}
+}
+
+func TestDeriveDepositWalletAmoyNotSupported(t *testing.T) {
+	t.Parallel()
+	addr, err := clob.DeriveUUPSDepositWallet(testEOA, clob.AmoyChainID)
+	if err != nil {
+		t.Fatalf("derive: %v", err)
+	}
+	if addr != (common.Address{}) {
+		t.Errorf("expected zero address for Amoy, got %s", addr.Hex())
+	}
+
+	addr, err = clob.DeriveBeaconDepositWallet(testEOA, clob.AmoyChainID)
+	if err != nil {
+		t.Fatalf("derive: %v", err)
+	}
+	if addr != (common.Address{}) {
+		t.Errorf("expected zero address for Amoy, got %s", addr.Hex())
+	}
+}
