@@ -395,6 +395,53 @@ type Profile struct {
 	CertReqDate           time.Time `json:"certReqDate,omitzero"`
 }
 
+// SearchSort is the sort field for Gamma public search.
+type SearchSort string
+
+const (
+	SearchSortVolume      SearchSort = "volume"
+	SearchSortVolume24h   SearchSort = "volume_24hr"
+	SearchSortLiquidity   SearchSort = "liquidity"
+	SearchSortCompetitive SearchSort = "competitive"
+	SearchSortClosedTime  SearchSort = "closed_time"
+	SearchSortStartDate   SearchSort = "start_date"
+	SearchSortEndDate     SearchSort = "end_date"
+)
+
+// validSearchSorts is the set of valid SearchSort values.
+var validSearchSorts = map[SearchSort]struct{}{
+	SearchSortVolume:      {},
+	SearchSortVolume24h:   {},
+	SearchSortLiquidity:   {},
+	SearchSortCompetitive: {},
+	SearchSortClosedTime:  {},
+	SearchSortStartDate:   {},
+	SearchSortEndDate:     {},
+}
+
+// IsValid returns true if s is a valid SearchSort.
+func (s SearchSort) IsValid() bool {
+	_, ok := validSearchSorts[s]
+	return ok
+}
+
+// SearchParams defines parameters for Gamma public search.
+type SearchParams struct {
+	Query             string     `url:"q"`
+	Ascending         *bool      `url:"ascending,omitzero"`
+	Cache             *bool      `url:"cache,omitzero"`
+	EventsStatus      string     `url:"events_status,omitzero"`
+	EventsTag         []string   `url:"events_tag,omitzero"`
+	ExcludeTagIDs     []int      `url:"exclude_tag_id,omitzero"`
+	KeepClosedMarkets int        `url:"keep_closed_markets,omitzero"`
+	Optimized         *bool      `url:"optimized,omitzero"`
+	Presets           []string   `url:"presets,omitzero"`
+	Recurrence        string     `url:"recurrence,omitzero"`
+	SearchProfiles    *bool      `url:"search_profiles,omitzero"`
+	SearchTags        *bool      `url:"search_tags,omitzero"`
+	Sort              SearchSort `url:"sort,omitzero"`
+}
+
 // SearchResults is the structured response from Gamma public search.
 type SearchResults struct {
 	Events     []Event     `json:"events,omitzero"`

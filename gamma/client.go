@@ -2,6 +2,7 @@ package gamma
 
 import (
 	"context"
+	"fmt"
 	"iter"
 	"net/http"
 	"net/url"
@@ -317,13 +318,38 @@ func (c *Client) IterEvents(ctx context.Context, params EventFilterParams) iter.
 	}
 }
 
-// Search returns structured search results matching the query.
-func (c *Client) Search(ctx context.Context, query string) (*SearchResults, error) {
-	params := url.Values{}
-	params.Set("query", query)
+// Search returns structured search results matching the search parameters.
+func (c *Client) Search(ctx context.Context, p SearchParams) (*SearchResults, error) {
+	if p.Query == "" {
+		return nil, fmt.Errorf("gamma search: query is required")
+	}
+	if p.Sort != "" && !p.Sort.IsValid() {
+		return nil, fmt.Errorf("gamma search: invalid sort %q", p.Sort)
+	}
+
+	query := url.Values{}
+	query.Set("q", p.Query)
+	setBool(query, "ascending", p.Ascending)
+	setBool(query, "cache", p.Cache)
+	setString(query, "events_status", p.EventsStatus)
+	for _, tag := range p.EventsTag {
+		query.Add("events_tag", tag)
+	}
+	for _, id := range p.ExcludeTagIDs {
+		query.Add("exclude_tag_id", strconv.Itoa(id))
+	}
+	setInt(query, "keep_closed_markets", p.KeepClosedMarkets)
+	setBool(query, "optimized", p.Optimized)
+	for _, preset := range p.Presets {
+		query.Add("presets", preset)
+	}
+	setString(query, "recurrence", p.Recurrence)
+	setBool(query, "search_profiles", p.SearchProfiles)
+	setBool(query, "search_tags", p.SearchTags)
+	setString(query, "sort", p.Sort)
 
 	var out SearchResults
-	err := c.http.GetJSON(ctx, searchEndpoint, params, polyhttp.AuthNone, &out)
+	err := c.http.GetJSON(ctx, searchEndpoint, query, polyhttp.AuthNone, &out)
 	return &out, err
 }
 

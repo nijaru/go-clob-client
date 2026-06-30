@@ -14,7 +14,7 @@ func main() {
 
 	// 1. Search Gamma content
 	fmt.Println("Searching for 'Bitcoin' content...")
-	results, err := client.Search(ctx, "Bitcoin")
+	results, err := client.Search(ctx, gamma.SearchParams{Query: "Bitcoin"})
 	if err != nil {
 		log.Fatalf("Search failed: %v", err)
 	}
