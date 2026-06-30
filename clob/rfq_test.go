@@ -482,3 +482,212 @@ func TestRFQTradeEventJSON(t *testing.T) {
 		t.Errorf("price_e6 = %q, want 650000", event.PriceE6)
 	}
 }
+
+func TestGetRFQQuotes(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != rfqDataQuotesEndpoint {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+
+		query := r.URL.Query()
+		if query.Get("limit") != "5" {
+			t.Errorf("limit = %q, want 5", query.Get("limit"))
+		}
+		if query.Get("offset") != "10" {
+			t.Errorf("offset = %q, want 10", query.Get("offset"))
+		}
+		if query.Get("state") != "OPEN" {
+			t.Errorf("state = %q, want OPEN", query.Get("state"))
+		}
+		if query.Get("requestIds") != "req-1" {
+			t.Errorf("requestIds = %q, want req-1", query.Get("requestIds"))
+		}
+		if query.Get("quoteIds") != "quote-1" {
+			t.Errorf("quoteIds = %q, want quote-1", query.Get("quoteIds"))
+		}
+		if query.Get("markets") != "m1,m2" {
+			t.Errorf("markets = %q, want m1,m2", query.Get("markets"))
+		}
+		if query.Get("sizeMin") != "100" {
+			t.Errorf("sizeMin = %q, want 100", query.Get("sizeMin"))
+		}
+		if query.Get("sizeMax") != "1000" {
+			t.Errorf("sizeMax = %q, want 1000", query.Get("sizeMax"))
+		}
+		if query.Get("sizeUsdcMin") != "50" {
+			t.Errorf("sizeUsdcMin = %q, want 50", query.Get("sizeUsdcMin"))
+		}
+		if query.Get("sizeUsdcMax") != "500" {
+			t.Errorf("sizeUsdcMax = %q, want 500", query.Get("sizeUsdcMax"))
+		}
+		if query.Get("priceMin") != "0.2" {
+			t.Errorf("priceMin = %q, want 0.2", query.Get("priceMin"))
+		}
+		if query.Get("priceMax") != "0.8" {
+			t.Errorf("priceMax = %q, want 0.8", query.Get("priceMax"))
+		}
+		if query.Get("sortBy") != "price" {
+			t.Errorf("sortBy = %q, want price", query.Get("sortBy"))
+		}
+		if query.Get("sortDir") != "desc" {
+			t.Errorf("sortDir = %q, want desc", query.Get("sortDir"))
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		resp := RFQQuotesResponse{
+			Data: []RFQQuote{
+				{
+					ID:        "quote-1",
+					RequestID: "req-1",
+					Price:     0.65,
+					State:     "OPEN",
+				},
+			},
+		}
+		data, _ := json.Marshal(resp)
+		w.Write(data)
+	}))
+	defer server.Close()
+
+	client, err := NewAuthenticatedClient(Config{
+		Host:       server.URL,
+		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
+		Credentials: &Credentials{
+			Key:        "api-key",
+			Secret:     "c2VjcmV0",
+			Passphrase: "pass",
+		},
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+
+	ctx := t.Context()
+	resp, err := client.GetRFQQuotes(ctx, &RFQQuoteFilterParams{
+		Limit:       5,
+		Offset:      "10",
+		State:       "OPEN",
+		RequestIDs:  []string{"req-1"},
+		QuoteIDs:    []string{"quote-1"},
+		Markets:     []string{"m1", "m2"},
+		SizeMin:     "100",
+		SizeMax:     "1000",
+		SizeUSDcMin: "50",
+		SizeUSDcMax: "500",
+		PriceMin:    "0.2",
+		PriceMax:    "0.8",
+		SortBy:      "price",
+		SortDir:     "desc",
+	})
+	if err != nil {
+		t.Fatalf("GetRFQQuotes: %v", err)
+	}
+
+	if len(resp.Data) != 1 {
+		t.Fatalf("got %d quotes, want 1", len(resp.Data))
+	}
+	if resp.Data[0].ID != "quote-1" {
+		t.Errorf("quote ID = %q, want quote-1", resp.Data[0].ID)
+	}
+}
+
+func TestIterComboMarkets(t *testing.T) {
+	t.Parallel()
+
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != rfqComboMarketsEndpoint {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		calls++
+
+		query := r.URL.Query()
+		var resp ComboMarketsPage
+		if calls == 1 {
+			if query.Get("cursor") != "" {
+				t.Errorf("first call cursor = %q, want empty", query.Get("cursor"))
+			}
+			resp = ComboMarketsPage{
+				Markets: []ComboMarket{
+					{ID: "market-1"},
+				},
+				NextCursor: "cursor-2",
+			}
+		} else if calls == 2 {
+			if query.Get("cursor") != "cursor-2" {
+				t.Errorf("second call cursor = %q, want cursor-2", query.Get("cursor"))
+			}
+			resp = ComboMarketsPage{
+				Markets: []ComboMarket{
+					{ID: "market-2"},
+				},
+				NextCursor: "",
+			}
+		} else {
+			t.Fatalf("unexpected call count: %d", calls)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		data, _ := json.Marshal(resp)
+		w.Write(data)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Config{Host: server.URL})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+
+	ctx := t.Context()
+	var markets []ComboMarket
+	for market, err := range client.IterComboMarkets(ctx, &ComboMarketFilterParams{Limit: 10}) {
+		if err != nil {
+			t.Fatalf("iterator error: %v", err)
+		}
+		markets = append(markets, market)
+	}
+
+	if len(markets) != 2 {
+		t.Fatalf("got %d markets, want 2", len(markets))
+	}
+	if markets[0].ID != "market-1" || markets[1].ID != "market-2" {
+		t.Errorf("unexpected markets order: %+v", markets)
+	}
+}
+
+func TestGetAllComboMarkets(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		resp := ComboMarketsPage{
+			Markets: []ComboMarket{
+				{ID: "market-abc"},
+			},
+			NextCursor: "",
+		}
+		data, _ := json.Marshal(resp)
+		w.Write(data)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Config{Host: server.URL})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+
+	ctx := t.Context()
+	markets, err := client.GetAllComboMarkets(ctx, nil)
+	if err != nil {
+		t.Fatalf("GetAllComboMarkets: %v", err)
+	}
+
+	if len(markets) != 1 {
+		t.Fatalf("got %d markets, want 1", len(markets))
+	}
+	if markets[0].ID != "market-abc" {
+		t.Errorf("market ID = %q, want market-abc", markets[0].ID)
+	}
+}

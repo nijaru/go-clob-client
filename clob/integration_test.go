@@ -600,3 +600,128 @@ func TestOrderLifecycle_ServerError(t *testing.T) {
 		t.Fatal("expected error from server 500")
 	}
 }
+
+func TestOrderLifecycle_MultiPageCursorTraversal(t *testing.T) {
+	t.Parallel()
+
+	callsOpenOrders := 0
+	callsTrades := 0
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		query := r.URL.Query()
+
+		switch r.URL.Path {
+		case openOrdersEndpoint:
+			callsOpenOrders++
+			if callsOpenOrders == 1 {
+				if query.Get("next_cursor") != "MA==" {
+					t.Errorf(
+						"expected initial cursor on first page, got %q",
+						query.Get("next_cursor"),
+					)
+				}
+				resp := Page[OpenOrder]{
+					Data: []OpenOrder{
+						{ID: "order-page-1"},
+					},
+					NextCursor: "cursor-2",
+				}
+				data, _ := json.Marshal(resp)
+				w.Write(data)
+			} else if callsOpenOrders == 2 {
+				if query.Get("next_cursor") != "cursor-2" {
+					t.Errorf("expected cursor-2 on second page, got %q", query.Get("next_cursor"))
+				}
+				resp := Page[OpenOrder]{
+					Data: []OpenOrder{
+						{ID: "order-page-2"},
+					},
+					NextCursor: endCursor,
+				}
+				data, _ := json.Marshal(resp)
+				w.Write(data)
+			} else {
+				t.Fatalf("unexpected calls to open orders: %d", callsOpenOrders)
+			}
+		case tradesEndpoint:
+			callsTrades++
+			if callsTrades == 1 {
+				if query.Get("next_cursor") != "MA==" {
+					t.Errorf(
+						"expected initial cursor on first page, got %q",
+						query.Get("next_cursor"),
+					)
+				}
+				resp := Page[Trade]{
+					Data: []Trade{
+						{ID: "trade-page-1"},
+					},
+					NextCursor: "cursor-3",
+				}
+				data, _ := json.Marshal(resp)
+				w.Write(data)
+			} else if callsTrades == 2 {
+				if query.Get("next_cursor") != "cursor-3" {
+					t.Errorf("expected cursor-3 on second page, got %q", query.Get("next_cursor"))
+				}
+				resp := Page[Trade]{
+					Data: []Trade{
+						{ID: "trade-page-2"},
+					},
+					NextCursor: endCursor,
+				}
+				data, _ := json.Marshal(resp)
+				w.Write(data)
+			} else {
+				t.Fatalf("unexpected calls to trades: %d", callsTrades)
+			}
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client, err := NewAuthenticatedClient(Config{
+		Host:       server.URL,
+		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
+		Credentials: &Credentials{
+			Key: "api-key", Secret: "c2VjcmV0", Passphrase: "pass",
+		},
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+
+	ctx := t.Context()
+
+	// Iterate Open Orders
+	var orders []OpenOrder
+	for order, iterErr := range client.IterOpenOrders(ctx, OpenOrderParams{}) {
+		if iterErr != nil {
+			t.Fatalf("iter open orders: %v", iterErr)
+		}
+		orders = append(orders, order)
+	}
+	if len(orders) != 2 {
+		t.Errorf("expected 2 open orders, got %d", len(orders))
+	}
+	if orders[0].ID != "order-page-1" || orders[1].ID != "order-page-2" {
+		t.Errorf("unexpected open orders: %+v", orders)
+	}
+
+	// Iterate Trades
+	var trades []Trade
+	for trade, iterErr := range client.IterTrades(ctx, TradeParams{}) {
+		if iterErr != nil {
+			t.Fatalf("iter trades: %v", iterErr)
+		}
+		trades = append(trades, trade)
+	}
+	if len(trades) != 2 {
+		t.Errorf("expected 2 trades, got %d", len(trades))
+	}
+	if trades[0].ID != "trade-page-1" || trades[1].ID != "trade-page-2" {
+		t.Errorf("unexpected trades: %+v", trades)
+	}
+}

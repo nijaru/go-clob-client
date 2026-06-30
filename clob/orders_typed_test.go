@@ -269,3 +269,69 @@ func TestTypedAuthenticatedResponses(t *testing.T) {
 		t.Fatalf("unexpected cancel response: %#v", cancelResponse)
 	}
 }
+
+func TestPostOrdersBatch(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != postOrdersEndpoint {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Method != http.MethodPost {
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		resp := []PostOrderResponse{
+			{
+				Success: true,
+				OrderID: "order-batch-1",
+			},
+		}
+		data, _ := json.Marshal(resp)
+		w.Write(data)
+	}))
+	defer server.Close()
+
+	client, err := NewAuthenticatedClient(Config{
+		Host:       server.URL,
+		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
+		Credentials: &Credentials{
+			Key:        "api-key",
+			Secret:     "c2VjcmV0",
+			Passphrase: "pass",
+		},
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+
+	ctx := t.Context()
+
+	// 1. Success case
+	reqs := []PostOrderRequest{
+		{
+			Order: SignedOrder{
+				Order: Order{
+					Salt: "42",
+				},
+			},
+			Owner:     "api-key",
+			OrderType: OrderTypeGTC,
+		},
+	}
+	resps, err := client.PostOrders(ctx, reqs)
+	if err != nil {
+		t.Fatalf("PostOrders: %v", err)
+	}
+	if len(resps) != 1 || resps[0].OrderID != "order-batch-1" {
+		t.Errorf("unexpected responses: %+v", resps)
+	}
+
+	// 2. Exceed batch limit
+	oversizedReqs := make([]PostOrderRequest, PostOrdersBatchLimit+1)
+	_, err = client.PostOrders(ctx, oversizedReqs)
+	if err == nil {
+		t.Error("expected error for oversized batch request")
+	}
+}
