@@ -171,6 +171,10 @@ const (
 	TickSizeTenth TickSize = "0.1"
 	// TickSizeHundredth rounds prices to two decimal places.
 	TickSizeHundredth TickSize = "0.01"
+	// TickSizeHalfCent rounds prices to half-cent precision (three decimal places).
+	TickSizeHalfCent TickSize = "0.005"
+	// TickSizeQuarterCent rounds prices to quarter-cent precision (four decimal places).
+	TickSizeQuarterCent TickSize = "0.0025"
 	// TickSizeThousandth rounds prices to three decimal places.
 	TickSizeThousandth TickSize = "0.001"
 	// TickSizeTenThousand rounds prices to four decimal places.

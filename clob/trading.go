@@ -39,6 +39,8 @@ var tokenScaleFactor = udecimal.MustFromInt64(1000000, 0) // 10^6
 var roundingConfig = map[TickSize]roundConfig{
 	TickSizeTenth:       {Price: 1, Size: 2, Amount: 3},
 	TickSizeHundredth:   {Price: 2, Size: 2, Amount: 4},
+	TickSizeHalfCent:    {Price: 3, Size: 2, Amount: 5},
+	TickSizeQuarterCent: {Price: 4, Size: 2, Amount: 6},
 	TickSizeThousandth:  {Price: 3, Size: 2, Amount: 5},
 	TickSizeTenThousand: {Price: 4, Size: 2, Amount: 6},
 }
@@ -62,6 +64,9 @@ func (c *SignerClient) CreateOrder(
 		return nil, err
 	}
 	if err := validateLimitPricePrecision(userOrder.Price, tickSize); err != nil {
+		return nil, err
+	}
+	if err := validateTickAlignment(userOrder.Price, tickSize); err != nil {
 		return nil, err
 	}
 
@@ -113,6 +118,9 @@ func (c *SignerClient) CreateMarketOrder(
 	}
 
 	if err := validatePrice(userOrder.Price, tickSize); err != nil {
+		return nil, err
+	}
+	if err := validateTickAlignment(userOrder.Price, tickSize); err != nil {
 		return nil, err
 	}
 
@@ -977,6 +985,26 @@ func generateSalt() (uint64, error) {
 
 func derefBool(value *bool) bool {
 	return value != nil && *value
+}
+
+// validateTickAlignment checks that price is aligned to the minimum tick size grid.
+// This mirrors the Rust SDK's price_aligned_to_tick_size check.
+func validateTickAlignment(price udecimal.Decimal, tickSize TickSize) error {
+	minimum, err := parseTickSize(tickSize)
+	if err != nil {
+		return err
+	}
+	rem, err := price.Mod(minimum)
+	if err != nil {
+		return fmt.Errorf("tick alignment check: %w", err)
+	}
+	if !rem.IsZero() {
+		return fmt.Errorf(
+			"price %s is not aligned to the minimum tick size %s",
+			price, tickSize,
+		)
+	}
+	return nil
 }
 
 func isTickSizeSmaller(a, b TickSize) (bool, error) {

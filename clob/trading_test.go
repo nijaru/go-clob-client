@@ -381,6 +381,203 @@ func TestCreateMarketOrderPreservesUSDCPrecisionForBuy(t *testing.T) {
 	}
 }
 
+func TestCreateOrderHalfCentTickSize(t *testing.T) {
+	t.Parallel()
+
+	server := newTradingTestServerWithTickSize(t, nil, TickSizeHalfCent)
+	defer server.Close()
+
+	client, err := NewAuthenticatedClient(Config{
+		Host:       server.URL,
+		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
+		Credentials: &Credentials{
+			Key:        "api-key",
+			Secret:     "c2VjcmV0",
+			Passphrase: "pass",
+		},
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	client.saltGenerator = func() (uint64, error) { return 42, nil }
+
+	order, err := client.CreateOrder(t.Context(), OrderArgs{
+		TokenID: "100",
+		Price:   udecimal.MustParse("0.055"),
+		Size:    udecimal.MustParse("21.04"),
+		Side:    SideBuy,
+	}, nil)
+	if err != nil {
+		t.Fatalf("create order: %v", err)
+	}
+
+	if order.Order.MakerAmount != "1157200" {
+		t.Fatalf("unexpected maker amount: %s", order.Order.MakerAmount)
+	}
+	if order.Order.TakerAmount != "21040000" {
+		t.Fatalf("unexpected taker amount: %s", order.Order.TakerAmount)
+	}
+	if order.Signature == "" {
+		t.Fatal("expected non-empty signature")
+	}
+}
+
+func TestCreateOrderQuarterCentTickSize(t *testing.T) {
+	t.Parallel()
+
+	server := newTradingTestServerWithTickSize(t, nil, TickSizeQuarterCent)
+	defer server.Close()
+
+	client, err := NewAuthenticatedClient(Config{
+		Host:       server.URL,
+		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
+		Credentials: &Credentials{
+			Key:        "api-key",
+			Secret:     "c2VjcmV0",
+			Passphrase: "pass",
+		},
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	client.saltGenerator = func() (uint64, error) { return 42, nil }
+
+	order, err := client.CreateOrder(t.Context(), OrderArgs{
+		TokenID: "100",
+		Price:   udecimal.MustParse("0.0525"),
+		Size:    udecimal.MustParse("21.04"),
+		Side:    SideBuy,
+	}, nil)
+	if err != nil {
+		t.Fatalf("create order: %v", err)
+	}
+
+	if order.Order.MakerAmount != "1104600" {
+		t.Fatalf("unexpected maker amount: %s", order.Order.MakerAmount)
+	}
+	if order.Order.TakerAmount != "21040000" {
+		t.Fatalf("unexpected taker amount: %s", order.Order.TakerAmount)
+	}
+	if order.Signature == "" {
+		t.Fatal("expected non-empty signature")
+	}
+}
+
+func TestCreateMarketOrderHalfCentTickSize(t *testing.T) {
+	t.Parallel()
+
+	server := newTradingTestServerWithTickSize(t, nil, TickSizeHalfCent)
+	defer server.Close()
+
+	client, err := NewAuthenticatedClient(Config{
+		Host:       server.URL,
+		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
+		Credentials: &Credentials{
+			Key:        "api-key",
+			Secret:     "c2VjcmV0",
+			Passphrase: "pass",
+		},
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	client.saltGenerator = func() (uint64, error) { return 42, nil }
+
+	order, err := client.CreateMarketOrder(t.Context(), MarketOrderArgs{
+		TokenID:   "100",
+		Price:     udecimal.MustParse("0.055"),
+		Amount:    udecimal.MustParse("100"),
+		Side:      SideSell,
+		OrderType: OrderTypeFOK,
+	}, nil)
+	if err != nil {
+		t.Fatalf("create market order: %v", err)
+	}
+
+	// SELL: makerAmount = size (100 * 10^6), takerAmount = size * price (100 * 0.055 * 10^6)
+	if order.Order.MakerAmount != "100000000" {
+		t.Fatalf("unexpected maker amount: %s", order.Order.MakerAmount)
+	}
+	if order.Order.TakerAmount != "5500000" {
+		t.Fatalf("unexpected taker amount: %s", order.Order.TakerAmount)
+	}
+	if order.Signature == "" {
+		t.Fatal("expected non-empty signature")
+	}
+}
+
+func TestCreateMarketOrderRejectsOffGridPrice(t *testing.T) {
+	t.Parallel()
+
+	server := newTradingTestServerWithTickSize(t, nil, TickSizeHalfCent)
+	defer server.Close()
+
+	client, err := NewAuthenticatedClient(Config{
+		Host:       server.URL,
+		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
+		Credentials: &Credentials{
+			Key:        "api-key",
+			Secret:     "c2VjcmV0",
+			Passphrase: "pass",
+		},
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+
+	_, err = client.CreateMarketOrder(t.Context(), MarketOrderArgs{
+		TokenID:   "100",
+		Price:     udecimal.MustParse("0.051"),
+		Amount:    udecimal.MustParse("100"),
+		Side:      SideSell,
+		OrderType: OrderTypeFOK,
+	}, nil)
+	if err == nil {
+		t.Fatal("expected error for off-grid market order price")
+	}
+}
+
+func TestCreateOrderRejectsOffGridPrice(t *testing.T) {
+	tests := []struct {
+		name, tickSize string
+		price          string
+	}{
+		{"HalfCent", "0.005", "0.051"},
+		{"QuarterCent", "0.0025", "0.0526"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			server := newTradingTestServerWithTickSize(t, nil, TickSize(tt.tickSize))
+			defer server.Close()
+
+			client, err := NewAuthenticatedClient(Config{
+				Host:       server.URL,
+				PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
+				Credentials: &Credentials{
+					Key:        "api-key",
+					Secret:     "c2VjcmV0",
+					Passphrase: "pass",
+				},
+			})
+			if err != nil {
+				t.Fatalf("new client: %v", err)
+			}
+
+			_, err = client.CreateOrder(t.Context(), OrderArgs{
+				TokenID: "100",
+				Price:   udecimal.MustParse(tt.price),
+				Size:    udecimal.MustParse("21.04"),
+				Side:    SideBuy,
+			}, nil)
+			if err == nil {
+				t.Fatal("expected error for off-grid price")
+			}
+		})
+	}
+}
+
 func TestCreateOrderReturnsSaltGenerationError(t *testing.T) {
 	t.Parallel()
 
@@ -412,7 +609,11 @@ func TestCreateOrderReturnsSaltGenerationError(t *testing.T) {
 	}
 }
 
-func newTradingTestServer(t *testing.T, postHandler http.HandlerFunc) *httptest.Server {
+func newTradingTestServerWithTickSize(
+	t *testing.T,
+	postHandler http.HandlerFunc,
+	tickSize TickSize,
+) *httptest.Server {
 	t.Helper()
 
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -420,15 +621,24 @@ func newTradingTestServer(t *testing.T, postHandler http.HandlerFunc) *httptest.
 
 		switch r.URL.Path {
 		case tickSizeEndpoint:
-			_, _ = w.Write([]byte(`{"minimum_tick_size":"0.01"}`))
+			data, _ := json.Marshal(TickSizeResponse{MinimumTickSize: tickSize})
+			_, _ = w.Write(data)
 		case negRiskEndpoint:
 			_, _ = w.Write([]byte(`{"neg_risk":false}`))
 		case orderBookEndpoint:
-			_, _ = w.Write(
-				[]byte(
-					`{"market":"m","asset_id":"100","timestamp":"1","bids":[{"price":"0.44","size":"10"}],"asks":[{"price":"0.46","size":"10"}],"min_order_size":"1","tick_size":"0.01","neg_risk":false,"last_trade_price":"0.45","hash":"h"}`,
-				),
-			)
+			data, _ := json.Marshal(OrderBookSummary{
+				Market:         "m",
+				AssetID:        "100",
+				Timestamp:      "1",
+				Bids:           []OrderSummary{{Price: "0.44", Size: "10"}},
+				Asks:           []OrderSummary{{Price: "0.46", Size: "10"}},
+				MinOrderSize:   "1",
+				TickSize:       string(tickSize),
+				NegRisk:        false,
+				LastTradePrice: "0.45",
+				Hash:           "h",
+			})
+			_, _ = w.Write(data)
 		case postOrderEndpoint:
 			if postHandler == nil {
 				t.Fatalf("unexpected POST /order")
@@ -438,4 +648,10 @@ func newTradingTestServer(t *testing.T, postHandler http.HandlerFunc) *httptest.
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 	}))
+}
+
+func newTradingTestServer(t *testing.T, postHandler http.HandlerFunc) *httptest.Server {
+	t.Helper()
+
+	return newTradingTestServerWithTickSize(t, postHandler, TickSizeHundredth)
 }
