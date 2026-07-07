@@ -719,6 +719,29 @@ func buildOrderTypedData(
 	}
 }
 
+// minGTDExpirationSeconds is the minimum lead time a GTD (Good-Til-Date)
+// limit order expiration must have. The CLOB rejects GTD orders expiring
+// sooner, so this fails fast before signing. Mirrors the ts-sdk and py-sdk
+// 3-minute client guard (not enforced by the Rust SDK, which is permissive).
+const minGTDExpirationSeconds = 180
+
+// validateGTDExpiration rejects GTD expirations closer than
+// minGTDExpirationSeconds to now. A zero expiration (GTC semantics) is
+// always valid. now is the current Unix time in seconds.
+func validateGTDExpiration(expiration uint64, now int64) error {
+	if expiration == 0 {
+		return nil
+	}
+	minimum := uint64(now) + minGTDExpirationSeconds
+	if expiration < minimum {
+		return fmt.Errorf(
+			"GTD expiration %d must be at least %d seconds (%d minutes) in the future",
+			expiration, minGTDExpirationSeconds, minGTDExpirationSeconds/60,
+		)
+	}
+	return nil
+}
+
 func validateLimitOrderArgs(order OrderArgs) error {
 	if order.TokenID == "" {
 		return fmt.Errorf("token id is required")
@@ -731,6 +754,9 @@ func validateLimitOrderArgs(order OrderArgs) error {
 	}
 	if order.Side != SideBuy && order.Side != SideSell {
 		return fmt.Errorf("invalid side %q", order.Side)
+	}
+	if err := validateGTDExpiration(order.Expiration, time.Now().Unix()); err != nil {
+		return err
 	}
 	return nil
 }

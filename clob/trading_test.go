@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	json "github.com/go-json-experiment/json"
 
@@ -654,4 +655,63 @@ func newTradingTestServer(t *testing.T, postHandler http.HandlerFunc) *httptest.
 	t.Helper()
 
 	return newTradingTestServerWithTickSize(t, postHandler, TickSizeHundredth)
+}
+
+func TestValidateGTDExpiration(t *testing.T) {
+	t.Parallel()
+
+	const now = 1_700_000_000
+	cases := []struct {
+		name       string
+		expiration uint64
+		wantErr    bool
+	}{
+		{name: "zero expiration is GTC and always valid", expiration: 0, wantErr: false},
+		{
+			name:       "exactly 3 minutes ahead is accepted",
+			expiration: now + minGTDExpirationSeconds,
+			wantErr:    false,
+		},
+		{name: "far future is accepted", expiration: now + 3600, wantErr: false},
+		{
+			name:       "one second short of 3 minutes is rejected",
+			expiration: now + minGTDExpirationSeconds - 1,
+			wantErr:    true,
+		},
+		{name: "in the past is rejected", expiration: now - 10, wantErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			err := validateGTDExpiration(tc.expiration, now)
+			if tc.wantErr && err == nil {
+				t.Fatalf("expected error for expiration %d, got nil", tc.expiration)
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("unexpected error for expiration %d: %v", tc.expiration, err)
+			}
+		})
+	}
+}
+
+func TestValidateLimitOrderArgsRejectsTooSoonGTDExpiration(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now().Unix()
+	order := OrderArgs{
+		TokenID:    "100",
+		Price:      udecimal.MustParse("0.45"),
+		Size:       udecimal.MustParse("10"),
+		Side:       SideBuy,
+		Expiration: uint64(now) + 60, // only 1 minute ahead — below the 3-minute floor
+	}
+	if err := validateLimitOrderArgs(order); err == nil {
+		t.Fatal("expected error for GTD expiration below 3-minute floor, got nil")
+	}
+
+	// A zero expiration (GTC) is unaffected.
+	order.Expiration = 0
+	if err := validateLimitOrderArgs(order); err != nil {
+		t.Fatalf("unexpected error with zero expiration: %v", err)
+	}
 }
