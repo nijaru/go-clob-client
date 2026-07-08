@@ -1,13 +1,14 @@
 package polyrelay
 
 import (
+	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 )
 
 // TransactionCall is a single EVM call bundled into a gasless relay request.
-// Data holds the raw calldata (no 0x prefix). Value is denominated in wei.
+// Data holds raw calldata; Value is denominated in wei.
 type TransactionCall struct {
 	To    common.Address
 	Data  []byte
@@ -19,14 +20,14 @@ type TransactionCall struct {
 type RelayerTransactionType string
 
 const (
-	// TransactionTypeSafe targets a Polymarket Gnosis Safe wallet.
-	TransactionTypeSafe RelayerTransactionType = "SAFE"
 	// TransactionTypeProxy targets a legacy Polymarket proxy wallet.
 	TransactionTypeProxy RelayerTransactionType = "PROXY"
-	// TransactionTypeSafeCreate deploys a new Safe wallet via relay.
-	TransactionTypeSafeCreate RelayerTransactionType = "SAFE-CREATE"
+	// TransactionTypeSafe targets a Polymarket Gnosis Safe wallet.
+	TransactionTypeSafe RelayerTransactionType = "SAFE"
 	// TransactionTypeWallet targets a Solady deposit wallet.
 	TransactionTypeWallet RelayerTransactionType = "WALLET"
+	// TransactionTypeSafeCreate deploys a new Safe via relay.
+	TransactionTypeSafeCreate RelayerTransactionType = "SAFE-CREATE"
 	// TransactionTypeWalletCreate deploys a new deposit wallet via relay.
 	TransactionTypeWalletCreate RelayerTransactionType = "WALLET-CREATE"
 )
@@ -35,19 +36,65 @@ const (
 type RelayerTransactionState string
 
 const (
-	TransactionStateNew       RelayerTransactionState = "STATE_NEW"
-	TransactionStateExecuted  RelayerTransactionState = "STATE_EXECUTED"
-	TransactionStateMined     RelayerTransactionState = "STATE_MINED"
-	TransactionStateConfirmed RelayerTransactionState = "STATE_CONFIRMED"
-	TransactionStateInvalid   RelayerTransactionState = "STATE_INVALID"
-	TransactionStateFailed    RelayerTransactionState = "STATE_FAILED"
+	StateNew       RelayerTransactionState = "STATE_NEW"
+	StateExecuted  RelayerTransactionState = "STATE_EXECUTED"
+	StateMined     RelayerTransactionState = "STATE_MINED"
+	StateConfirmed RelayerTransactionState = "STATE_CONFIRMED"
+	StateInvalid   RelayerTransactionState = "STATE_INVALID"
+	StateFailed    RelayerTransactionState = "STATE_FAILED"
 )
 
-// IsTerminal reports whether state is a terminal outcome worth stopping a poll loop.
+// IsTerminal reports whether a poll loop should stop at this state.
 func (s RelayerTransactionState) IsTerminal() bool {
 	switch s {
-	case TransactionStateConfirmed, TransactionStateFailed, TransactionStateInvalid:
+	case StateConfirmed, StateFailed, StateInvalid:
 		return true
 	}
 	return false
 }
+
+// RelayRequest carries everything the signers need. The schemes read different
+// subsets — callers populate only the fields relevant to their transaction type:
+//
+//   - PROXY:  Signer, To, Data, Nonce, and the Gas*/Relay* fields.
+//   - SAFE:   Wallet (verifying contract), To, Data, Value, Operation, Nonce, ChainID.
+//   - WALLET: Wallet, Calls, Nonce, Deadline, ChainID.
+//
+// This union is deliberate: PROXY and SAFE sign a single prepared transaction
+// (calls are pre-encoded into Data via multiSend by the transport), while
+// WALLET (deposit) signs the raw batch natively. Splitting per scheme would
+// scatter dispatch; one documented struct keeps the entry point uniform.
+type RelayRequest struct {
+	// Shared
+	Signer  common.Address // EOA authorizing the relay (proxy "from")
+	Wallet  common.Address // verifying contract: Safe address / deposit wallet
+	ChainID *big.Int       // EIP-712 domain chain ID (SAFE, WALLET)
+	Nonce   *big.Int       // relayer execute nonce
+
+	// Single-transaction schemes (PROXY, SAFE)
+	To        common.Address
+	Data      []byte
+	Value     *big.Int
+	Operation uint8
+
+	// PROXY relay/gas parameters
+	RelayHub common.Address
+	Relay    common.Address
+	GasFee   *big.Int
+	GasPrice *big.Int
+	GasLimit *big.Int
+
+	// WALLET (deposit) batch + deadline
+	Calls    []TransactionCall
+	Deadline *big.Int
+}
+
+// Sentinels for invalid request inputs. Use errors.Is to distinguish.
+var (
+	ErrNilKey        = errors.New("polyrelay: nil private key")
+	ErrEmptyBatch    = errors.New("polyrelay: empty call batch")
+	ErrUnknownType   = errors.New("polyrelay: unknown relayer transaction type")
+	ErrNilValue      = errors.New("polyrelay: nil value in uint256 field")
+	ErrNegativeValue = errors.New("polyrelay: negative value in uint256 field")
+	ErrOverflow      = errors.New("polyrelay: value exceeds uint256")
+)
