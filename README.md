@@ -130,7 +130,7 @@ The SDK enforces authentication through a three-tier hierarchy:
 | --------------------- | ------------------------ | ----------------------- | --------------------------------------------- |
 | `Client`              | `NewClient`              | None                    | Public market data, orderbooks, prices        |
 | `SignerClient`        | `NewSignerClient`        | Private key             | Order building & signing, API key management  |
-| `AuthenticatedClient` | `NewAuthenticatedClient` | Private key + API creds | Order posting, account management, heartbeats |
+| `AuthenticatedClient` | `NewAuthenticatedClient` | Private key + API creds | Order posting, account management, heartbeats, gasless relayer |
 
 Upgrade incrementally:
 
@@ -147,8 +147,23 @@ authed, _ := signer.AsAuthenticated(creds, nil)
 | `0`   | `SignatureTypeEOA`            | MetaMask, hardware wallets (direct key)  |
 | `1`   | `SignatureTypePolyProxy`      | Email / Magic wallet (delegated signing) |
 | `2`   | `SignatureTypePolyGnosisSafe` | Browser proxy wallet                     |
+| `3`   | `SignatureTypePoly1271`       | Smart-contract / deposit wallet          |
 
 Set `FunderAddress` explicitly for proxy/Magic wallets where the signing key differs from the on-chain funder. For EOA wallets it defaults to the signing key address.
+
+### Gasless relayer
+
+Proxy, Safe, and deposit (Poly1271) wallets can only act through Polymarket's relayer, which submits on-chain calls as meta-transactions so the caller pays no gas. `AuthenticatedClient` exposes the full lifecycle for these wallet types; EOA wallets broadcast directly via go-ethereum (see CTF operations).
+
+```go
+// Submit a batch of calls through the relayer and wait for confirmation.
+handle, err := client.PrepareGaslessTransaction(ctx, calls, "merge")
+if err != nil { return err }
+outcome, err := handle.Wait(ctx)
+// outcome.TransactionHash is the on-chain tx hash once mined.
+```
+
+`PrepareGaslessTransaction` handles nonce fetch, per-scheme signing, payload assembly, and submit with retry on transient failures (rate limit, wallet contention, stale nonce). `DeployDepositWallet` submits the unsigned wallet deployment; `IsWalletDeployed` checks on-chain deployment. The relayer host defaults to `https://relayer-v2.polymarket.com` (override via `Config.RelayerHost`).
 
 ## Error Handling
 
@@ -170,6 +185,7 @@ if errors.Is(err, clob.ErrUnauthorized){ /* 401/403 */ }
 | Limit order    | `examples/clob/limit_order`    | Placing a GTC limit order                    |
 | Market order   | `examples/clob/market_order`   | Placing a FOK market order                   |
 | CTF operations | `examples/clob/ctf_operations` | Splitting, merging, and redeeming shares     |
+| Gasless        | `examples/clob/gasless`        | Submitting calls through the relayer        |
 | WebSocket      | `examples/ws`                  | Real-time orderbook and user event streaming |
 | Data API       | `examples/data`                | Positions and read-only data endpoints       |
 | Bridge         | `examples/bridge`              | Deposit addresses (EVM, Solana, Bitcoin)     |
