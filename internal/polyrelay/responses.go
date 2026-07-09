@@ -6,9 +6,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// ExecuteParams is the relayer's response to a nonce (or relay-payload) fetch.
-// The proxy path uses Address as the relay address to sign against; Safe and
-// deposit paths use only the Nonce.
+// ExecuteParams is the relayer's response to a /v1/account/transactions/params
+// fetch. The proxy path uses Address as the relay address to sign against; Safe
+// and deposit paths use only the Nonce.
 type ExecuteParams struct {
 	Address common.Address
 	Nonce   *big.Int

@@ -1,0 +1,17 @@
+ok  	github.com/nijaru/go-clob-client/bridge	(cached)
+ok  	github.com/nijaru/go-clob-client/clob	(cached)
+ok  	github.com/nijaru/go-clob-client/clob/ws	(cached)
+ok  	github.com/nijaru/go-clob-client/clob/ws/rtds	(cached)
+ok  	github.com/nijaru/go-clob-client/data	(cached)
+?   	github.com/nijaru/go-clob-client/examples/bridge	[no test files]
+?   	github.com/nijaru/go-clob-client/examples/clob/auth_bootstrap	[no test files]
+?   	github.com/nijaru/go-clob-client/examples/clob/ctf_operations	[no test files]
+?   	github.com/nijaru/go-clob-client/examples/clob/limit_order	[no test files]
+?   	github.com/nijaru/go-clob-client/examples/clob/market_order	[no test files]
+?   	github.com/nijaru/go-clob-client/examples/clob/read_only	[no test files]
+?   	github.com/nijaru/go-clob-client/examples/data	[no test files]
+?   	github.com/nijaru/go-clob-client/examples/gamma	[no test files]
+?   	github.com/nijaru/go-clob-client/examples/ws	[no test files]
+ok  	github.com/nijaru/go-clob-client/gamma	0.227s
+ok  	github.com/nijaru/go-clob-client/internal/polyauth	(cached)
+ok  	github.com/nijaru/go-clob-client/internal/polyhttp	(cached)

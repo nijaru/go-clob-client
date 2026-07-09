@@ -87,25 +87,6 @@ func TestFetchExecuteParams(t *testing.T) {
 	}
 }
 
-func TestFetchRelayPayloadUsesSeparatePath(t *testing.T) {
-	t.Parallel()
-	var seen []recordedReq
-	tr := newTestTransport(t, map[string]any{
-		relayPayloadPath: map[string]string{"address": "0xRelay", "nonce": "7"},
-	}, &seen)
-
-	got, err := tr.FetchRelayPayload(context.Background(), "0xSigner", TransactionTypeProxy)
-	if err != nil {
-		t.Fatalf("FetchRelayPayload: %v", err)
-	}
-	if got.Nonce.Int64() != 7 {
-		t.Fatalf("nonce = %d, want 7", got.Nonce.Int64())
-	}
-	if r := seen[0]; r.path != relayPayloadPath {
-		t.Fatalf("path = %s, want %s (proxy uses /relay-payload)", r.path, relayPayloadPath)
-	}
-}
-
 func TestFetchExecuteParamsRejectsBadNonce(t *testing.T) {
 	t.Parallel()
 	for _, nonce := range []string{"", "not-a-number"} {

@@ -31,8 +31,6 @@ func (s *orchServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.URL.Path == executeParamsPath:
 		_ = json.NewEncoder(w).Encode(map[string]string{"address": s.relayAddr, "nonce": s.nonce})
-	case r.URL.Path == relayPayloadPath:
-		_ = json.NewEncoder(w).Encode(map[string]string{"address": s.relayAddr, "nonce": s.nonce})
 	case r.URL.Path == submitPath && r.Method == http.MethodPost:
 		body, _ := io.ReadAll(r.Body)
 		var parsed map[string]any
@@ -159,7 +157,7 @@ func TestPrepareGaslessProxy(t *testing.T) {
 		t.Fatalf("missing proxy signatureParams: %v", captured)
 	}
 	if sp["relay"] != addrRepeat(0x99).Hex() {
-		t.Fatalf("relay = %v, want relay-payload address", sp["relay"])
+		t.Fatalf("relay = %v, want execute-params relay address", sp["relay"])
 	}
 }
 

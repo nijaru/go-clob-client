@@ -81,7 +81,7 @@ func TestPrepareGaslessTransactionWiring(t *testing.T) {
 			sawBuilderHeaders = true
 		}
 		switch r.URL.Path {
-		case "/v1/account/transactions/params", "/relay-payload":
+		case "/v1/account/transactions/params":
 			_ = json.NewEncoder(w).Encode(map[string]string{"address": "0xRelay", "nonce": "3"})
 		case "/submit":
 			body, _ := io.ReadAll(r.Body)

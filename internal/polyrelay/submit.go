@@ -236,8 +236,8 @@ func submitProxy(
 	calls []TransactionCall,
 	metadata string,
 ) (ExecuteResponse, error) {
-	// Proxy signs against the relay address, fetched via the /relay-payload path.
-	params, err := t.FetchRelayPayload(ctx, addrHex(cfg.Signer), TransactionTypeProxy)
+	// Proxy signs against the relay address, fetched via the unified params endpoint.
+	params, err := t.FetchExecuteParams(ctx, addrHex(cfg.Signer), TransactionTypeProxy)
 	if err != nil {
 		return ExecuteResponse{}, err
 	}

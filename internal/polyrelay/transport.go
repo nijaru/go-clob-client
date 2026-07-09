@@ -12,7 +12,6 @@ import (
 // paths mirror py-sdk's transport layer exactly.
 const (
 	executeParamsPath = "/v1/account/transactions/params"
-	relayPayloadPath  = "/relay-payload" // proxy nonce+relay-address fetch
 	submitPath        = "/submit"
 	deployedPath      = "/deployed"
 )
@@ -39,24 +38,17 @@ func NewTransport(c *polyhttp.Client) *Transport {
 // Client returns the underlying polyhttp client.
 func (t *Transport) Client() *polyhttp.Client { return t.http }
 
-// FetchExecuteParams gets the relayer execute nonce for address+type via
-// /v1/account/transactions/params (used by Safe and deposit paths).
+// FetchExecuteParams gets the relayer execute nonce and relay address for
+// address+type via /v1/account/transactions/params, the unified endpoint used by
+// all wallet types (proxy, safe, deposit). py-sdk additionally exposes a legacy
+// /relay-payload alias for proxy; both return the same {address, nonce} and the
+// unified path is canonical (matches ts-sdk).
 func (t *Transport) FetchExecuteParams(
 	ctx context.Context,
 	address string,
 	txType RelayerTransactionType,
 ) (ExecuteParams, error) {
 	return t.fetchParams(ctx, executeParamsPath, address, txType)
-}
-
-// FetchRelayPayload gets the relayer execute nonce and relay address via
-// /relay-payload (used by the proxy path, which signs against the relay address).
-func (t *Transport) FetchRelayPayload(
-	ctx context.Context,
-	address string,
-	txType RelayerTransactionType,
-) (ExecuteParams, error) {
-	return t.fetchParams(ctx, relayPayloadPath, address, txType)
 }
 
 func (t *Transport) fetchParams(
