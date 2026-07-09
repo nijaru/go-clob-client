@@ -97,4 +97,11 @@ var (
 	ErrNilValue      = errors.New("polyrelay: nil value in uint256 field")
 	ErrNegativeValue = errors.New("polyrelay: negative value in uint256 field")
 	ErrOverflow      = errors.New("polyrelay: value exceeds uint256")
+
+	// Transport / orchestration errors.
+	ErrEmptyCalls         = errors.New("polyrelay: gasless submission requires at least one call")
+	ErrMetadataTooLong    = errors.New("polyrelay: metadata exceeds maximum length")
+	ErrTransactionFailed  = errors.New("polyrelay: transaction reached a terminal failure state")
+	ErrTransactionTimeout = errors.New("polyrelay: timed out waiting for transaction confirmation")
+	ErrNoTransactionHash  = errors.New("polyrelay: transaction confirmed without a transaction hash")
 )
