@@ -13,6 +13,8 @@ const (
 	DefaultRTDSHost = "wss://rtds.polymarket.com"
 	// DefaultGeoblockHost is the production Polymarket site host for geoblock checks.
 	DefaultGeoblockHost = "https://polymarket.com"
+	// DefaultRelayerHost is the production Polymarket gasless relayer URL.
+	DefaultRelayerHost = "https://relayer-v2.polymarket.com"
 	// PolygonChainID is the Polygon mainnet chain ID used by Polymarket.
 	PolygonChainID = int64(137)
 	// AmoyChainID is the Polygon Amoy testnet chain ID.
@@ -47,6 +49,8 @@ type Config struct {
 	RTDSHost string
 	// GeoblockHost overrides the host used for geoblock checks.
 	GeoblockHost string
+	// RelayerHost overrides the gasless relayer URL. Defaults to DefaultRelayerHost.
+	RelayerHost string
 	// ChainID is the EVM chain ID. Defaults to PolygonChainID (137).
 	ChainID int64
 	// PrivateKey is the hex-encoded Ethereum private key used for signing.
@@ -115,6 +119,11 @@ func (c Config) normalized() Config {
 		c.GeoblockHost = DefaultGeoblockHost
 	}
 	c.GeoblockHost = strings.TrimRight(c.GeoblockHost, "/")
+
+	if c.RelayerHost == "" {
+		c.RelayerHost = DefaultRelayerHost
+	}
+	c.RelayerHost = strings.TrimRight(c.RelayerHost, "/")
 
 	if c.ChainID == 0 {
 		c.ChainID = PolygonChainID

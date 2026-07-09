@@ -37,6 +37,8 @@ type walletConfig struct {
 	DepositWalletFactory        string // UUPS+Beacon deposit-wallet factory (Poly1271)
 	DepositWalletImplementation string // UUPS deposit-wallet implementation
 	DepositWalletBeacon         string // Beacon deposit-wallet beacon
+	RelayHub                    string // OpenGSN relay hub (proxy gasless submissions)
+	SafeMultisend               string // Safe multiSend library (safe gasless batching)
 }
 
 var walletConfigs = map[int64]walletConfig{
@@ -46,6 +48,8 @@ var walletConfigs = map[int64]walletConfig{
 		DepositWalletFactory:        "0x00000000000Fb5C9ADea0298D729A0CB3823Cc07",
 		DepositWalletImplementation: "0x58CA52ebe0DadfdF531Cde7062e76746de4Db1eB",
 		DepositWalletBeacon:         "0x7A18EDfe055488A3128f01F563e5B479D92ffc3a",
+		RelayHub:                    "0xD216153c06E857cD7f72665E0aF1d7D82172F494",
+		SafeMultisend:               "0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761",
 	},
 	80002: {
 		SafeFactory: "0xaacFeEa03eb1561C4e67d661e40682Bd20E3541b",

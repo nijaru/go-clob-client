@@ -23,6 +23,7 @@ import (
 type Client struct {
 	host          string
 	rtdsHost      string
+	relayerHost   string
 	chainID       int64
 	useServerTime bool
 	http          *polyhttp.Client
@@ -136,6 +137,7 @@ func newBase(config Config) *Client {
 	base := &Client{
 		host:               config.Host,
 		rtdsHost:           config.RTDSHost,
+		relayerHost:        config.RelayerHost,
 		chainID:            config.ChainID,
 		useServerTime:      config.UseServerTime,
 		rpcURL:             config.RPCURL,
