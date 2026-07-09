@@ -4,30 +4,11 @@ import (
 	"encoding/hex"
 	"math/big"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/common"
 )
 
 // Vectors generated from py-sdk's calls.py (eth-abi) — the encoder output is
 // load-bearing: it becomes the `data` the wallet signs and the relayer
 // dispatches, so exact ABI parity is required.
-
-func addrRepeat(b byte) common.Address {
-	var a [20]byte
-	for i := range a {
-		a[i] = b
-	}
-	return common.Address(a)
-}
-
-func mustHex(t *testing.T, s string) []byte {
-	t.Helper()
-	b, err := hex.DecodeString(s)
-	if err != nil {
-		t.Fatalf("decode hex: %v", err)
-	}
-	return b
-}
 
 // threeCalls mirrors the py vector generator's input.
 func threeCalls() []TransactionCall {

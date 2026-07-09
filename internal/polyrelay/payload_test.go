@@ -16,14 +16,6 @@ import (
 // to maps, lowercase hex leaves (EIP-55 casing is irrelevant to the server),
 // and deep-compare. Signatures use a 65-byte zero placeholder.
 
-func addrRepeat20(b byte) common.Address {
-	var a [20]byte
-	for i := range a {
-		a[i] = b
-	}
-	return common.Address(a)
-}
-
 func lowerHexLeaves(v any) any {
 	switch x := v.(type) {
 	case map[string]any:
@@ -70,7 +62,7 @@ func patchSig(m map[string]any) { m["signature"] = "0x" + strings.Repeat("00", 6
 
 func TestBuildProxySubmit(t *testing.T) {
 	t.Parallel()
-	A, B, C := addrRepeat20(0x11), addrRepeat20(0x22), addrRepeat20(0x33)
+	A, B, C := addrRepeat(0x11), addrRepeat(0x22), addrRepeat(0x33)
 	req, err := BuildProxySubmit(ProxySubmitInput{
 		Signer: A, ProxyFactory: B, Wallet: C,
 		Data: common.FromHex("0xdeadbeef"), Nonce: big.NewInt(7), Signature: make([]byte, 65),
@@ -91,7 +83,7 @@ func TestBuildProxySubmit(t *testing.T) {
 
 func TestBuildSafeSubmit(t *testing.T) {
 	t.Parallel()
-	A, B, C := addrRepeat20(0x11), addrRepeat20(0x22), addrRepeat20(0x33)
+	A, B, C := addrRepeat(0x11), addrRepeat(0x22), addrRepeat(0x33)
 	const safeZero = `{"type":"SAFE","from":"0x1111111111111111111111111111111111111111","to":"0x2222222222222222222222222222222222222222","proxyWallet":"0x3333333333333333333333333333333333333333","data":"0xcafe","nonce":"3","signature":"0xsig","metadata":"x","signatureParams":{"baseGas":"0","gasPrice":"0","gasToken":"0x0000000000000000000000000000000000000000","operation":"0","refundReceiver":"0x0000000000000000000000000000000000000000","safeTxnGas":"0"}}`
 	const safeValue = `{"type":"SAFE","from":"0x1111111111111111111111111111111111111111","to":"0x2222222222222222222222222222222222222222","proxyWallet":"0x3333333333333333333333333333333333333333","data":"0xcafe","nonce":"3","signature":"0xsig","metadata":"x","value":"1000000","signatureParams":{"baseGas":"0","gasPrice":"0","gasToken":"0x0000000000000000000000000000000000000000","operation":"1","refundReceiver":"0x0000000000000000000000000000000000000000","safeTxnGas":"0"}}`
 	check := func(value *big.Int, op uint8, wantPy string) {
@@ -117,7 +109,7 @@ func TestBuildSafeSubmit(t *testing.T) {
 
 func TestBuildDepositSubmit(t *testing.T) {
 	t.Parallel()
-	A, B, C := addrRepeat20(0x11), addrRepeat20(0x22), addrRepeat20(0x33)
+	A, B, C := addrRepeat(0x11), addrRepeat(0x22), addrRepeat(0x33)
 	req, err := BuildDepositSubmit(DepositSubmitInput{
 		Signer: A, Factory: B, Wallet: C,
 		Calls: []TransactionCall{
@@ -141,7 +133,7 @@ func TestBuildDepositSubmit(t *testing.T) {
 
 func TestBuildWalletCreate(t *testing.T) {
 	t.Parallel()
-	A, B := addrRepeat20(0x11), addrRepeat20(0x22)
+	A, B := addrRepeat(0x11), addrRepeat(0x22)
 	req := BuildWalletCreate(WalletCreateInput{Signer: A, Factory: B, Metadata: "deploy"})
 	const wantPy = `{"type":"WALLET-CREATE","from":"0x1111111111111111111111111111111111111111","to":"0x2222222222222222222222222222222222222222","metadata":"deploy"}`
 	got := marshalLower(t, req)
@@ -153,7 +145,7 @@ func TestBuildWalletCreate(t *testing.T) {
 func TestBuildSubmitRejectsBadInput(t *testing.T) {
 	t.Parallel()
 	sig := make([]byte, 65)
-	if _, err := BuildProxySubmit(ProxySubmitInput{Signer: addrRepeat20(1), Nonce: nil, Signature: sig, GasLimit: big.NewInt(1)}); err == nil {
+	if _, err := BuildProxySubmit(ProxySubmitInput{Signer: addrRepeat(1), Nonce: nil, Signature: sig, GasLimit: big.NewInt(1)}); err == nil {
 		t.Fatal("nil nonce: expected error")
 	}
 	if _, err := BuildSafeSubmit(SafeSubmitInput{Value: nil, Nonce: big.NewInt(1), Signature: sig}); err == nil {

@@ -1,12 +1,11 @@
-// Package polyrelay implements Polymarket's gasless relayer transport: the
-// signing schemes, payload shapes, and (in sibling files) the submit/poll
-// lifecycle used to execute on-chain operations through Polymarket's relay
-// server without the caller paying gas.
+// Package polyrelay implements the signing, call-encoding, and request-assembly
+// pieces of Polymarket's gasless relayer — the components that turn a private
+// key and a set of calls into a /submit request body the relayer accepts.
 //
-// The relayer is required for proxy, Safe, and deposit wallets, which can only
-// act through relayed meta-transactions. EOA wallets may submit directly via
-// go-ethereum, but the relayer is the sole execution path for the other wallet
-// types and is therefore load-bearing for a general-purpose SDK.
+// It is required for proxy, Safe, and deposit wallets, which can only act
+// through relayed meta-transactions. EOA wallets may submit on-chain ops
+// directly via go-ethereum, but the relayer is the sole execution path for the
+// other wallet families and is therefore load-bearing for a general SDK.
 //
 // Three signing schemes are supported, one per wallet family. All produce a
 // 65-byte secp256k1 signature; they differ in how the signed digest is derived:
@@ -18,6 +17,11 @@
 //     the Safe signature-type encoding.
 //   - DepositWallet: an EIP-712 Batch signed directly (standard EIP-712).
 //
-// The logic mirrors py-clob-client's polymarket._internal.actions.relayer
-// modules byte-for-byte; test vectors are generated from that reference.
+// Call encoders bundle many TransactionCalls into the single calldata blob the
+// wallet signs (proxy factory tuple array, or Safe multiSend). Payload builders
+// assemble the per-scheme /submit JSON body from a signature and typed inputs.
+//
+// The HTTP transport (nonce fetch, POST /submit, poll to confirmation,
+// /deployed check) is not yet implemented; this package covers everything up to
+// a submittable request.
 package polyrelay

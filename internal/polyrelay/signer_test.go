@@ -1,10 +1,8 @@
 package polyrelay
 
 import (
-	"crypto/ecdsa"
 	"errors"
 	"math/big"
-	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -17,25 +15,7 @@ import (
 // signing makes eth-account/coincurve, ox, and go-ethereum byte-stable, so
 // exact equality is required.
 
-const (
-	vectorKeyHex     = "4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c"
-	vectorAddressHex = "0xF3F53fD15F3D5C773e84F1A1827c7ECdBC08ADA0"
-)
-
-func mustKey(t *testing.T) *ecdsa.PrivateKey {
-	t.Helper()
-	key, err := crypto.HexToECDSA(vectorKeyHex)
-	if err != nil {
-		t.Fatalf("parse key: %v", err)
-	}
-	return key
-}
-
-func hexAddr(hexByte string) common.Address {
-	return common.HexToAddress("0x" + strings.Repeat(hexByte, 20))
-}
-
-func sigHex(sig []byte) string { return "0x" + common.Bytes2Hex(sig) }
+const vectorAddressHex = "0xF3F53fD15F3D5C773e84F1A1827c7ECdBC08ADA0"
 
 func TestKeyDerivesExpectedAddress(t *testing.T) {
 	t.Parallel()
@@ -51,14 +31,14 @@ func TestProxyDigestAndSign(t *testing.T) {
 	t.Parallel()
 	req := RelayRequest{
 		Signer:   common.HexToAddress(vectorAddressHex),
-		To:       hexAddr("22"),
+		To:       addrRepeat(0x22),
 		Data:     common.FromHex("0xdeadbeef"),
 		GasFee:   big.NewInt(0),
 		GasPrice: big.NewInt(1_000_000_000),
 		GasLimit: big.NewInt(200_000),
 		Nonce:    big.NewInt(7),
-		RelayHub: hexAddr("33"),
-		Relay:    hexAddr("44"),
+		RelayHub: addrRepeat(0x33),
+		Relay:    addrRepeat(0x44),
 	}
 
 	digest, err := proxyDigest(&req)
@@ -85,8 +65,8 @@ func TestProxyDigestAndSign(t *testing.T) {
 func TestSafeDigestAndSign(t *testing.T) {
 	t.Parallel()
 	req := RelayRequest{
-		Wallet:    hexAddr("55"),
-		To:        hexAddr("66"),
+		Wallet:    addrRepeat(0x55),
+		To:        addrRepeat(0x66),
 		Data:      common.FromHex("0xcafe"),
 		Value:     big.NewInt(0),
 		Operation: 0,
@@ -136,10 +116,10 @@ func TestPackSafeSignature(t *testing.T) {
 func TestDepositDigestAndSign(t *testing.T) {
 	t.Parallel()
 	req := RelayRequest{
-		Wallet: hexAddr("77"),
+		Wallet: addrRepeat(0x77),
 		Calls: []TransactionCall{
-			{To: hexAddr("88"), Data: nil, Value: big.NewInt(0)},
-			{To: hexAddr("99"), Data: common.FromHex("0xaabbcc"), Value: big.NewInt(1_000_000)},
+			{To: addrRepeat(0x88), Data: nil, Value: big.NewInt(0)},
+			{To: addrRepeat(0x99), Data: common.FromHex("0xaabbcc"), Value: big.NewInt(1_000_000)},
 		},
 		Nonce:    big.NewInt(5),
 		Deadline: big.NewInt(1_700_000_000),
@@ -189,7 +169,7 @@ func TestSignValidatesInput(t *testing.T) {
 
 	t.Run("empty deposit batch", func(t *testing.T) {
 		t.Parallel()
-		req := RelayRequest{Wallet: hexAddr("77"), Nonce: big.NewInt(1), Deadline: big.NewInt(2), ChainID: big.NewInt(137)}
+		req := RelayRequest{Wallet: addrRepeat(0x77), Nonce: big.NewInt(1), Deadline: big.NewInt(2), ChainID: big.NewInt(137)}
 		_, err := Sign(TransactionTypeWallet, key, req)
 		if !errors.Is(err, ErrEmptyBatch) {
 			t.Fatalf("err = %v, want ErrEmptyBatch", err)
@@ -199,9 +179,9 @@ func TestSignValidatesInput(t *testing.T) {
 	t.Run("proxy negative gas fee", func(t *testing.T) {
 		t.Parallel()
 		req := RelayRequest{
-			Signer: hexAddr("11"), To: hexAddr("22"),
+			Signer: addrRepeat(0x11), To: addrRepeat(0x22),
 			GasFee: big.NewInt(-1), GasPrice: big.NewInt(0), GasLimit: big.NewInt(0), Nonce: big.NewInt(0),
-			RelayHub: hexAddr("33"), Relay: hexAddr("44"),
+			RelayHub: addrRepeat(0x33), Relay: addrRepeat(0x44),
 		}
 		_, err := Sign(TransactionTypeProxy, key, req)
 		if !errors.Is(err, ErrNegativeValue) {
@@ -213,9 +193,9 @@ func TestSignValidatesInput(t *testing.T) {
 		t.Parallel()
 		tooBig := new(big.Int).Lsh(big.NewInt(1), 257) // > uint256
 		req := RelayRequest{
-			Signer: hexAddr("11"), To: hexAddr("22"),
+			Signer: addrRepeat(0x11), To: addrRepeat(0x22),
 			GasFee: big.NewInt(0), GasPrice: big.NewInt(0), GasLimit: big.NewInt(0), Nonce: tooBig,
-			RelayHub: hexAddr("33"), Relay: hexAddr("44"),
+			RelayHub: addrRepeat(0x33), Relay: addrRepeat(0x44),
 		}
 		_, err := Sign(TransactionTypeProxy, key, req)
 		if !errors.Is(err, ErrOverflow) {
@@ -226,9 +206,9 @@ func TestSignValidatesInput(t *testing.T) {
 	t.Run("proxy nil gas field", func(t *testing.T) {
 		t.Parallel()
 		req := RelayRequest{
-			Signer: hexAddr("11"), To: hexAddr("22"),
+			Signer: addrRepeat(0x11), To: addrRepeat(0x22),
 			GasFee: nil, GasPrice: big.NewInt(0), GasLimit: big.NewInt(0), Nonce: big.NewInt(0),
-			RelayHub: hexAddr("33"), Relay: hexAddr("44"),
+			RelayHub: addrRepeat(0x33), Relay: addrRepeat(0x44),
 		}
 		_, err := Sign(TransactionTypeProxy, key, req)
 		if !errors.Is(err, ErrNilValue) {

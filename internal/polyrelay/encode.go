@@ -3,7 +3,6 @@ package polyrelay
 import (
 	"fmt"
 	"math/big"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -25,35 +24,24 @@ const proxyCallType uint8 = 1
 var (
 	proxyFactorySel  = crypto.Keccak256([]byte("proxy((uint8,address,uint256,bytes)[])"))[:4]
 	safeMultisendSel = crypto.Keccak256([]byte("multiSend(bytes)"))[:4]
-)
 
-// abiType guards let the (programmer-controlled) type literals fail fast at
-// first use rather than on package init. They never fail in practice.
-var abiTypes struct {
-	sync.Once
-	proxyTuple abi.Type
-	safeBytes  abi.Type
-	err        error
-}
-
-func loadABITypes() {
-	t, err := abi.NewType("tuple[]", "", []abi.ArgumentMarshaling{
+	// ABI type literals are programmer-controlled invariants; a malformed
+	// literal is a bug and fails fast at init (regexp.MustCompile pattern).
+	proxyTupleType = mustNewType("tuple[]", "", []abi.ArgumentMarshaling{
 		{Name: "callType", Type: "uint8"},
 		{Name: "to", Type: "address"},
 		{Name: "value", Type: "uint256"},
 		{Name: "data", Type: "bytes"},
 	})
+	safeBytesType = mustNewType("bytes", "", nil)
+)
+
+func mustNewType(name, raw string, components []abi.ArgumentMarshaling) abi.Type {
+	t, err := abi.NewType(name, raw, components)
 	if err != nil {
-		abiTypes.err = fmt.Errorf("polyrelay: proxy tuple type: %w", err)
-		return
+		panic("polyrelay: abi.NewType(" + name + "): " + err.Error())
 	}
-	abiTypes.proxyTuple = t
-	b, err := abi.NewType("bytes", "", nil)
-	if err != nil {
-		abiTypes.err = fmt.Errorf("polyrelay: bytes type: %w", err)
-		return
-	}
-	abiTypes.safeBytes = b
+	return t
 }
 
 // proxyTuple is the on-chain shape of a single proxied call.
@@ -70,10 +58,6 @@ func EncodeProxyCall(calls []TransactionCall) ([]byte, error) {
 	if len(calls) == 0 {
 		return nil, ErrEmptyBatch
 	}
-	abiTypes.Do(loadABITypes)
-	if abiTypes.err != nil {
-		return nil, abiTypes.err
-	}
 	tuples := make([]proxyTuple, len(calls))
 	for i, c := range calls {
 		if c.Value == nil {
@@ -81,7 +65,7 @@ func EncodeProxyCall(calls []TransactionCall) ([]byte, error) {
 		}
 		tuples[i] = proxyTuple{CallType: proxyCallType, To: c.To, Value: c.Value, Data: c.Data}
 	}
-	body, err := abi.Arguments{{Type: abiTypes.proxyTuple}}.Pack(tuples)
+	body, err := abi.Arguments{{Type: proxyTupleType}}.Pack(tuples)
 	if err != nil {
 		return nil, fmt.Errorf("polyrelay: encode proxy call: %w", err)
 	}
@@ -94,10 +78,6 @@ func EncodeProxyCall(calls []TransactionCall) ([]byte, error) {
 func EncodeSafeMultisendCall(calls []TransactionCall) ([]byte, error) {
 	if len(calls) == 0 {
 		return nil, ErrEmptyBatch
-	}
-	abiTypes.Do(loadABITypes)
-	if abiTypes.err != nil {
-		return nil, abiTypes.err
 	}
 	inner := make([]byte, 0, safeMultisendInnerSize(calls))
 	var lenBuf [32]byte
@@ -113,7 +93,7 @@ func EncodeSafeMultisendCall(calls []TransactionCall) ([]byte, error) {
 		inner = append(inner, lenBuf[:]...)
 		inner = append(inner, c.Data...)
 	}
-	body, err := abi.Arguments{{Type: abiTypes.safeBytes}}.Pack(inner)
+	body, err := abi.Arguments{{Type: safeBytesType}}.Pack(inner)
 	if err != nil {
 		return nil, fmt.Errorf("polyrelay: encode safe multisend: %w", err)
 	}
