@@ -90,8 +90,8 @@ func TestFetchRelayPayloadUsesSeparatePath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FetchRelayPayload: %v", err)
 	}
-	if got.Address.Hex() != "0xAb12345" && got.Nonce.Int64() != 7 {
-		t.Fatalf("params = %+v", got)
+	if got.Nonce.Int64() != 7 {
+		t.Fatalf("nonce = %d, want 7", got.Nonce.Int64())
 	}
 	if r := seen[0]; r.path != relayPayloadPath {
 		t.Fatalf("path = %s, want %s (proxy uses /relay-payload)", r.path, relayPayloadPath)
