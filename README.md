@@ -165,6 +165,15 @@ outcome, err := handle.Wait(ctx)
 
 `PrepareGaslessTransaction` handles nonce fetch, per-scheme signing, payload assembly, and submit with retry on transient failures (rate limit, wallet contention, stale nonce). `DeployDepositWallet` submits the unsigned wallet deployment; `IsWalletDeployed` checks on-chain deployment. The relayer host defaults to `https://relayer-v2.polymarket.com` (override via `Config.RelayerHost`).
 
+For the common CTF operations, gasless convenience methods build the calldata and route it through the relayer — the non-EOA equivalents of the on-chain `SignerClient` methods, sharing identical calldata and contract targets:
+
+```go
+// Merge a complementary YES/NO pair back into collateral, gaslessly.
+handle, err := client.MergePositionsGasless(ctx, clob.MergeBinary(usdc, conditionID, amount), "merge")
+// Also: SplitPositionGasless, RedeemPositionsGasless, RedeemNegRiskGasless.
+outcome, err := handle.Wait(ctx)
+```
+
 ## Error Handling
 
 API errors are returned as `*clob.APIError` with HTTP status and body:

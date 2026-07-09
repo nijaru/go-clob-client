@@ -128,11 +128,20 @@ func (c *SignerClient) contractAddr(field func(contractConfig) string) (common.A
 	return common.HexToAddress(field(cfg)), nil
 }
 
-func (c *SignerClient) SplitPosition(
-	ctx context.Context,
-	req SplitPositionRequest,
-) (*TxReceipt, error) {
-	data, err := ctfABI.Pack(
+// conditionalAddr resolves the ConditionalTokens (CTF) contract for the chain.
+func (c *SignerClient) conditionalAddr() (common.Address, error) {
+	return c.contractAddr(func(cc contractConfig) string { return cc.Conditional })
+}
+
+// negRiskAdapterAddr resolves the NegRiskAdapter contract for the chain.
+func (c *SignerClient) negRiskAdapterAddr() (common.Address, error) {
+	return c.contractAddr(func(cc contractConfig) string { return cc.NegRiskAdapter })
+}
+
+// packSplitPosition encodes a CTF splitPosition call. Shared by the on-chain EOA
+// path and the gasless relayer path so the calldata can never diverge.
+func packSplitPosition(req SplitPositionRequest) ([]byte, error) {
+	return ctfABI.Pack(
 		"splitPosition",
 		req.CollateralToken,
 		req.ParentCollectionID,
@@ -140,11 +149,43 @@ func (c *SignerClient) SplitPosition(
 		req.Partition,
 		req.Amount,
 	)
+}
+
+func packMergePositions(req MergePositionsRequest) ([]byte, error) {
+	return ctfABI.Pack(
+		"mergePositions",
+		req.CollateralToken,
+		req.ParentCollectionID,
+		req.ConditionID,
+		req.Partition,
+		req.Amount,
+	)
+}
+
+func packRedeemPositions(req RedeemPositionsRequest) ([]byte, error) {
+	return ctfABI.Pack(
+		"redeemPositions",
+		req.CollateralToken,
+		req.ParentCollectionID,
+		req.ConditionID,
+		req.IndexSets,
+	)
+}
+
+func packRedeemNegRisk(req RedeemNegRiskRequest) ([]byte, error) {
+	return negRiskABI.Pack("redeemPositions", req.ConditionID, req.Amounts)
+}
+
+func (c *SignerClient) SplitPosition(
+	ctx context.Context,
+	req SplitPositionRequest,
+) (*TxReceipt, error) {
+	data, err := packSplitPosition(req)
 	if err != nil {
 		return nil, fmt.Errorf("ctf: pack splitPosition: %w", err)
 	}
 
-	to, err := c.contractAddr(func(cc contractConfig) string { return cc.Conditional })
+	to, err := c.conditionalAddr()
 	if err != nil {
 		return nil, err
 	}
@@ -160,19 +201,12 @@ func (c *SignerClient) MergePositions(
 	ctx context.Context,
 	req MergePositionsRequest,
 ) (*TxReceipt, error) {
-	data, err := ctfABI.Pack(
-		"mergePositions",
-		req.CollateralToken,
-		req.ParentCollectionID,
-		req.ConditionID,
-		req.Partition,
-		req.Amount,
-	)
+	data, err := packMergePositions(req)
 	if err != nil {
 		return nil, fmt.Errorf("ctf: pack mergePositions: %w", err)
 	}
 
-	to, err := c.contractAddr(func(cc contractConfig) string { return cc.Conditional })
+	to, err := c.conditionalAddr()
 	if err != nil {
 		return nil, err
 	}
@@ -188,18 +222,12 @@ func (c *SignerClient) RedeemPositions(
 	ctx context.Context,
 	req RedeemPositionsRequest,
 ) (*TxReceipt, error) {
-	data, err := ctfABI.Pack(
-		"redeemPositions",
-		req.CollateralToken,
-		req.ParentCollectionID,
-		req.ConditionID,
-		req.IndexSets,
-	)
+	data, err := packRedeemPositions(req)
 	if err != nil {
 		return nil, fmt.Errorf("ctf: pack redeemPositions: %w", err)
 	}
 
-	to, err := c.contractAddr(func(cc contractConfig) string { return cc.Conditional })
+	to, err := c.conditionalAddr()
 	if err != nil {
 		return nil, err
 	}
@@ -215,16 +243,12 @@ func (c *SignerClient) RedeemNegRisk(
 	ctx context.Context,
 	req RedeemNegRiskRequest,
 ) (*TxReceipt, error) {
-	data, err := negRiskABI.Pack(
-		"redeemPositions",
-		req.ConditionID,
-		req.Amounts,
-	)
+	data, err := packRedeemNegRisk(req)
 	if err != nil {
 		return nil, fmt.Errorf("ctf: pack negRisk redeemPositions: %w", err)
 	}
 
-	to, err := c.contractAddr(func(cc contractConfig) string { return cc.NegRiskAdapter })
+	to, err := c.negRiskAdapterAddr()
 	if err != nil {
 		return nil, err
 	}
