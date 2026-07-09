@@ -117,7 +117,7 @@ func TestRemoteBuilderAuthHeaders(t *testing.T) {
 	}
 }
 
-func TestRemoteBuilderAuthNormalizesBodyBeforeSigning(t *testing.T) {
+func TestRemoteBuilderAuthSendsRawBody(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -128,8 +128,15 @@ func TestRemoteBuilderAuthNormalizesBodyBeforeSigning(t *testing.T) {
 		if err := json.Unmarshal(body, &payload); err != nil {
 			t.Fatalf("decode payload: %v", err)
 		}
-		if payload.Body != `{"a":"b"}` {
-			t.Fatalf("unexpected normalized body: %q", payload.Body)
+		// Builder/relayer auth signs the body verbatim: the remote builder signer must
+		// receive the raw bytes (no CLOB-L2 quote rewrite). Verified against
+		// py-sdk build_hmac_signature and go-builder-signing-sdk.
+		if payload.Body != `{'a':'b'}` {
+			t.Fatalf(
+				"remote builder body was altered: got %q want raw %q",
+				payload.Body,
+				`{'a':'b'}`,
+			)
 		}
 
 		_, _ = w.Write([]byte(`{

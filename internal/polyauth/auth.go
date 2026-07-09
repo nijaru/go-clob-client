@@ -95,7 +95,9 @@ func L2Headers(
 	method, path string,
 	body []byte,
 ) (map[string]string, error) {
-	signature := HMACSignatureBytes(secret, timestamp, method, path, body)
+	// CLOB L2 auth: the server rewrites single quotes as double quotes before
+	// recomputing the HMAC (matches py-clob-client-v2 and rs-clob-client-v2).
+	signature := HMACSignatureBytes(secret, timestamp, method, path, normalizeSignatureBody(body))
 
 	return map[string]string{
 		"POLY_ADDRESS":    signer.address.Hex(),
@@ -106,6 +108,10 @@ func L2Headers(
 	}, nil
 }
 
+// BuilderHeaders builds the POLY_BUILDER_* headers used for builder and relayer
+// auth. Unlike CLOB L2 auth, builder auth signs the request body verbatim: the
+// builder/relayer server does not rewrite quotes before recomputing the HMAC
+// (verified against py-sdk build_hmac_signature and go-builder-signing-sdk).
 func BuilderHeaders(
 	key string, secret []byte, passphrase string,
 	timestamp int64,
@@ -122,15 +128,14 @@ func BuilderHeaders(
 	}, nil
 }
 
+// normalizeSignatureBody applies the CLOB L2 quote rewrite (single → double)
+// that the CLOB server performs before recomputing an L2 HMAC. Builder/relayer
+// auth must NOT use this — those servers sign the body verbatim.
 func normalizeSignatureBody(body []byte) []byte {
 	if len(body) == 0 {
 		return nil
 	}
 	return bytes.ReplaceAll(body, []byte("'"), []byte("\""))
-}
-
-func NormalizeSignatureBodyForRemote(body []byte) []byte {
-	return normalizeSignatureBody(body)
 }
 
 type RemoteBuilderHeaderRequest struct {
@@ -267,9 +272,20 @@ func HMACSignature(
 	if err != nil {
 		return "", err
 	}
-	return HMACSignatureBytes(decoded, timestamp, method, requestPath, body), nil
+	// HMACSignature is the CLOB L2 convenience, so apply L2 quote normalization.
+	return HMACSignatureBytes(
+		decoded,
+		timestamp,
+		method,
+		requestPath,
+		normalizeSignatureBody(body),
+	), nil
 }
 
+// HMACSignatureBytes computes the raw HMAC-SHA256 signature over
+// timestamp+method+requestPath+body, encoded as padded URL-safe base64. The body
+// is signed verbatim. CLOB L2 callers must apply quote normalization first (the
+// server rewrites quotes); builder/relayer auth signs the body as-is.
 func HMACSignatureBytes(
 	secret []byte,
 	timestamp int64,
@@ -284,8 +300,7 @@ func HMACSignatureBytes(
 	io.WriteString(mac, method)
 	io.WriteString(mac, requestPath)
 	if len(body) > 0 {
-		// Polymarket API expects single quotes to be replaced with double quotes in the signature message
-		mac.Write(normalizeSignatureBody(body))
+		mac.Write(body)
 	}
 
 	return base64.URLEncoding.EncodeToString(mac.Sum(nil))

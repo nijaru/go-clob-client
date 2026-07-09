@@ -83,3 +83,64 @@ func TestFetchRemoteBuilderHeadersReturnsStatusError(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+// TestHMACSignatureBytesMatchesBuilderSigningSDK pins HMACSignatureBytes (the raw
+// primitive shared by builder/relayer auth) against golden vectors computed with
+// the official go-builder-signing-sdk GenSignature. The body deliberately contains
+// an apostrophe to prove builder/relayer auth signs the body verbatim and does NOT
+// apply the CLOB-L2 single→double quote rewrite that the CLOB server performs.
+func TestHMACSignatureBytesMatchesBuilderSigningSDK(t *testing.T) {
+	t.Parallel()
+
+	secret := []byte("super-secret-key")
+
+	got := HMACSignatureBytes(
+		secret,
+		1718000000,
+		"POST",
+		"/submit",
+		[]byte(`{"metadata":"President's choice"}`),
+	)
+	want := "zw3IAVBBVpn31T-3bSHNMSaI-_pIPnhhU2hzWI2leog="
+	if got != want {
+		t.Fatalf("body signature: got %q want %q (official builder-signing-sdk)", got, want)
+	}
+
+	gotNone := HMACSignatureBytes(secret, 1718000000, "GET", "/deployed", nil)
+	wantNone := "tBklY9vATHJdKKMAETsCPbPrtyiUtVZZKOsHq3qxKZU="
+	if gotNone != wantNone {
+		t.Fatalf(
+			"nil-body signature: got %q want %q (official builder-signing-sdk)",
+			gotNone,
+			wantNone,
+		)
+	}
+}
+
+// TestBuilderHeadersDoNotNormalizeQuotes verifies builder/relayer auth (POLY_BUILDER_*)
+// signs the raw body, diverging from CLOB L2 auth (which rewrites quotes). An
+// apostrophe in the body must reach the HMAC untouched.
+func TestBuilderHeadersDoNotNormalizeQuotes(t *testing.T) {
+	t.Parallel()
+
+	secret := []byte("super-secret-key")
+	body := []byte(`{"metadata":"President's choice"}`)
+
+	rawSig := HMACSignatureBytes(secret, 1718000000, "POST", "/submit", body)
+	headers, err := BuilderHeaders("key", secret, "pass", 1718000000, "POST", "/submit", body)
+	if err != nil {
+		t.Fatalf("BuilderHeaders: %v", err)
+	}
+	if headers["POLY_BUILDER_SIGNATURE"] != rawSig {
+		t.Fatalf("builder signature %q != raw %q (builder auth must not normalize quotes)",
+			headers["POLY_BUILDER_SIGNATURE"], rawSig)
+	}
+
+	// It must differ from the L2-normalized signature the CLOB server expects.
+	l2Sig := HMACSignatureBytes(secret, 1718000000, "POST", "/submit", normalizeSignatureBody(body))
+	if headers["POLY_BUILDER_SIGNATURE"] == l2Sig {
+		t.Fatal(
+			"builder signature matched the L2-normalized signature; builder auth should sign verbatim",
+		)
+	}
+}
