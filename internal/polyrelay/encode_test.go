@@ -15,7 +15,11 @@ func threeCalls() []TransactionCall {
 	return []TransactionCall{
 		{To: addrRepeat(0x11), Data: nil, Value: big.NewInt(0)},
 		{To: addrRepeat(0x22), Data: []byte{0xaa, 0xbb, 0xcc}, Value: big.NewInt(1_000_000)},
-		{To: addrRepeat(0x33), Data: []byte{0xde, 0xad, 0xbe, 0xef, 0xca, 0xfe}, Value: new(big.Int).Lsh(big.NewInt(1), 128)},
+		{
+			To:    addrRepeat(0x33),
+			Data:  []byte{0xde, 0xad, 0xbe, 0xef, 0xca, 0xfe},
+			Value: new(big.Int).Lsh(big.NewInt(1), 128),
+		},
 	}
 }
 

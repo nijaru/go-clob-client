@@ -27,7 +27,15 @@ func newTestTransport(t *testing.T, responses map[string]any, seen *[]recordedRe
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
-		*seen = append(*seen, recordedReq{method: r.Method, path: r.URL.Path, query: r.URL.Query(), body: string(body)})
+		*seen = append(
+			*seen,
+			recordedReq{
+				method: r.Method,
+				path:   r.URL.Path,
+				query:  r.URL.Query(),
+				body:   string(body),
+			},
+		)
 		var resp any
 		// /v1/account/transactions/{id} is path-based; match by prefix.
 		for prefix, v := range responses {

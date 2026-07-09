@@ -35,7 +35,10 @@ func (s SignatureType) relayerWalletType() (polyrelay.RelayerTransactionType, er
 	case SignatureTypePoly1271:
 		return polyrelay.TransactionTypeWallet, nil
 	default:
-		return "", fmt.Errorf("gasless: signature type %d does not use the relayer (EOAs broadcast directly)", s)
+		return "", fmt.Errorf(
+			"gasless: signature type %d does not use the relayer (EOAs broadcast directly)",
+			s,
+		)
 	}
 }
 
@@ -75,7 +78,15 @@ func (c *AuthenticatedClient) relayerHeaders(
 	if creds == nil {
 		return nil, fmt.Errorf("gasless: relayer auth requires API credentials or BuilderAuth")
 	}
-	return polyauth.BuilderHeaders(creds.Key, c.decodedSecret, creds.Passphrase, timestamp, method, path, body)
+	return polyauth.BuilderHeaders(
+		creds.Key,
+		c.decodedSecret,
+		creds.Passphrase,
+		timestamp,
+		method,
+		path,
+		body,
+	)
 }
 
 // gaslessConfig builds the polyrelay config from the client's chain + wallet
@@ -92,15 +103,24 @@ func (c *AuthenticatedClient) gaslessConfig() (polyrelay.GaslessConfig, error) {
 	switch walletType {
 	case polyrelay.TransactionTypeProxy:
 		if wc.ProxyFactory == "" || wc.RelayHub == "" {
-			return polyrelay.GaslessConfig{}, fmt.Errorf("gasless: proxy wallets unsupported on chain %d", c.chainID)
+			return polyrelay.GaslessConfig{}, fmt.Errorf(
+				"gasless: proxy wallets unsupported on chain %d",
+				c.chainID,
+			)
 		}
 	case polyrelay.TransactionTypeSafe:
 		if wc.SafeMultisend == "" {
-			return polyrelay.GaslessConfig{}, fmt.Errorf("gasless: safe wallets unsupported on chain %d", c.chainID)
+			return polyrelay.GaslessConfig{}, fmt.Errorf(
+				"gasless: safe wallets unsupported on chain %d",
+				c.chainID,
+			)
 		}
 	case polyrelay.TransactionTypeWallet:
 		if wc.DepositWalletFactory == "" {
-			return polyrelay.GaslessConfig{}, fmt.Errorf("gasless: deposit wallets unsupported on chain %d", c.chainID)
+			return polyrelay.GaslessConfig{}, fmt.Errorf(
+				"gasless: deposit wallets unsupported on chain %d",
+				c.chainID,
+			)
 		}
 	}
 	return polyrelay.GaslessConfig{
@@ -143,12 +163,22 @@ func (c *AuthenticatedClient) PrepareGaslessTransaction(
 	if err != nil {
 		return nil, err
 	}
-	return polyrelay.PrepareGasless(ctx, c.RelayerTransport(), cfg, c.signer.PrivateKey(), calls, metadata)
+	return polyrelay.PrepareGasless(
+		ctx,
+		c.RelayerTransport(),
+		cfg,
+		c.signer.PrivateKey(),
+		calls,
+		metadata,
+	)
 }
 
 // DeployDepositWallet submits an unsigned WALLET-CREATE to deploy a new deposit
 // wallet for the signer via the relayer.
-func (c *AuthenticatedClient) DeployDepositWallet(ctx context.Context, metadata string) (*polyrelay.Handle, error) {
+func (c *AuthenticatedClient) DeployDepositWallet(
+	ctx context.Context,
+	metadata string,
+) (*polyrelay.Handle, error) {
 	wc, err := getWalletConfig(c.chainID)
 	if err != nil {
 		return nil, err

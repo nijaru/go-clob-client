@@ -40,7 +40,8 @@ func PollUntilTerminal(
 		if err != nil {
 			return nil, err
 		}
-		if outcome, err := terminalOutcome(tx, transactionID, fallbackHash); err != nil || outcome != nil {
+		if outcome, err := terminalOutcome(tx, transactionID, fallbackHash); err != nil ||
+			outcome != nil {
 			return outcome, err
 		}
 		select {
@@ -55,7 +56,10 @@ func PollUntilTerminal(
 
 // terminalOutcome returns the outcome if the transaction has settled, the
 // failure error if it failed, or (nil, nil) to keep polling.
-func terminalOutcome(tx GaslessTransaction, transactionID, fallbackHash string) (*TransactionOutcome, error) {
+func terminalOutcome(
+	tx GaslessTransaction,
+	transactionID, fallbackHash string,
+) (*TransactionOutcome, error) {
 	switch {
 	case terminalSuccess[tx.State]:
 		hash := tx.TransactionHash

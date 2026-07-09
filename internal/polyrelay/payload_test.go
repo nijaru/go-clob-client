@@ -116,7 +116,9 @@ func TestBuildDepositSubmit(t *testing.T) {
 			{To: B, Data: nil, Value: big.NewInt(0)},
 			{To: C, Data: common.FromHex("0xaabbcc"), Value: big.NewInt(1_000_000)},
 		},
-		Nonce: big.NewInt(5), Deadline: big.NewInt(1_700_000_000), Signature: make([]byte, 65), Metadata: "redeem",
+		Nonce: big.NewInt(
+			5,
+		), Deadline: big.NewInt(1_700_000_000), Signature: make([]byte, 65), Metadata: "redeem",
 	})
 	if err != nil {
 		t.Fatalf("BuildDepositSubmit: %v", err)

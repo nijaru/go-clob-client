@@ -22,11 +22,40 @@ func TestIsRetryableSubmitError(t *testing.T) {
 		{"500", &polyhttp.APIError{StatusCode: 500}, false},
 		{"429 rate limit", &polyhttp.APIError{StatusCode: 429}, true},
 		{"400 unrelated", &polyhttp.APIError{StatusCode: 400, Message: "bad signature"}, false},
-		{"400 wallet busy", &polyhttp.APIError{StatusCode: 400, Message: "Wallet busy: active action in flight"}, true},
-		{"400 wallet in-flight", &polyhttp.APIError{StatusCode: 400, Message: "wallet has in-flight action"}, true},
-		{"400 nonce stale (submitted<onchain)", &polyhttp.APIError{StatusCode: 400, Message: "batch nonce 5 does not match on-chain nonce 8"}, true},
-		{"400 nonce ahead (submitted>=onchain)", &polyhttp.APIError{StatusCode: 400, Message: "batch nonce 8 does not match on-chain nonce 5"}, false},
-		{"400 nonce equal", &polyhttp.APIError{StatusCode: 400, Message: "batch nonce 5 does not match on-chain nonce 5"}, false},
+		{
+			"400 wallet busy",
+			&polyhttp.APIError{StatusCode: 400, Message: "Wallet busy: active action in flight"},
+			true,
+		},
+		{
+			"400 wallet in-flight",
+			&polyhttp.APIError{StatusCode: 400, Message: "wallet has in-flight action"},
+			true,
+		},
+		{
+			"400 nonce stale (submitted<onchain)",
+			&polyhttp.APIError{
+				StatusCode: 400,
+				Message:    "batch nonce 5 does not match on-chain nonce 8",
+			},
+			true,
+		},
+		{
+			"400 nonce ahead (submitted>=onchain)",
+			&polyhttp.APIError{
+				StatusCode: 400,
+				Message:    "batch nonce 8 does not match on-chain nonce 5",
+			},
+			false,
+		},
+		{
+			"400 nonce equal",
+			&polyhttp.APIError{
+				StatusCode: 400,
+				Message:    "batch nonce 5 does not match on-chain nonce 5",
+			},
+			false,
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -45,7 +74,14 @@ func TestPollUntilTerminalConfirmed(t *testing.T) {
 	srv := sequenceServer(t, states, "0xhash")
 	tr := NewTransport(&polyhttp.Client{BaseURL: srv.URL, HTTPClient: srv.Client()})
 
-	out, err := PollUntilTerminal(context.Background(), tr, "tx-1", "0xfallback", 10, time.Millisecond)
+	out, err := PollUntilTerminal(
+		context.Background(),
+		tr,
+		"tx-1",
+		"0xfallback",
+		10,
+		time.Millisecond,
+	)
 	if err != nil {
 		t.Fatalf("PollUntilTerminal: %v", err)
 	}
@@ -61,7 +97,14 @@ func TestPollUntilTerminalFallbackHash(t *testing.T) {
 	srv := sequenceServer(t, states, "")
 	tr := NewTransport(&polyhttp.Client{BaseURL: srv.URL, HTTPClient: srv.Client()})
 
-	out, err := PollUntilTerminal(context.Background(), tr, "tx-1", "0xfallback", 10, time.Millisecond)
+	out, err := PollUntilTerminal(
+		context.Background(),
+		tr,
+		"tx-1",
+		"0xfallback",
+		10,
+		time.Millisecond,
+	)
 	if err != nil {
 		t.Fatalf("PollUntilTerminal: %v", err)
 	}
@@ -88,7 +131,14 @@ func TestPollUntilTerminalFailure(t *testing.T) {
 	srv := sequenceServer(t, states, "")
 	tr := NewTransport(&polyhttp.Client{BaseURL: srv.URL, HTTPClient: srv.Client()})
 
-	_, err := PollUntilTerminal(context.Background(), tr, "tx-1", "0xfallback", 10, time.Millisecond)
+	_, err := PollUntilTerminal(
+		context.Background(),
+		tr,
+		"tx-1",
+		"0xfallback",
+		10,
+		time.Millisecond,
+	)
 	if !errors.Is(err, ErrTransactionFailed) {
 		t.Fatalf("err = %v, want ErrTransactionFailed", err)
 	}

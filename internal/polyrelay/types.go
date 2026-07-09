@@ -103,5 +103,7 @@ var (
 	ErrMetadataTooLong    = errors.New("polyrelay: metadata exceeds maximum length")
 	ErrTransactionFailed  = errors.New("polyrelay: transaction reached a terminal failure state")
 	ErrTransactionTimeout = errors.New("polyrelay: timed out waiting for transaction confirmation")
-	ErrNoTransactionHash  = errors.New("polyrelay: transaction confirmed without a transaction hash")
+	ErrNoTransactionHash  = errors.New(
+		"polyrelay: transaction confirmed without a transaction hash",
+	)
 )

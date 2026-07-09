@@ -169,7 +169,12 @@ func TestSignValidatesInput(t *testing.T) {
 
 	t.Run("empty deposit batch", func(t *testing.T) {
 		t.Parallel()
-		req := RelayRequest{Wallet: addrRepeat(0x77), Nonce: big.NewInt(1), Deadline: big.NewInt(2), ChainID: big.NewInt(137)}
+		req := RelayRequest{
+			Wallet:   addrRepeat(0x77),
+			Nonce:    big.NewInt(1),
+			Deadline: big.NewInt(2),
+			ChainID:  big.NewInt(137),
+		}
 		_, err := Sign(TransactionTypeWallet, key, req)
 		if !errors.Is(err, ErrEmptyBatch) {
 			t.Fatalf("err = %v, want ErrEmptyBatch", err)
@@ -180,7 +185,9 @@ func TestSignValidatesInput(t *testing.T) {
 		t.Parallel()
 		req := RelayRequest{
 			Signer: addrRepeat(0x11), To: addrRepeat(0x22),
-			GasFee: big.NewInt(-1), GasPrice: big.NewInt(0), GasLimit: big.NewInt(0), Nonce: big.NewInt(0),
+			GasFee: big.NewInt(
+				-1,
+			), GasPrice: big.NewInt(0), GasLimit: big.NewInt(0), Nonce: big.NewInt(0),
 			RelayHub: addrRepeat(0x33), Relay: addrRepeat(0x44),
 		}
 		_, err := Sign(TransactionTypeProxy, key, req)

@@ -88,7 +88,10 @@ func (t *Transport) Submit(ctx context.Context, req *SubmitRequest) (ExecuteResp
 }
 
 // GaslessTransaction fetches the current status of a submitted transaction.
-func (t *Transport) GaslessTransaction(ctx context.Context, transactionID string) (GaslessTransaction, error) {
+func (t *Transport) GaslessTransaction(
+	ctx context.Context,
+	transactionID string,
+) (GaslessTransaction, error) {
 	var w gaslessTransactionWire
 	if err := t.http.GetJSON(ctx, gaslessTxPath(transactionID), nil, polyhttp.AuthNone, &w); err != nil {
 		return GaslessTransaction{}, err

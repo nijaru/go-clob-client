@@ -84,7 +84,14 @@ type Handle struct {
 
 // Wait polls the relayer until the transaction reaches a terminal state.
 func (h *Handle) Wait(ctx context.Context) (*TransactionOutcome, error) {
-	return PollUntilTerminal(ctx, h.transport, h.TransactionID, h.TransactionHash, h.maxPolls, h.pollDelay)
+	return PollUntilTerminal(
+		ctx,
+		h.transport,
+		h.TransactionID,
+		h.TransactionHash,
+		h.maxPolls,
+		h.pollDelay,
+	)
 }
 
 // PrepareGasless signs and submits a batch of calls through the relayer for the
@@ -144,7 +151,9 @@ func DeployDepositWallet(
 	if len(metadata) > MetadataMaxLength {
 		return nil, fmt.Errorf("%w: %d > %d", ErrMetadataTooLong, len(metadata), MetadataMaxLength)
 	}
-	payload := BuildWalletCreate(WalletCreateInput{Signer: signer, Factory: factory, Metadata: metadata})
+	payload := BuildWalletCreate(
+		WalletCreateInput{Signer: signer, Factory: factory, Metadata: metadata},
+	)
 	resp, err := t.Submit(ctx, payload)
 	if err != nil {
 		return nil, err
@@ -359,7 +368,9 @@ var (
 	walletBusyRE     = regexp.MustCompile(`(?i)wallet busy.*active action`)
 	walletInflightRE = regexp.MustCompile(`(?i)wallet has in-flight action`)
 	// batch nonce <submitted> does not match on-chain nonce <on-chain>
-	nonceMismatchRE = regexp.MustCompile(`(?i)batch nonce\s+(\d+)\s+does not match on-chain nonce\s+(\d+)`)
+	nonceMismatchRE = regexp.MustCompile(
+		`(?i)batch nonce\s+(\d+)\s+does not match on-chain nonce\s+(\d+)`,
+	)
 )
 
 // isRetryableSubmitError reports whether a submit failure is worth retrying:

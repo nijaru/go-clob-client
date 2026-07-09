@@ -79,14 +79,25 @@ func TestPrepareGaslessDepositWallet(t *testing.T) {
 		t: t, nonce: "5", relayAddr: "0xRelay",
 		submitBody: &captured,
 		submitResp: func(int) any {
-			return map[string]any{"state": "STATE_NEW", "transactionHash": "", "transactionID": "tx-deposit"}
+			return map[string]any{
+				"state":           "STATE_NEW",
+				"transactionHash": "",
+				"transactionID":   "tx-deposit",
+			}
 		},
 	})
 	t.Cleanup(srv.Close)
 
 	calls := []TransactionCall{{To: addrRepeat(0x20), Data: []byte{0xaa}, Value: big.NewInt(0)}}
 	tr := testTransport(t, srv)
-	h, err := PrepareGasless(context.Background(), tr, testGaslessConfig(TransactionTypeWallet), mustKey(t), calls, "merge")
+	h, err := PrepareGasless(
+		context.Background(),
+		tr,
+		testGaslessConfig(TransactionTypeWallet),
+		mustKey(t),
+		calls,
+		"merge",
+	)
 	if err != nil {
 		t.Fatalf("PrepareGasless: %v", err)
 	}
@@ -123,7 +134,14 @@ func TestPrepareGaslessProxy(t *testing.T) {
 
 	calls := []TransactionCall{{To: addrRepeat(0x20), Data: []byte{0xbb}, Value: big.NewInt(0)}}
 	tr := testTransport(t, srv)
-	h, err := PrepareGasless(context.Background(), tr, testGaslessConfig(TransactionTypeProxy), mustKey(t), calls, "")
+	h, err := PrepareGasless(
+		context.Background(),
+		tr,
+		testGaslessConfig(TransactionTypeProxy),
+		mustKey(t),
+		calls,
+		"",
+	)
 	if err != nil {
 		t.Fatalf("PrepareGasless: %v", err)
 	}
@@ -212,7 +230,10 @@ func TestPrepareGaslessRetriesOnNonceMismatch(t *testing.T) {
 		// Second submit: success.
 		submitResp: func(attempt int) any {
 			if attempt == 1 {
-				return &cannedError{status: 400, body: `{"error":"batch nonce 1 does not match on-chain nonce 5"}`}
+				return &cannedError{
+					status: 400,
+					body:   `{"error":"batch nonce 1 does not match on-chain nonce 5"}`,
+				}
 			}
 			return map[string]any{"state": "STATE_NEW", "transactionID": "tx-after-retry"}
 		},
@@ -222,7 +243,14 @@ func TestPrepareGaslessRetriesOnNonceMismatch(t *testing.T) {
 
 	calls := []TransactionCall{{To: addrRepeat(0x20), Data: []byte{0x01}, Value: big.NewInt(0)}}
 	tr := testTransport(t, srv)
-	h, err := PrepareGasless(context.Background(), tr, testGaslessConfig(TransactionTypeWallet), mustKey(t), calls, "")
+	h, err := PrepareGasless(
+		context.Background(),
+		tr,
+		testGaslessConfig(TransactionTypeWallet),
+		mustKey(t),
+		calls,
+		"",
+	)
 	if err != nil {
 		t.Fatalf("PrepareGasless: %v", err)
 	}
@@ -248,7 +276,14 @@ func TestPrepareGaslessDoesNotRetryUnrelated400(t *testing.T) {
 
 	calls := []TransactionCall{{To: addrRepeat(0x20), Data: nil, Value: big.NewInt(0)}}
 	tr := testTransport(t, srv)
-	_, err := PrepareGasless(context.Background(), tr, testGaslessConfig(TransactionTypeWallet), mustKey(t), calls, "")
+	_, err := PrepareGasless(
+		context.Background(),
+		tr,
+		testGaslessConfig(TransactionTypeWallet),
+		mustKey(t),
+		calls,
+		"",
+	)
 	if err == nil {
 		t.Fatal("expected error for non-retryable 400")
 	}
@@ -260,22 +295,34 @@ func TestPrepareGaslessDoesNotRetryUnrelated400(t *testing.T) {
 
 func TestPrepareGaslessValidation(t *testing.T) {
 	t.Parallel()
-	tr := testTransport(t, httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})))
+	tr := testTransport(
+		t,
+		httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})),
+	)
 	cfg := testGaslessConfig(TransactionTypeWallet)
 
 	t.Run("nil key", func(t *testing.T) {
-		if _, err := PrepareGasless(context.Background(), tr, cfg, nil, []TransactionCall{{To: addrRepeat(1), Value: big.NewInt(0)}}, ""); !errors.Is(err, ErrNilKey) {
+		if _, err := PrepareGasless(context.Background(), tr, cfg, nil, []TransactionCall{{To: addrRepeat(1), Value: big.NewInt(0)}}, ""); !errors.Is(
+			err,
+			ErrNilKey,
+		) {
 			t.Fatalf("err = %v, want ErrNilKey", err)
 		}
 	})
 	t.Run("empty calls", func(t *testing.T) {
-		if _, err := PrepareGasless(context.Background(), tr, cfg, mustKey(t), nil, ""); !errors.Is(err, ErrEmptyCalls) {
+		if _, err := PrepareGasless(context.Background(), tr, cfg, mustKey(t), nil, ""); !errors.Is(
+			err,
+			ErrEmptyCalls,
+		) {
 			t.Fatalf("err = %v, want ErrEmptyCalls", err)
 		}
 	})
 	t.Run("metadata too long", func(t *testing.T) {
 		long := strings.Repeat("x", MetadataMaxLength+1)
-		if _, err := PrepareGasless(context.Background(), tr, cfg, mustKey(t), []TransactionCall{{To: addrRepeat(1), Value: big.NewInt(0)}}, long); !errors.Is(err, ErrMetadataTooLong) {
+		if _, err := PrepareGasless(context.Background(), tr, cfg, mustKey(t), []TransactionCall{{To: addrRepeat(1), Value: big.NewInt(0)}}, long); !errors.Is(
+			err,
+			ErrMetadataTooLong,
+		) {
 			t.Fatalf("err = %v, want ErrMetadataTooLong", err)
 		}
 	})
@@ -293,7 +340,8 @@ func TestResolveSafeCall(t *testing.T) {
 		if err != nil {
 			t.Fatalf("err: %v", err)
 		}
-		if target != c1.To || !bytesEq(data, c1.Data) || value.Int64() != 7 || op != safeOperationCall {
+		if target != c1.To || !bytesEq(data, c1.Data) || value.Int64() != 7 ||
+			op != safeOperationCall {
 			t.Fatalf("single resolve = %s/%v/%d/%d", target, data, value, op)
 		}
 	})
