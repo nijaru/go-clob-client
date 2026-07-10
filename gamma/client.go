@@ -24,6 +24,7 @@ const (
 	commentsEndpoint = "/comments"
 	profileEndpoint  = "/public-profile"
 	searchEndpoint   = "/public-search"
+	statusEndpoint   = "/status"
 )
 
 // Client is a read-only client for the Polymarket Gamma API.
@@ -460,6 +461,14 @@ func (c *Client) GetMarketTypes(ctx context.Context) (*SportsMarketTypesResponse
 	var out SportsMarketTypesResponse
 	err := c.http.GetJSON(ctx, sportsEndpoint+"/market-types", nil, polyhttp.AuthNone, &out)
 	return &out, err
+}
+
+// GetStatus returns the raw health/status string from the Gamma API.
+// It mirrors the Rust SDK's gamma `status()` and errors on a non-2xx response.
+func (c *Client) GetStatus(ctx context.Context) (string, error) {
+	var out string
+	err := c.http.GetJSON(ctx, statusEndpoint, nil, polyhttp.AuthNone, &out)
+	return out, err
 }
 
 // GetComments returns a list of comments based on the provided filters.
