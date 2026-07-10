@@ -424,6 +424,20 @@ func (c *Client) GetFeeInfo(ctx context.Context, tokenID string) (*FeeInfo, erro
 	}, nil
 }
 
+// GetFeeExponent returns the V2 platform-fee exponent (fd.e) for a token.
+// It mirrors the Rust SDK's fee_exponent(): on legacy or fee-free markets it
+// returns 0 rather than an error.
+func (c *Client) GetFeeExponent(ctx context.Context, tokenID string) (uint32, error) {
+	market, err := c.GetClobMarket(ctx, tokenID)
+	if err != nil {
+		return 0, err
+	}
+	if market.FeeDetails == nil {
+		return 0, nil
+	}
+	return market.FeeDetails.Exponent, nil
+}
+
 // GetBuilderFeeRate returns the maker and taker fee rates for a builder code.
 func (c *Client) GetBuilderFeeRate(
 	ctx context.Context,
