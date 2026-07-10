@@ -72,7 +72,7 @@ type MarketSubscription struct {
 	Type                 Channel  `json:"type"`
 	Operation            string   `json:"operation,omitzero"`
 	Markets              []string `json:"markets,omitzero"`
-	AssetIDs             []string `json:"asset_ids"`
+	AssetIDs             []string `json:"assets_ids"`
 	InitialDump          bool     `json:"initial_dump,omitzero"`
 	CustomFeatureEnabled bool     `json:"custom_feature_enabled,omitzero"`
 }

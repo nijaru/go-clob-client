@@ -440,11 +440,11 @@ func TestMarketSubscriptionsRefcountAndCustomFeatureFlag(t *testing.T) {
 		t.Fatalf("subscribe order book: %v", err)
 	}
 	msg := mustReceiveSubscriptionMessage(t, messages)
-	if got := msg["type"]; got != "order_book" {
-		t.Fatalf("type = %v, want order_book", got)
+	if got := msg["type"]; got != "market" {
+		t.Fatalf("type = %v, want market", got)
 	}
-	if got := messageStrings(msg["asset_ids"]); len(got) != 1 || got[0] != "asset-1" {
-		t.Fatalf("asset_ids = %#v, want [asset-1]", got)
+	if got := messageStrings(msg["assets_ids"]); len(got) != 1 || got[0] != "asset-1" {
+		t.Fatalf("assets_ids = %#v, want [asset-1]", got)
 	}
 	if got := msg["initial_dump"]; got != true {
 		t.Fatalf("initial_dump = %v, want true", got)
@@ -465,8 +465,8 @@ func TestMarketSubscriptionsRefcountAndCustomFeatureFlag(t *testing.T) {
 	if got := msg["custom_feature_enabled"]; got != true {
 		t.Fatalf("custom_feature_enabled = %v, want true", got)
 	}
-	if got := messageStrings(msg["asset_ids"]); len(got) != 1 || got[0] != "asset-1" {
-		t.Fatalf("asset_ids = %#v, want [asset-1]", got)
+	if got := messageStrings(msg["assets_ids"]); len(got) != 1 || got[0] != "asset-1" {
+		t.Fatalf("assets_ids = %#v, want [asset-1]", got)
 	}
 
 	if err := client.UnsubscribeOrderBook(t.Context(), []string{"asset-1"}); err != nil {
@@ -486,8 +486,8 @@ func TestMarketSubscriptionsRefcountAndCustomFeatureFlag(t *testing.T) {
 	if got := msg["operation"]; got != "unsubscribe" {
 		t.Fatalf("operation = %v, want unsubscribe", got)
 	}
-	if got := messageStrings(msg["asset_ids"]); len(got) != 1 || got[0] != "asset-1" {
-		t.Fatalf("asset_ids = %#v, want [asset-1]", got)
+	if got := messageStrings(msg["assets_ids"]); len(got) != 1 || got[0] != "asset-1" {
+		t.Fatalf("assets_ids = %#v, want [asset-1]", got)
 	}
 }
 
