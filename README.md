@@ -7,6 +7,14 @@
 > [!WARNING]
 > Unofficial, community-maintained SDK. Not extensively tested in production trading environments. Use at your own risk.
 
+> [!NOTE]
+> **Parity status (2026-07-10):** Feature-complete against the official
+> [Rust `rs-clob-client-v2` v0.6.0](https://github.com/Polymarket/rs-clob-client-v2) unified SDK
+> (CLOB, Data, Gamma, Bridge, CTF, RTDS, RFQ) plus the gasless relayer. **Perps** is the next
+> major surface — the public market-data REST API ships in the `perps/` package (oracle: TS
+> `ts-sdk`, which added perps June 2026, ahead of Rust); account reads + order placement via the
+> delegated-proxy session are planned. See `ai/ROADMAP.md`.
+
 Go SDK for the [Polymarket](https://polymarket.com) CLOB and Data APIs. Tracks feature parity with the [official Rust V2 SDK](https://github.com/Polymarket/rs-clob-client-v2).
 
 ## Install
@@ -199,6 +207,7 @@ if errors.Is(err, clob.ErrUnauthorized){ /* 401/403 */ }
 | Data API       | `examples/data`                | Positions and read-only data endpoints       |
 | Bridge         | `examples/bridge`              | Deposit addresses (EVM, Solana, Bitcoin)     |
 | Gamma          | `examples/gamma`               | Search, events, and discovery metadata       |
+| Perps         | `examples/perps`               | Instruments, tickers, books, candles, trades, funding |
 
 ```bash
 export POLYMARKET_PRIVATE_KEY=0x...
