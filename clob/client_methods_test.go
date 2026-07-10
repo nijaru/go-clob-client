@@ -1,6 +1,7 @@
 package clob
 
 import (
+	"bytes"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -29,6 +30,50 @@ func TestAsAuthenticated(t *testing.T) {
 
 	if authClient == nil {
 		t.Fatal("expected client to be authenticated")
+	}
+}
+
+func TestSetCredentialsRotatesDecodedSecret(t *testing.T) {
+	t.Parallel()
+	// SetCredentials must re-derive the decoded HMAC secret on rotation, not
+	// just swap the Credentials struct (regression: it previously left
+	// decodedSecret stale, so every signed request after rotation used the OLD
+	// secret with the NEW key/passphrase and was rejected).
+	const (
+		privKey = "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c"
+		secret1 = "YWFhYQ==" // "aaaa"
+		secret2 = "YmJiYg==" // "bbbb"
+		invalid = "!!!!"     // valid length, invalid base64 chars -> decode error
+	)
+	sc, err := NewSignerClient(Config{Host: "http://example.com", PrivateKey: privKey})
+	if err != nil {
+		t.Fatalf("new signer: %v", err)
+	}
+	client, err := sc.AsAuthenticated(
+		Credentials{Key: "k1", Secret: secret1, Passphrase: "p1"},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("as authenticated: %v", err)
+	}
+
+	before := append([]byte(nil), client.decodedSecret...)
+	if err := client.SetCredentials(Credentials{Key: "k2", Secret: secret2, Passphrase: "p2"}); err != nil {
+		t.Fatalf("SetCredentials (valid): %v", err)
+	}
+	if got := client.credentials().Key; got != "k2" {
+		t.Fatalf("key = %s, want k2", got)
+	}
+	if bytes.Equal(client.decodedSecret, before) {
+		t.Fatal("decodedSecret unchanged after rotation (stale-secret bug regressed)")
+	}
+
+	// An invalid secret must error and leave the current credentials untouched.
+	if err := client.SetCredentials(Credentials{Key: "k3", Secret: invalid, Passphrase: "p3"}); err == nil {
+		t.Fatal("expected error for invalid base64 secret, got nil")
+	}
+	if got := client.credentials().Key; got != "k2" {
+		t.Fatalf("key = %s after failed rotation, want k2 (credentials must be unchanged)", got)
 	}
 }
 

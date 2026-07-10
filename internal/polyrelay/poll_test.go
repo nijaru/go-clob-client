@@ -144,6 +144,28 @@ func TestPollUntilTerminalFailure(t *testing.T) {
 	}
 }
 
+func TestPollUntilTerminalInvalid(t *testing.T) {
+	t.Parallel()
+	// STATE_INVALID is terminal-but-not-success: must surface ErrTransactionFailed,
+	// exercising the IsTerminal() + terminalSuccess path that replaced the old
+	// parallel terminalFailure map.
+	states := []string{"STATE_INVALID"}
+	srv := sequenceServer(t, states, "")
+	tr := NewTransport(&polyhttp.Client{BaseURL: srv.URL, HTTPClient: srv.Client()})
+
+	_, err := PollUntilTerminal(
+		context.Background(),
+		tr,
+		"tx-1",
+		"0xfallback",
+		10,
+		time.Millisecond,
+	)
+	if !errors.Is(err, ErrTransactionFailed) {
+		t.Fatalf("err = %v, want ErrTransactionFailed", err)
+	}
+}
+
 func TestPollUntilTerminalTimeout(t *testing.T) {
 	t.Parallel()
 	// Never terminal.

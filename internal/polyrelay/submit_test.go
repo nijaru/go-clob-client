@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
 )
 
@@ -158,6 +160,43 @@ func TestPrepareGaslessProxy(t *testing.T) {
 	}
 	if sp["relay"] != addrRepeat(0x99).Hex() {
 		t.Fatalf("relay = %v, want execute-params relay address", sp["relay"])
+	}
+}
+
+func TestPrepareGaslessProxyUsesGasEstimate(t *testing.T) {
+	t.Parallel()
+	// Exercises the previously-untested branch where cfg.GasEstimator returns a
+	// real (>0) value: that estimate must reach the submitted payload's
+	// signatureParams.gasLimit. Digest↔payload consistency is guaranteed by
+	// construction (submitProxy signs and builds the payload from the same
+	// *big.Int gasLimit local), so asserting the payload value closes the gap.
+	const est uint64 = 123456
+	var captured map[string]any
+	srv := httptest.NewServer(&orchServer{
+		t: t, nonce: "9", relayAddr: addrRepeat(0x99).Hex(),
+		submitBody: &captured,
+		submitResp: func(int) any {
+			return map[string]any{"state": "STATE_NEW", "transactionID": "tx-proxy"}
+		},
+	})
+	t.Cleanup(srv.Close)
+
+	cfg := testGaslessConfig(TransactionTypeProxy)
+	cfg.GasEstimator = func(context.Context, common.Address, common.Address, []byte) (uint64, error) {
+		return est, nil
+	}
+
+	calls := []TransactionCall{{To: addrRepeat(0x20), Data: []byte{0xbb}, Value: big.NewInt(0)}}
+	tr := testTransport(t, srv)
+	if _, err := PrepareGasless(context.Background(), tr, cfg, mustKey(t), calls, ""); err != nil {
+		t.Fatalf("PrepareGasless: %v", err)
+	}
+	sp, _ := captured["signatureParams"].(map[string]any)
+	if sp == nil {
+		t.Fatalf("missing signatureParams: %v", captured)
+	}
+	if sp["gasLimit"] != "123456" {
+		t.Fatalf("signatureParams.gasLimit = %v, want 123456 (estimator output)", sp["gasLimit"])
 	}
 }
 

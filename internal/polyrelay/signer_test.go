@@ -222,6 +222,26 @@ func TestSignValidatesInput(t *testing.T) {
 			t.Fatalf("err = %v, want ErrNilValue", err)
 		}
 	})
+
+	t.Run("deposit call nil value", func(t *testing.T) {
+		t.Parallel()
+		// A caller passing a 0-value call (the common case for approvals/transfers)
+		// without explicitly setting Value must get a typed error, not a nil-deref
+		// panic. This is the WALLET equivalent of the proxy nil-field check above;
+		// the SAFE path guards it in resolveSafeCall.
+		req := RelayRequest{
+			Wallet: addrRepeat(0x77),
+			Calls: []TransactionCall{
+				{To: addrRepeat(0x88), Data: []byte{0x01}}, // Value unset (nil)
+				{To: addrRepeat(0x99), Data: []byte{0x02}, Value: big.NewInt(1)},
+			},
+			Nonce: big.NewInt(1), Deadline: big.NewInt(2), ChainID: big.NewInt(137),
+		}
+		_, err := Sign(TransactionTypeWallet, key, req)
+		if !errors.Is(err, ErrNilValue) {
+			t.Fatalf("err = %v, want ErrNilValue", err)
+		}
+	})
 }
 
 func TestHexSignature(t *testing.T) {

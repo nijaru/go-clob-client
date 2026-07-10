@@ -6,11 +6,12 @@ import (
 	"time"
 )
 
-// terminalSuccess/terminalFailure mirror py's _TERMINAL_SUCCESS/_TERMINAL_FAILURE.
-var (
-	terminalSuccess = map[RelayerTransactionState]bool{StateConfirmed: true}
-	terminalFailure = map[RelayerTransactionState]bool{StateFailed: true, StateInvalid: true}
-)
+// terminalSuccess is the subset of terminal states that indicate success;
+// all other terminal states (per RelayerTransactionState.IsTerminal) are
+// failures. IsTerminal stays the single source of truth for which states end
+// polling — adding a terminal state means updating IsTerminal, and only a new
+// *success* state needs an entry here.
+var terminalSuccess = map[RelayerTransactionState]bool{StateConfirmed: true}
 
 // PollUntilTerminal polls GET /v1/account/transactions/{id} until the transaction
 // reaches a terminal state, returning its outcome. A CONFIRMED state with no
@@ -60,8 +61,10 @@ func terminalOutcome(
 	tx GaslessTransaction,
 	transactionID, fallbackHash string,
 ) (*TransactionOutcome, error) {
-	switch {
-	case terminalSuccess[tx.State]:
+	if !tx.State.IsTerminal() {
+		return nil, nil // keep polling
+	}
+	if terminalSuccess[tx.State] {
 		hash := tx.TransactionHash
 		if hash == "" {
 			hash = fallbackHash
@@ -70,13 +73,11 @@ func terminalOutcome(
 			return nil, fmt.Errorf("%w: %s", ErrNoTransactionHash, transactionID)
 		}
 		return &TransactionOutcome{TransactionHash: hash, TransactionID: tx.TransactionID}, nil
-	case terminalFailure[tx.State]:
-		msg := tx.ErrorMsg
-		if msg == "" {
-			msg = fmt.Sprintf("transaction %s reached terminal state %s", transactionID, tx.State)
-		}
-		return nil, fmt.Errorf("%w: %s", ErrTransactionFailed, msg)
-	default:
-		return nil, nil
 	}
+	// Terminal but not a success state → failure.
+	msg := tx.ErrorMsg
+	if msg == "" {
+		msg = fmt.Sprintf("transaction %s reached terminal state %s", transactionID, tx.State)
+	}
+	return nil, fmt.Errorf("%w: %s", ErrTransactionFailed, msg)
 }

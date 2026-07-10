@@ -423,11 +423,20 @@ func (c *Client) resolveContractConfig(negRisk bool) (contractConfig, error) {
 }
 
 // SetCredentials updates the API credentials used for authenticated requests.
-// Safe to call concurrently with in-flight requests.
-func (c *AuthenticatedClient) SetCredentials(creds Credentials) {
+// It re-derives the decoded HMAC secret from creds.Secret so subsequent L2 and
+// relayer requests sign with the new key. If the secret is not valid base64 the
+// existing credentials are left unchanged and an error is returned. Safe to
+// call concurrently with in-flight requests.
+func (c *AuthenticatedClient) SetCredentials(creds Credentials) error {
+	decodedSecret, err := polyauth.DecodeAPISecret(creds.Secret)
+	if err != nil {
+		return fmt.Errorf("set credentials: %w", err)
+	}
 	c.authMu.Lock()
 	c.creds = &creds
+	c.decodedSecret = decodedSecret
 	c.authMu.Unlock()
+	return nil
 }
 
 // Address returns the signer address backing the client.

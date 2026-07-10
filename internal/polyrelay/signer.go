@@ -226,6 +226,9 @@ func depositDigest(req *RelayRequest) ([]byte, error) {
 	}
 	calls := make([]apitypes.TypedDataMessage, len(req.Calls))
 	for i, c := range req.Calls {
+		if c.Value == nil {
+			return nil, fmt.Errorf("%w: call %d value", ErrNilValue, i)
+		}
 		calls[i] = apitypes.TypedDataMessage{
 			"target": c.To.Hex(),
 			"value":  c.Value.String(),
