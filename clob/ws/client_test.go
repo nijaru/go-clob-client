@@ -18,13 +18,15 @@ func TestHandleMessageBookEvent(t *testing.T) {
 
 	c := NewClient("")
 
-	data, _ := json.Marshal(BookEvent{
+	data, _ := json.Marshal([]BookEvent{{
 		BaseEvent: BaseEvent{EventType: EventTypeBook},
+		Market:    "market-1",
 		AssetID:   "asset-1",
 		Bids:      []clob.OrderSummary{{Price: "0.45", Size: "10"}},
 		Asks:      []clob.OrderSummary{{Price: "0.55", Size: "12"}},
 		Timestamp: "1710000000",
-	})
+		Hash:      "hash-1",
+	}})
 
 	c.handleMessage(t.Context(), data)
 
@@ -43,6 +45,32 @@ func TestHandleMessageBookEvent(t *testing.T) {
 		if len(book.Asks) != 1 || book.Asks[0].Price != "0.55" {
 			t.Errorf("unexpected asks: %+v", book.Asks)
 		}
+		if book.Market != "market-1" || book.Hash != "hash-1" {
+			t.Errorf("metadata = %q/%q", book.Market, book.Hash)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for event")
+	}
+}
+
+func TestHandleMessageBookEventSingleObjectCompatibility(t *testing.T) {
+	t.Parallel()
+
+	c := NewClient("")
+	data, _ := json.Marshal(BookEvent{
+		BaseEvent: BaseEvent{EventType: EventTypeBook},
+		AssetID:   "asset-legacy",
+		Bids:      []clob.OrderSummary{{Price: "0.45", Size: "10"}},
+		Asks:      []clob.OrderSummary{{Price: "0.55", Size: "12"}},
+		Timestamp: "1710000000",
+	})
+	c.handleMessage(t.Context(), data)
+	select {
+	case ev := <-c.Events():
+		book, ok := ev.(*BookEvent)
+		if !ok || book.AssetID != "asset-legacy" {
+			t.Fatalf("event = %#v", ev)
+		}
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for event")
 	}
@@ -55,10 +83,17 @@ func TestHandleMessagePriceChangeEvent(t *testing.T) {
 
 	data, _ := json.Marshal(PriceChangeEvent{
 		BaseEvent: BaseEvent{EventType: EventTypePriceChange},
-		AssetID:   "asset-2",
-		Price:     "0.42",
-		Size:      "5.5",
-		Side:      clob.SideBuy,
+		Market:    "market-2",
+		Timestamp: "1710000000123",
+		PriceChanges: []PriceChange{{
+			AssetID: "asset-2",
+			Price:   "0.42",
+			Size:    "5.5",
+			Side:    clob.SideBuy,
+			Hash:    "hash-2",
+			BestBid: "0.41",
+			BestAsk: "0.43",
+		}},
 	})
 
 	c.handleMessage(t.Context(), data)
@@ -69,14 +104,32 @@ func TestHandleMessagePriceChangeEvent(t *testing.T) {
 		if !ok {
 			t.Fatalf("expected *PriceChangeEvent, got %T", ev)
 		}
-		if pe.Price != "0.42" {
-			t.Errorf("price = %q, want %q", pe.Price, "0.42")
+		if len(pe.PriceChanges) != 1 || pe.PriceChanges[0].Price != "0.42" {
+			t.Errorf("price changes = %+v", pe.PriceChanges)
 		}
-		if pe.Side != clob.SideBuy {
-			t.Errorf("side = %q, want %q", pe.Side, clob.SideBuy)
+		if pe.PriceChanges[0].Side != clob.SideBuy || pe.PriceChanges[0].Hash != "hash-2" {
+			t.Errorf("change metadata = %+v", pe.PriceChanges[0])
 		}
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for event")
+	}
+}
+
+func TestHandleMessageLiveWireBatchFixtures(t *testing.T) {
+	t.Parallel()
+
+	c := NewClient("")
+	c.handleMessage(t.Context(), []byte(`[{"event_type":"book","market":"m1","asset_id":"a1","bids":[{"price":"0.4","size":"2"}],"asks":[{"price":"0.6","size":"3"}],"timestamp":"1710000000000"},{"event_type":"book","market":"m1","asset_id":"a2","bids":[],"asks":[],"timestamp":"1710000000000"}]`))
+	c.handleMessage(t.Context(), []byte(`{"event_type":"price_change","market":"m1","price_changes":[{"asset_id":"a1","price":"0.41","size":"1","side":"BUY","hash":"h1","best_bid":"0.41","best_ask":"0.6"}],"timestamp":"1710000000123"}`))
+
+	for i := 0; i < 3; i++ {
+		select {
+		case <-c.Events():
+		case err := <-c.Errors():
+			t.Fatalf("unexpected fixture decode error: %v", err)
+		case <-time.After(time.Second):
+			t.Fatal("timed out waiting for fixture event")
+		}
 	}
 }
 

@@ -54,7 +54,13 @@ func main() {
 				fmt.Printf(" Bids: %d levels, Best Bid: %s\n", len(e.Bids), safeBest(e.Bids))
 				fmt.Printf(" Asks: %d levels, Best Ask: %s\n", len(e.Asks), safeBest(e.Asks))
 			case *ws.PriceChangeEvent:
-				fmt.Printf("[PRICE] %s: %s %s @ %s\n", e.AssetID, e.Side, e.Size, e.Price)
+				if len(e.PriceChanges) == 0 {
+					fmt.Printf("[PRICE] %s: %s %s @ %s\n", e.AssetID, e.Side, e.Size, e.Price)
+					continue
+				}
+				for _, change := range e.PriceChanges {
+					fmt.Printf("[PRICE] %s: %s %s @ %s\n", change.AssetID, change.Side, change.Size, change.Price)
+				}
 			case *ws.LastTradePriceEvent:
 				fmt.Printf("[TRADE] %s: %s @ %s (%s)\n", e.AssetID, e.Size, e.Price, e.Side)
 			case *ws.TickSizeChangeEvent:

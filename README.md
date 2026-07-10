@@ -8,12 +8,13 @@
 > Unofficial, community-maintained SDK. Not extensively tested in production trading environments. Use at your own risk.
 
 > [!NOTE]
-> **Parity status (2026-07-10):** Feature-complete against the official
-> [Rust `rs-clob-client-v2` v0.6.0](https://github.com/Polymarket/rs-clob-client-v2) unified SDK
-> (CLOB, Data, Gamma, Bridge, CTF, RTDS, RFQ) plus the gasless relayer. **Perps** is the next
-> major surface — the public market-data REST API ships in the `perps/` package (oracle: TS
-> `ts-sdk`, which added perps June 2026, ahead of Rust); account reads + order placement via the
-> delegated-proxy session are planned. See `ai/ROADMAP.md`.
+> **Parity status (2026-07-10):** Core REST, signing, and wire mechanics are audited against the
+> official [Rust `rs-clob-client-v2` v0.6.0](https://github.com/Polymarket/rs-clob-client-v2)
+> unified SDK (CLOB, Data, Gamma, Bridge, CTF, RTDS, RFQ) plus the gasless relayer. Market
+> WebSocket decoding is kept compatible with the current Rust/Python/TypeScript batch wire
+> shapes. **Perps** is a separate surface: public market-data REST ships in `perps/` (oracle:
+> official TS `ts-sdk`); account reads and delegated-proxy order sessions remain planned. See
+> `ai/ROADMAP.md`.
 
 Go SDK for the [Polymarket](https://polymarket.com) CLOB and Data APIs. Tracks feature parity with the [official Rust V2 SDK](https://github.com/Polymarket/rs-clob-client-v2).
 

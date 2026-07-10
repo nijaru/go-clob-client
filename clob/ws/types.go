@@ -82,22 +82,46 @@ type BaseEvent struct {
 	EventType EventType `json:"event_type"`
 }
 
-// BookEvent is a full order book snapshot emitted upon subscription.
+// BookEvent is a full order book snapshot emitted upon subscription or after a
+// trade. The market channel may deliver these as a top-level JSON array; the
+// client flattens that transport batch into one Event per asset.
 type BookEvent struct {
 	BaseEvent
-	AssetID   string              `json:"asset_id"`
-	Bids      []clob.OrderSummary `json:"bids"`
-	Asks      []clob.OrderSummary `json:"asks"`
-	Timestamp string              `json:"timestamp"`
+	Market         string              `json:"market"`
+	AssetID        string              `json:"asset_id"`
+	Bids           []clob.OrderSummary `json:"bids"`
+	Asks           []clob.OrderSummary `json:"asks"`
+	Timestamp      string              `json:"timestamp"`
+	Hash           string              `json:"hash,omitzero"`
+	MinOrderSize   string              `json:"min_order_size,omitzero"`
+	TickSize       clob.TickSize       `json:"tick_size,omitzero"`
+	NegRisk        bool                `json:"neg_risk,omitzero"`
+	LastTradePrice string              `json:"last_trade_price,omitzero"`
 }
 
-// PriceChangeEvent is an incremental order book update.
-type PriceChangeEvent struct {
-	BaseEvent
+// PriceChange is one entry in a price_change batch.
+type PriceChange struct {
 	AssetID string    `json:"asset_id"`
 	Price   string    `json:"price"`
-	Size    string    `json:"size"`
+	Size    string    `json:"size,omitzero"`
 	Side    clob.Side `json:"side"`
+	Hash    string    `json:"hash,omitzero"`
+	BestBid string    `json:"best_bid,omitzero"`
+	BestAsk string    `json:"best_ask,omitzero"`
+}
+
+// PriceChangeEvent is an incremental order book update. The official market
+// channel sends a batch in price_changes; the deprecated singular fields keep
+// compatibility with older payloads and callers while the server migrates.
+type PriceChangeEvent struct {
+	BaseEvent
+	Market       string        `json:"market,omitzero"`
+	PriceChanges []PriceChange `json:"price_changes,omitzero"`
+	Timestamp    string        `json:"timestamp,omitzero"`
+	AssetID      string        `json:"asset_id,omitzero"`
+	Price        string        `json:"price,omitzero"`
+	Size         string        `json:"size,omitzero"`
+	Side         clob.Side     `json:"side,omitzero"`
 }
 
 // TickSizeChangeEvent is emitted when a market's tick size changes.
@@ -113,13 +137,14 @@ type TickSizeChangeEvent struct {
 // LastTradePriceEvent is emitted for every trade execution.
 type LastTradePriceEvent struct {
 	BaseEvent
-	AssetID    string    `json:"asset_id"`
-	Market     string    `json:"market"`
-	Price      string    `json:"price"`
-	Size       string    `json:"size"`
-	Side       clob.Side `json:"side"`
-	FeeRateBps string    `json:"fee_rate_bps"`
-	Timestamp  string    `json:"timestamp"`
+	AssetID         string    `json:"asset_id"`
+	Market          string    `json:"market"`
+	Price           string    `json:"price"`
+	Size            string    `json:"size"`
+	Side            clob.Side `json:"side"`
+	FeeRateBps      string    `json:"fee_rate_bps"`
+	Timestamp       string    `json:"timestamp"`
+	TransactionHash string    `json:"transaction_hash,omitzero"`
 }
 
 // OrderEvent is emitted when a user's order status changes (placed, canceled).
@@ -177,7 +202,7 @@ type NewMarketEvent struct {
 	Market       string        `json:"market"`
 	Slug         string        `json:"slug"`
 	Description  string        `json:"description"`
-	AssetIDs     []string      `json:"asset_ids"`
+	AssetIDs     []string      `json:"assets_ids"`
 	Outcomes     []string      `json:"outcomes"`
 	EventMessage *EventMessage `json:"event_message,omitzero"`
 	Timestamp    string        `json:"timestamp"`
@@ -191,7 +216,7 @@ type MarketResolvedEvent struct {
 	Market         string        `json:"market"`
 	Slug           string        `json:"slug,omitzero"`
 	Description    string        `json:"description,omitzero"`
-	AssetIDs       []string      `json:"asset_ids"`
+	AssetIDs       []string      `json:"assets_ids"`
 	Outcomes       []string      `json:"outcomes,omitzero"`
 	WinningAssetID string        `json:"winning_asset_id"`
 	WinningOutcome string        `json:"winning_outcome"`

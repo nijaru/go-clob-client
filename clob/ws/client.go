@@ -859,6 +859,18 @@ func (c *Client) handleMessage(ctx context.Context, data []byte) {
 	var event Event
 	switch eventType {
 	case EventTypeBook:
+		// The market endpoint sends the initial dump as a JSON array of
+		// per-asset book snapshots. Keep compatibility with older/synthetic
+		// single-object payloads, but flatten the live wire batch into the
+		// same Event stream exposed by the official clients.
+		var books []BookEvent
+		if err := json.Unmarshal(data, &books); err == nil {
+			for i := range books {
+				books[i].BaseEvent = BaseEvent{EventType: EventTypeBook}
+				c.emitEvent(ctx, &books[i])
+			}
+			return
+		}
 		event = &BookEvent{}
 	case EventTypePriceChange:
 		event = &PriceChangeEvent{}
@@ -886,13 +898,20 @@ func (c *Client) handleMessage(ctx context.Context, data []byte) {
 	}
 
 	if err := json.Unmarshal(data, event); err != nil {
-		select {
-		case c.errs <- fmt.Errorf("decode event %s: %w", eventType, err):
-		default:
-		}
+		c.reportDecodeError(eventType, err)
 		return
 	}
+	c.emitEvent(ctx, event)
+}
 
+func (c *Client) reportDecodeError(eventType EventType, err error) {
+	select {
+	case c.errs <- fmt.Errorf("decode event %s: %w", eventType, err):
+	default:
+	}
+}
+
+func (c *Client) emitEvent(ctx context.Context, event Event) {
 	select {
 	case c.events <- event:
 	case <-ctx.Done():
