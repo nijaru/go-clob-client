@@ -2,9 +2,11 @@ package polyrelay
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -113,15 +115,74 @@ func TestPollUntilTerminalFallbackHash(t *testing.T) {
 	}
 }
 
-func TestPollUntilTerminalNoHash(t *testing.T) {
+func TestPollUntilTerminalConfirmedNoHash(t *testing.T) {
 	t.Parallel()
+	// CONFIRMED with no observed hash is a SUCCESS, not an error: the tx settled,
+	// so erroring would risk a caller double-submitting it. The outcome carries
+	// an empty hash for the caller to resolve via the transaction ID.
 	states := []string{"STATE_CONFIRMED"}
 	srv := sequenceServer(t, states, "")
 	tr := NewTransport(&polyhttp.Client{BaseURL: srv.URL, HTTPClient: srv.Client()})
 
+	out, err := PollUntilTerminal(context.Background(), tr, "tx-1", "", 10, time.Millisecond)
+	if err != nil {
+		t.Fatalf("err = %v, want nil (CONFIRMED is success even without a hash)", err)
+	}
+	if out == nil || out.TransactionHash != "" {
+		t.Fatalf("outcome = %+v, want non-nil with empty hash", out)
+	}
+}
+
+func TestPollUntilTerminalToleratesTransientError(t *testing.T) {
+	t.Parallel()
+	// First GET → 429 (transient), second GET → CONFIRMED. The loop must keep
+	// polling past the blip rather than aborting the whole wait.
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if calls.Add(1) == 1 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"state": "STATE_CONFIRMED", "transaction_hash": "0xok", "transaction_id": "tx-1",
+		})
+	}))
+	t.Cleanup(srv.Close)
+	tr := NewTransport(&polyhttp.Client{BaseURL: srv.URL, HTTPClient: srv.Client()})
+
+	out, err := PollUntilTerminal(
+		context.Background(),
+		tr,
+		"tx-1",
+		"0xfallback",
+		10,
+		time.Millisecond,
+	)
+	if err != nil {
+		t.Fatalf("PollUntilTerminal: %v (must tolerate transient 429)", err)
+	}
+	if out.TransactionHash != "0xok" {
+		t.Fatalf("hash = %s, want 0xok", out.TransactionHash)
+	}
+}
+
+func TestPollUntilTerminalHardErrorAborts(t *testing.T) {
+	t.Parallel()
+	// 401 is non-transient: the loop must abort immediately, not keep polling.
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	t.Cleanup(srv.Close)
+	tr := NewTransport(&polyhttp.Client{BaseURL: srv.URL, HTTPClient: srv.Client()})
+
 	_, err := PollUntilTerminal(context.Background(), tr, "tx-1", "", 10, time.Millisecond)
-	if !errors.Is(err, ErrNoTransactionHash) {
-		t.Fatalf("err = %v, want ErrNoTransactionHash", err)
+	if err == nil {
+		t.Fatal("expected error for 401, got nil")
+	}
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("poll attempts = %d, want 1 (hard error must abort)", got)
 	}
 }
 
@@ -183,11 +244,12 @@ func TestPollUntilTerminalTimeout(t *testing.T) {
 // with a succession of states, cycling on the last.
 func sequenceServer(t *testing.T, states []string, hash string) *httptest.Server {
 	t.Helper()
-	idx := 0
+	var idx atomic.Int32
 	srv := newJSONServer(func(r *http.Request) any {
-		state := states[idx]
-		if idx < len(states)-1 {
-			idx++
+		i := int(idx.Load())
+		state := states[i]
+		if i < len(states)-1 {
+			idx.Add(1)
 		}
 		return map[string]any{
 			"state":            state,

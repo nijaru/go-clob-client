@@ -161,6 +161,9 @@ func proxyDigest(req *RelayRequest) ([]byte, error) {
 // ---------------------------------------------------------------------------
 
 func safeDigest(req *RelayRequest) ([]byte, error) {
+	if req.ChainID == nil || req.Value == nil || req.Nonce == nil {
+		return nil, fmt.Errorf("%w: safe digest requires chainId, value, nonce", ErrNilValue)
+	}
 	td := apitypes.TypedData{
 		Types: apitypes.Types{
 			"EIP712Domain": {
@@ -223,6 +226,9 @@ func packSafeSignature(sig []byte) {
 func depositDigest(req *RelayRequest) ([]byte, error) {
 	if len(req.Calls) == 0 {
 		return nil, ErrEmptyBatch
+	}
+	if req.ChainID == nil || req.Nonce == nil || req.Deadline == nil {
+		return nil, fmt.Errorf("%w: deposit digest requires chainId, nonce, deadline", ErrNilValue)
 	}
 	calls := make([]apitypes.TypedDataMessage, len(req.Calls))
 	for i, c := range req.Calls {

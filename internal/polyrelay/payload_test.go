@@ -133,6 +133,28 @@ func TestBuildDepositSubmit(t *testing.T) {
 	}
 }
 
+func TestBuildSubmitEmitsEmptyMetadata(t *testing.T) {
+	t.Parallel()
+	// py-sdk always emits "metadata" (even ""), so Metadata has no omitempty;
+	// an empty metadata must still appear as a key in every submit body.
+	req, err := BuildProxySubmit(ProxySubmitInput{
+		Signer: addrRepeat(1), ProxyFactory: addrRepeat(2), Wallet: addrRepeat(3),
+		Data: nil, Nonce: big.NewInt(1), Signature: make([]byte, 65),
+		GasLimit: big.NewInt(1), Relay: addrRepeat(4), RelayHub: addrRepeat(5), Metadata: "",
+	})
+	if err != nil {
+		t.Fatalf("BuildProxySubmit: %v", err)
+	}
+	got := marshalLower(t, req).(map[string]any)
+	v, ok := got["metadata"]
+	if !ok {
+		t.Fatal("metadata key missing for empty metadata (omitempty regressed)")
+	}
+	if v != "" {
+		t.Fatalf("metadata = %v, want empty string", v)
+	}
+}
+
 func TestBuildWalletCreate(t *testing.T) {
 	t.Parallel()
 	A, B := addrRepeat(0x11), addrRepeat(0x22)
@@ -155,5 +177,8 @@ func TestBuildSubmitRejectsBadInput(t *testing.T) {
 	}
 	if _, err := BuildDepositSubmit(DepositSubmitInput{Nonce: big.NewInt(1), Deadline: big.NewInt(2), Signature: sig}); err == nil {
 		t.Fatal("empty calls: expected error")
+	}
+	if _, err := BuildProxySubmit(ProxySubmitInput{Signer: addrRepeat(1), Nonce: big.NewInt(-1), Signature: sig, GasLimit: big.NewInt(1)}); err == nil {
+		t.Fatal("negative nonce: expected error")
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"math/rand/v2"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -130,10 +131,8 @@ func PrepareGasless(
 		if attempt == SubmitRetryAttempts || !isRetryableSubmitError(err) {
 			return nil, err
 		}
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(pollDelay):
+		if err := sleepCtx(ctx, backoffWithJitter(pollDelay)); err != nil {
+			return nil, err
 		}
 	}
 	// Unreachable: the loop returns on success, last attempt, or non-retryable.
@@ -141,7 +140,10 @@ func PrepareGasless(
 }
 
 // DeployDepositWallet submits an unsigned WALLET-CREATE to deploy a new deposit
-// wallet for the signer via the relayer.
+// wallet for the signer via the relayer. Transient submit failures (429, wallet
+// contention) are retried like PrepareGasless; the deploy is unsigned and
+// idempotent on the relayer (deterministic by signer+factory), so there is no
+// nonce or signature to rebuild between attempts.
 func DeployDepositWallet(
 	ctx context.Context,
 	t *Transport,
@@ -154,9 +156,19 @@ func DeployDepositWallet(
 	payload := BuildWalletCreate(
 		WalletCreateInput{Signer: signer, Factory: factory, Metadata: metadata},
 	)
-	resp, err := t.Submit(ctx, payload)
-	if err != nil {
-		return nil, err
+	var resp ExecuteResponse
+	for attempt := 0; ; attempt++ {
+		var err error
+		resp, err = t.Submit(ctx, payload)
+		if err == nil {
+			break
+		}
+		if attempt == SubmitRetryAttempts || !isRetryableSubmitError(err) {
+			return nil, err
+		}
+		if err := sleepCtx(ctx, backoffWithJitter(DefaultPollInterval)); err != nil {
+			return nil, err
+		}
 	}
 	return &Handle{
 		transport:       t,
@@ -363,6 +375,17 @@ func estimateProxyGasLimit(
 }
 
 // --- submit retry rules ---
+
+// backoffWithJitter applies "equal jitter" to a retry delay: half fixed plus
+// half random, yielding a value in [d/2, d]. This desynchronizes 429 retries
+// across clients without ever shortening the delay below half the base.
+func backoffWithJitter(d time.Duration) time.Duration {
+	if d <= 0 {
+		return d
+	}
+	half := d / 2
+	return half + time.Duration(rand.Float64()*float64(half))
+}
 
 var (
 	walletBusyRE     = regexp.MustCompile(`(?i)wallet busy.*active action`)

@@ -253,7 +253,11 @@ func DecodeAPISecret(secret string) ([]byte, error) {
 		// This is technically misconfigured — Polymarket issues URL-safe secrets.
 		// We accept it for backward compatibility but warn so the caller can fix it.
 		slog.Warn("API secret uses standard base64 encoding; URL-safe encoding is expected")
-		std := strings.NewReplacer("-", "+", "_", "/").Replace(secret)
+		std := strings.NewReplacer("-", "+", "_", "/").Replace(strings.TrimSpace(secret))
+		std, perr := padBase64(std)
+		if perr != nil {
+			return nil, fmt.Errorf("decode API secret: %w", perr)
+		}
 		decoded, err = base64.StdEncoding.DecodeString(std)
 		if err != nil {
 			return nil, fmt.Errorf("decode API secret: %w", err)
@@ -307,14 +311,19 @@ func HMACSignatureBytes(
 }
 
 func normalizeBase64URL(value string) (string, error) {
-	value = strings.TrimSpace(value)
+	return padBase64(strings.TrimSpace(value))
+}
+
+// padBase64 adds the base64 padding implied by value's length, returning an
+// error for the one length (mod 4 == 1) that can never be valid base64.
+func padBase64(value string) (string, error) {
 	switch len(value) % 4 {
 	case 1:
-		return "", fmt.Errorf("invalid base64url secret: length mod 4 == 1 is never valid")
+		return "", fmt.Errorf("invalid base64 secret: length mod 4 == 1 is never valid")
 	case 2:
-		value += "=="
+		return value + "==", nil
 	case 3:
-		value += "="
+		return value + "=", nil
 	}
 	return value, nil
 }

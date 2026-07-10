@@ -242,6 +242,35 @@ func TestSignValidatesInput(t *testing.T) {
 			t.Fatalf("err = %v, want ErrNilValue", err)
 		}
 	})
+
+	t.Run("safe missing chainId", func(t *testing.T) {
+		t.Parallel()
+		// safeDigest derefs ChainID/Value/Nonce; a nil one must surface a typed
+		// error (defense-in-depth — the orchestrator always sets these today).
+		req := RelayRequest{
+			Wallet: addrRepeat(0x77), To: addrRepeat(0x88),
+			Data: nil, Value: big.NewInt(0), Operation: 0, Nonce: big.NewInt(1),
+			// ChainID intentionally nil
+		}
+		_, err := Sign(TransactionTypeSafe, key, req)
+		if !errors.Is(err, ErrNilValue) {
+			t.Fatalf("err = %v, want ErrNilValue", err)
+		}
+	})
+
+	t.Run("deposit missing deadline", func(t *testing.T) {
+		t.Parallel()
+		req := RelayRequest{
+			Wallet: addrRepeat(0x77),
+			Calls:  []TransactionCall{{To: addrRepeat(0x88), Data: nil, Value: big.NewInt(0)}},
+			Nonce:  big.NewInt(1), ChainID: big.NewInt(137),
+			// Deadline intentionally nil
+		}
+		_, err := Sign(TransactionTypeWallet, key, req)
+		if !errors.Is(err, ErrNilValue) {
+			t.Fatalf("err = %v, want ErrNilValue", err)
+		}
+	})
 }
 
 func TestHexSignature(t *testing.T) {

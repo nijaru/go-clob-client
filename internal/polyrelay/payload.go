@@ -21,7 +21,7 @@ type SubmitRequest struct {
 	Value           string               `json:"value,omitempty"`
 	Nonce           string               `json:"nonce,omitempty"`
 	Signature       string               `json:"signature,omitempty"`
-	Metadata        string               `json:"metadata,omitempty"`
+	Metadata        string               `json:"metadata"`
 	SignatureParams *signatureParams     `json:"signatureParams,omitempty"`
 	DepositWallet   *depositWalletParams `json:"depositWalletParams,omitempty"`
 }
@@ -65,6 +65,9 @@ func addrHex(a common.Address) string { return a.Hex() }
 func bigStr(v *big.Int) (string, error) {
 	if v == nil {
 		return "", fmt.Errorf("%w: big.Int field", ErrNilValue)
+	}
+	if v.Sign() < 0 {
+		return "", fmt.Errorf("%w: %s", ErrNegativeValue, v.String())
 	}
 	return v.String(), nil
 }

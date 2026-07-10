@@ -330,6 +330,38 @@ func TestPrepareGaslessDoesNotRetryUnrelated400(t *testing.T) {
 	}
 }
 
+func TestPrepareGaslessRetryExhaustionReturnsFinalError(t *testing.T) {
+	t.Parallel()
+	var captured map[string]any
+	mock := &orchServer{
+		t: t, nonce: "1", relayAddr: "0x",
+		submitBody: &captured,
+		submitResp: func(int) any {
+			return &cannedError{status: http.StatusTooManyRequests, body: "rate limited"}
+		},
+	}
+	srv := httptest.NewServer(mock)
+	t.Cleanup(srv.Close)
+
+	cfg := testGaslessConfig(TransactionTypeWallet)
+	cfg.PollInterval = time.Nanosecond
+	tr := testTransport(t, srv)
+	_, err := PrepareGasless(
+		context.Background(),
+		tr,
+		cfg,
+		mustKey(t),
+		[]TransactionCall{{To: addrRepeat(0x20), Value: big.NewInt(0)}},
+		"",
+	)
+	if err == nil {
+		t.Fatal("expected retry exhaustion error")
+	}
+	if got := mock.calls.Load(); got != SubmitRetryAttempts+1 {
+		t.Fatalf("submit attempts = %d, want %d", got, SubmitRetryAttempts+1)
+	}
+}
+
 func TestPrepareGaslessValidation(t *testing.T) {
 	t.Parallel()
 	tr := testTransport(
@@ -416,6 +448,35 @@ func TestDeployDepositWallet(t *testing.T) {
 	}
 	if captured["type"] != "WALLET-CREATE" {
 		t.Fatalf("type = %v, want WALLET-CREATE", captured["type"])
+	}
+}
+
+func TestDeployDepositWalletRetriesTransientSubmit(t *testing.T) {
+	t.Parallel()
+	var captured map[string]any
+	mock := &orchServer{
+		t: t, nonce: "0", relayAddr: "0x",
+		submitBody: &captured,
+		submitResp: func(attempt int) any {
+			if attempt == 1 {
+				return &cannedError{status: http.StatusTooManyRequests, body: "rate limited"}
+			}
+			return map[string]any{"state": "STATE_NEW", "transactionID": "deploy-retry"}
+		},
+	}
+	srv := httptest.NewServer(mock)
+	t.Cleanup(srv.Close)
+
+	tr := testTransport(t, srv)
+	h, err := DeployDepositWallet(context.Background(), tr, addrRepeat(0x01), addrRepeat(0x11), "")
+	if err != nil {
+		t.Fatalf("DeployDepositWallet: %v", err)
+	}
+	if h.TransactionID != "deploy-retry" {
+		t.Fatalf("tx id = %s, want deploy-retry", h.TransactionID)
+	}
+	if got := mock.calls.Load(); got != 2 {
+		t.Fatalf("submit attempts = %d, want 2", got)
 	}
 }
 

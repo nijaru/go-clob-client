@@ -1,12 +1,30 @@
 package polyauth
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
+
+func TestDecodeAPISecretStdFallbackPadding(t *testing.T) {
+	t.Parallel()
+
+	got, err := DecodeAPISecret("+fw")
+	if err != nil {
+		t.Fatalf("DecodeAPISecret standard-base64 fallback: %v", err)
+	}
+	want, err := base64.StdEncoding.DecodeString("+fw=")
+	if err != nil {
+		t.Fatalf("decode expected secret: %v", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("decoded secret = %x, want %x", got, want)
+	}
+}
 
 func TestHMACSignatureReplacesSingleQuotes(t *testing.T) {
 	t.Parallel()
