@@ -69,7 +69,8 @@ func newGaslessCTFMockRelayer(t *testing.T, captured *map[string]any) *httptest.
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v1/account/transactions/params":
-			_ = json.NewEncoder(w).Encode(map[string]string{"address": "0x" + repeatHex(20), "nonce": "3"})
+			_ = json.NewEncoder(w).
+				Encode(map[string]string{"address": "0x" + repeatHex(20), "nonce": "3"})
 		case "/submit":
 			body, _ := io.ReadAll(r.Body)
 			var parsed map[string]any
@@ -102,7 +103,11 @@ func TestMergePositionsGaslessRoutesThroughRelayer(t *testing.T) {
 	cond := common.BytesToHash(bytes.Repeat([]byte{0xcd}, 32))
 	h, err := client.MergePositionsGasless(
 		context.Background(),
-		MergeBinary(common.HexToAddress("0x1111111111111111111111111111111111111111"), cond, big.NewInt(5)),
+		MergeBinary(
+			common.HexToAddress("0x1111111111111111111111111111111111111111"),
+			cond,
+			big.NewInt(5),
+		),
 		"merge",
 	)
 	if err != nil {
@@ -119,7 +124,9 @@ func TestMergePositionsGaslessRoutesThroughRelayer(t *testing.T) {
 		t.Fatalf("submit to = %s, want ConditionalTokens %s", got, conditional.Hex())
 	}
 	dataHex, _ := captured["data"].(string)
-	wantSel := "0x" + common.Bytes2Hex(selector("mergePositions(address,bytes32,bytes32,uint256[],uint256)"))
+	wantSel := "0x" + common.Bytes2Hex(
+		selector("mergePositions(address,bytes32,bytes32,uint256[],uint256)"),
+	)
 	if len(dataHex) < 10 || dataHex[:10] != wantSel {
 		t.Fatalf("submit data selector = %s, want %s", dataHex, wantSel)
 	}
