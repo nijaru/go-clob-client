@@ -25,7 +25,11 @@ func TestRequiredTradingApprovalsMatchesOfficialContractSet(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(erc20) != 8 || len(erc1155) != 9 {
-		t.Fatalf("approval requirements = %d ERC20, %d ERC1155; want 8, 9", len(erc20), len(erc1155))
+		t.Fatalf(
+			"approval requirements = %d ERC20, %d ERC1155; want 8, 9",
+			len(erc20),
+			len(erc1155),
+		)
 	}
 
 	wantERC20Spenders := []string{
@@ -60,7 +64,13 @@ func TestRequiredTradingApprovalsMatchesOfficialContractSet(t *testing.T) {
 	for i, want := range wantERC1155 {
 		if got := erc1155[i]; got.TokenAddress != common.HexToAddress(want[0]) ||
 			got.OperatorAddress != common.HexToAddress(want[1]) || !got.Approved {
-			t.Fatalf("ERC1155 approval[%d] = %+v, want token=%s operator=%s approved=true", i, got, want[0], want[1])
+			t.Fatalf(
+				"ERC1155 approval[%d] = %+v, want token=%s operator=%s approved=true",
+				i,
+				got,
+				want[0],
+				want[1],
+			)
 		}
 	}
 
@@ -125,7 +135,11 @@ func TestPrepareTradingApprovalsReturnsMissingState(t *testing.T) {
 		t.Fatalf("PrepareTradingApprovals: %v", err)
 	}
 	if len(plan.ERC20Approvals) != 8 || len(plan.ERC1155Approvals) != 9 {
-		t.Fatalf("plan = %d ERC20, %d ERC1155; want 8, 9", len(plan.ERC20Approvals), len(plan.ERC1155Approvals))
+		t.Fatalf(
+			"plan = %d ERC20, %d ERC1155; want 8, 9",
+			len(plan.ERC20Approvals),
+			len(plan.ERC1155Approvals),
+		)
 	}
 	if got := calls.Load(); got != 17 {
 		t.Fatalf("eth_call count = %d, want 17", got)
@@ -189,7 +203,11 @@ func TestSetupTradingApprovalsGaslessReturnsNilWhenComplete(t *testing.T) {
 	}
 }
 
-func newTokenReadRPC(t *testing.T, allowance *big.Int, approved bool) (*httptest.Server, *atomic.Int32) {
+func newTokenReadRPC(
+	t *testing.T,
+	allowance *big.Int,
+	approved bool,
+) (*httptest.Server, *atomic.Int32) {
 	t.Helper()
 	var calls atomic.Int32
 	allowanceResult, err := tokenABI.Methods["allowance"].Outputs.Pack(allowance)
