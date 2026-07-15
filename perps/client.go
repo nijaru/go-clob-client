@@ -2,15 +2,21 @@ package perps
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
 )
 
 // DefaultHost is the production Perps REST API host.
 const DefaultHost = "https://api.perpetuals.polymarket.com"
+
+// DefaultWebSocketHost is the production authenticated Perps WebSocket URL.
+const DefaultWebSocketHost = "wss://ws.perpetuals.polymarket.com/v1/ws"
 
 // Client is a read-only client for the Polymarket Perps API.
 type Client struct {
@@ -22,6 +28,9 @@ type Client struct {
 type Config struct {
 	// Host overrides the API host. Defaults to DefaultHost.
 	Host string
+	// WebSocketHost overrides the authenticated session URL. Defaults to
+	// DefaultWebSocketHost.
+	WebSocketHost string
 	// HTTPClient is the underlying HTTP client. Defaults to a 15s-timeout client.
 	HTTPClient *http.Client
 	// UserAgent sets the User-Agent header. Defaults to "go-clob-client/perps".
@@ -31,6 +40,9 @@ type Config struct {
 func (c Config) normalized() Config {
 	if c.Host == "" {
 		c.Host = DefaultHost
+	}
+	if c.WebSocketHost == "" {
+		c.WebSocketHost = DefaultWebSocketHost
 	}
 	if c.HTTPClient == nil {
 		c.HTTPClient = &http.Client{Timeout: 15 * time.Second}
@@ -52,6 +64,66 @@ func New(config Config) *Client {
 			UserAgent:  config.UserAgent,
 		},
 	}
+}
+
+// AuthenticatedConfig configures an authenticated Perps client with an
+// existing delegated proxy credential.
+type AuthenticatedConfig struct {
+	Config
+	Credentials PerpsCredentials
+}
+
+// AuthenticatedClient reads account data and opens delegated Perps sessions.
+type AuthenticatedClient struct {
+	*Client
+	webSocketHost string
+	credentials   PerpsCredentials
+}
+
+// NewAuthenticated creates an authenticated Perps client from delegated
+// credentials. Credential creation and revocation remain explicit owner-signed
+// operations; this constructor is the safe resume path for stored credentials.
+func NewAuthenticated(config AuthenticatedConfig) (*AuthenticatedClient, error) {
+	baseConfig := config.Config.normalized()
+	if !common.IsHexAddress(config.Credentials.Proxy) ||
+		common.HexToAddress(config.Credentials.Proxy) == (common.Address{}) {
+		return nil, fmt.Errorf("perps: invalid delegated proxy address")
+	}
+	if config.Credentials.Secret == "" {
+		return nil, fmt.Errorf("perps: delegated credential secret is required")
+	}
+	return &AuthenticatedClient{
+		Client:        New(baseConfig),
+		webSocketHost: baseConfig.WebSocketHost,
+		credentials:   config.Credentials,
+	}, nil
+}
+
+// Credentials returns a copy of the delegated credentials used by the client.
+func (c *AuthenticatedClient) Credentials() PerpsCredentials {
+	return c.credentials
+}
+
+func (c *AuthenticatedClient) getAuthenticatedJSON(
+	ctx context.Context,
+	path string,
+	query url.Values,
+	out any,
+) error {
+	return c.http.DoJSON(
+		ctx,
+		http.MethodGet,
+		path,
+		query,
+		nil,
+		polyhttp.AuthNone,
+		nil,
+		map[string]string{
+			"POLYMARKET-PROXY":  c.credentials.Proxy,
+			"POLYMARKET-SECRET": c.credentials.Secret,
+		},
+		out,
+	)
 }
 
 // Host returns the configured API host.

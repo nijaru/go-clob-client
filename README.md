@@ -11,10 +11,10 @@
 > **Parity status (2026-07-15):** Core mechanics and the non-perps CLOB/Data/Gamma/Bridge/CTF/
 > RTDS/RFQ surfaces are tracked against the current official Rust, TypeScript, and Python SDKs,
 > with current combo pagination, Gamma discovery endpoints, and full CLOB WebSocket event fields.
-> **Perps** remains a separate package: public market-data REST is wire-compatible with the TS
-> SDK, while authenticated account/session trading is a separate planned milestone. Parity here
-> means contract-level capability with idiomatic Go APIs, not a drop-in copy of TypeScript or
-> Python method names. See `ai/ROADMAP.md`.
+> **Perps** remains a separate package: public market-data REST plus authenticated account reads
+> and delegated session startup are wire-compatible with the current TS SDK. Signed order commands
+> remain a separate follow-up. Parity here means contract-level capability with idiomatic Go APIs,
+> not a drop-in copy of TypeScript or Python method names. See `ai/ROADMAP.md`.
 
 Go SDK for the [Polymarket](https://polymarket.com) CLOB and adjacent APIs. Tracks stable capability
 parity with the official [Rust V2](https://github.com/Polymarket/rs-clob-client-v2),
@@ -35,7 +35,7 @@ The module exposes several focused packages:
 - **`data`** — read-only analytics: positions, trades, activity, combo portfolios, holders, leaderboards
 - **`gamma`** — markets, events, tags, sports, comments, profiles, and clarifications
 - **`bridge`** — deposit-address discovery
-- **`perps`** — public perpetuals market-data REST
+- **`perps`** — public perpetuals market data and authenticated account/session access
 
 ## Quickstart
 
@@ -199,6 +199,39 @@ allowances already present. Use `SignerClient.SetupTradingApprovals` for sequent
 transactions or `AuthenticatedClient.SetupTradingApprovalsGasless` for one relayed batch. The
 resolver follows the current Polygon contract set; callers should treat a nil gasless handle as
 “already approved.”
+
+Perps account reads use an existing delegated credential, and `OpenSession` performs the official
+authenticated WebSocket handshake and account-channel subscription:
+
+```go
+import "github.com/nijaru/go-clob-client/perps"
+
+client, err := perps.NewAuthenticated(perps.AuthenticatedConfig{
+	Credentials: perps.PerpsCredentials{
+		Proxy:  os.Getenv("POLYMARKET_PERPS_PROXY"),
+		Secret: os.Getenv("POLYMARKET_PERPS_SECRET"),
+	},
+})
+if err != nil {
+	log.Fatal(err)
+}
+portfolio, err := client.GetPortfolio(ctx)
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Printf("withdrawable: %s\n", portfolio.Withdrawable)
+session, err := client.OpenSession(ctx, perps.SessionConfig{})
+if err != nil {
+	log.Fatal(err)
+}
+defer session.Close()
+for event := range session.Events() {
+	log.Printf("perps %s update: %s", event.Channel, event.Data)
+}
+```
+
+Signed perps order commands and owner-signed delegated-credential creation/revocation remain
+separate follow-up surfaces.
 
 ## Error Handling
 

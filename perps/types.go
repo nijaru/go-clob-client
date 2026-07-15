@@ -6,6 +6,15 @@ import (
 	"fmt"
 )
 
+// PerpsCredentials are delegated credentials issued by the Perps account
+// service. Keep the secret private; it authorizes account reads and sessions.
+type PerpsCredentials struct {
+	Proxy      string `json:"proxy"`
+	Secret     string `json:"secret"`
+	PrivateKey string `json:"private_key,omitempty"`
+	ExpiresAt  int64  `json:"expires_at"`
+}
+
 // PerpsCategory is the market category of a perps instrument.
 type PerpsCategory string
 
@@ -31,6 +40,36 @@ const (
 	PerpsTIFGTC PerpsTimeInForce = "gtc"
 	PerpsTIFIOC PerpsTimeInForce = "ioc"
 	PerpsTIFFOK PerpsTimeInForce = "fok"
+)
+
+// PerpsOrderStatus is the server lifecycle status of an authenticated order.
+type PerpsOrderStatus string
+
+const (
+	PerpsOrderAccepted                   PerpsOrderStatus = "accepted"
+	PerpsOrderOpen                       PerpsOrderStatus = "open"
+	PerpsOrderPartial                    PerpsOrderStatus = "partial"
+	PerpsOrderFilled                     PerpsOrderStatus = "filled"
+	PerpsOrderCancelled                  PerpsOrderStatus = "cancelled"
+	PerpsOrderAutoCancelled              PerpsOrderStatus = "auto_cancelled"
+	PerpsOrderPostOnlyRejected           PerpsOrderStatus = "post_only_rejected"
+	PerpsOrderFOKUnfilled                PerpsOrderStatus = "fok_unfilled"
+	PerpsOrderIOCNoFill                  PerpsOrderStatus = "ioc_no_fill"
+	PerpsOrderIOCExpired                 PerpsOrderStatus = "ioc_expired"
+	PerpsOrderSTPCancelled               PerpsOrderStatus = "stp_cancelled"
+	PerpsOrderZeroQuantity               PerpsOrderStatus = "zero_quantity"
+	PerpsOrderDuplicate                  PerpsOrderStatus = "duplicate_order"
+	PerpsOrderNotFound                   PerpsOrderStatus = "order_not_found"
+	PerpsOrderReduceOnlyInvalid          PerpsOrderStatus = "reduce_only_invalid"
+	PerpsOrderReduceOnlyExpired          PerpsOrderStatus = "reduce_only_expired"
+	PerpsOrderExpired                    PerpsOrderStatus = "order_expired"
+	PerpsOrderUntriggered                PerpsOrderStatus = "untriggered"
+	PerpsOrderArmed                      PerpsOrderStatus = "armed"
+	PerpsOrderTriggered                  PerpsOrderStatus = "triggered"
+	PerpsOrderParentCancelled            PerpsOrderStatus = "parent_cancelled"
+	PerpsOrderPositionClosed             PerpsOrderStatus = "position_closed"
+	PerpsOrderPositionFlipped            PerpsOrderStatus = "position_flipped"
+	PerpsOrderReduceOnlyInvalidAtTrigger PerpsOrderStatus = "reduce_only_invalid_at_trigger"
 )
 
 // PerpsKlineInterval is the candle interval for perps klines.
@@ -245,6 +284,223 @@ type PerpsFeeScheduleEntry struct {
 // PerpsFeesInfo is the fee schedule response wrapper.
 type PerpsFeesInfo struct {
 	FeeSchedule []PerpsFeeScheduleEntry `json:"fee_schedule"`
+}
+
+// PerpsBalance is an authenticated account balance entry.
+type PerpsBalance struct {
+	Asset   string `json:"asset"`
+	Balance string `json:"balance"`
+	Value   string `json:"value"`
+}
+
+// PerpsAccountStats contains account-level seven-day volume statistics.
+type PerpsAccountStats struct {
+	Volume7d            string `json:"volume_7d"`
+	TakerVolume7d       string `json:"taker_volume_7d"`
+	MakerVolume7d       string `json:"maker_volume_7d"`
+	AccountMakerShare7d string `json:"account_maker_share_7d"`
+	EntityMakerShare7d  string `json:"entity_maker_share_7d,omitempty"`
+	EntityID            int    `json:"entity_id,omitempty"`
+	EntityName          string `json:"entity_name,omitempty"`
+}
+
+// PerpsPortfolioPosition is an open position in the authenticated portfolio.
+type PerpsPortfolioPosition struct {
+	InstrumentID      int    `json:"instrument_id"`
+	Symbol            string `json:"symbol"`
+	Size              string `json:"size"`
+	EntryPrice        string `json:"entry_price"`
+	Leverage          int    `json:"leverage"`
+	Cross             bool   `json:"cross"`
+	InitialMargin     string `json:"initial_margin"`
+	MaintenanceMargin string `json:"maintenance_margin"`
+	PositionValue     string `json:"position_value"`
+	LiquidationPrice  string `json:"liquidation_price"`
+	UnrealizedPnL     string `json:"unrealized_pnl"`
+	ReturnOnEquity    string `json:"return_on_equity"`
+	CumulativeFunding string `json:"cumulative_funding"`
+}
+
+// PerpsMarginSummary summarizes portfolio margin usage.
+type PerpsMarginSummary struct {
+	TotalAccountValue      string `json:"total_account_value"`
+	TotalInitialMargin     string `json:"total_initial_margin"`
+	TotalMaintenanceMargin string `json:"total_maintenance_margin"`
+	TotalPositionValue     string `json:"total_position_value"`
+}
+
+// PerpsPortfolio is the authenticated account portfolio snapshot.
+type PerpsPortfolio struct {
+	Positions     []PerpsPortfolioPosition `json:"positions"`
+	Margin        PerpsMarginSummary       `json:"margin"`
+	Withdrawable  string                   `json:"withdrawable"`
+	InLiquidation bool                     `json:"in_liquidation"`
+	Timestamp     int64                    `json:"timestamp"`
+}
+
+// PerpsAccountConfig is leverage and margin mode for one instrument.
+type PerpsAccountConfig struct {
+	InstrumentID int  `json:"instrument_id"`
+	Leverage     int  `json:"leverage"`
+	Cross        bool `json:"cross"`
+}
+
+// PerpsOrder is an authenticated order returned by the account API.
+type PerpsOrder struct {
+	ID               int              `json:"order_id"`
+	InstrumentID     int              `json:"instrument_id"`
+	Buy              bool             `json:"buy"`
+	Price            string           `json:"price"`
+	Quantity         string           `json:"quantity"`
+	TimeInForce      PerpsTimeInForce `json:"tif"`
+	PostOnly         bool             `json:"post_only"`
+	ReduceOnly       bool             `json:"ro"`
+	Status           PerpsOrderStatus `json:"status"`
+	RestingQuantity  string           `json:"resting_quantity"`
+	FilledQuantity   string           `json:"filled_quantity"`
+	CreatedTimestamp int64            `json:"created_timestamp"`
+	UpdatedTimestamp int64            `json:"updated_timestamp"`
+	ClientOrderID    string           `json:"client_order_id,omitempty"`
+}
+
+// PerpsPage is the wire page returned by authenticated history endpoints.
+type PerpsPage[T any] struct {
+	Data []T  `json:"data"`
+	More bool `json:"more"`
+}
+
+// PerpsAccountFill is an authenticated trade fill.
+type PerpsAccountFill struct {
+	TradeID            int64     `json:"trade_id"`
+	OrderID            int       `json:"order_id"`
+	InstrumentID       int       `json:"instrument_id"`
+	Side               PerpsSide `json:"side"`
+	Price              string    `json:"price"`
+	Quantity           string    `json:"quantity"`
+	Taker              bool      `json:"taker"`
+	Fee                string    `json:"fee"`
+	FeeAsset           string    `json:"fee_asset"`
+	PreviousSize       string    `json:"previous_size"`
+	PreviousEntryPrice string    `json:"previous_entry_price"`
+	PnL                string    `json:"pnl"`
+	Liquidation        bool      `json:"liquidation"`
+	Timestamp          int64     `json:"timestamp"`
+	Hash               string    `json:"hash"`
+}
+
+// PerpsAccountFundingPayment is an account funding payment entry.
+type PerpsAccountFundingPayment struct {
+	InstrumentID int    `json:"instrument_id"`
+	Size         string `json:"size"`
+	FundingRate  string `json:"funding_rate"`
+	FundingAsset string `json:"funding_asset"`
+	Funding      string `json:"funding"`
+	Timestamp    int64  `json:"timestamp"`
+}
+
+// PerpsDepositStatus is the lifecycle state of a collateral deposit.
+type PerpsDepositStatus string
+
+const (
+	PerpsDepositPending   PerpsDepositStatus = "pending"
+	PerpsDepositConfirmed PerpsDepositStatus = "confirmed"
+	PerpsDepositRemoved   PerpsDepositStatus = "removed"
+)
+
+// PerpsDeposit is an authenticated collateral deposit entry.
+type PerpsDeposit struct {
+	Hash                  string             `json:"hash"`
+	Asset                 string             `json:"asset"`
+	Amount                string             `json:"amount"`
+	Status                PerpsDepositStatus `json:"status"`
+	From                  string             `json:"from"`
+	To                    string             `json:"to"`
+	Confirmations         int                `json:"confirmations"`
+	RequiredConfirmations int                `json:"required_confirmations"`
+	CreatedTimestamp      int64              `json:"created_timestamp"`
+	ConfirmedTimestamp    int64              `json:"confirmed_timestamp,omitempty"`
+}
+
+// PerpsWithdrawalStatus is the lifecycle state of a collateral withdrawal.
+type PerpsWithdrawalStatus string
+
+const (
+	PerpsWithdrawalPending   PerpsWithdrawalStatus = "pending"
+	PerpsWithdrawalConfirmed PerpsWithdrawalStatus = "confirmed"
+	PerpsWithdrawalRemoved   PerpsWithdrawalStatus = "removed"
+)
+
+// PerpsWithdrawal is an authenticated collateral withdrawal entry.
+type PerpsWithdrawal struct {
+	WithdrawalID          int                   `json:"withdraw_id"`
+	Asset                 string                `json:"asset"`
+	Amount                string                `json:"amount"`
+	Fee                   string                `json:"fee"`
+	Status                PerpsWithdrawalStatus `json:"status"`
+	To                    string                `json:"to"`
+	Hash                  string                `json:"hash"`
+	Confirmations         int                   `json:"confirmations"`
+	RequiredConfirmations int                   `json:"required_confirmations"`
+	CreatedTimestamp      int64                 `json:"created_timestamp"`
+	ConfirmedTimestamp    int64                 `json:"confirmed_timestamp,omitempty"`
+}
+
+// PerpsPnlInterval selects an equity or PnL history interval.
+type PerpsPnlInterval string
+
+const (
+	PerpsPnl1h PerpsPnlInterval = "1h"
+	PerpsPnl4h PerpsPnlInterval = "4h"
+	PerpsPnl1d PerpsPnlInterval = "1d"
+	PerpsPnl1w PerpsPnlInterval = "1w"
+)
+
+// PerpsEquityPoint is a timestamped equity history sample.
+type PerpsEquityPoint struct {
+	Timestamp int64
+	Equity    string
+}
+
+// UnmarshalJSON decodes the official [timestamp, equity] tuple.
+func (p *PerpsEquityPoint) UnmarshalJSON(data []byte) error {
+	var tuple []json.RawMessage
+	if err := json.Unmarshal(data, &tuple); err != nil {
+		return fmt.Errorf("perps equity point: %w", err)
+	}
+	if len(tuple) != 2 {
+		return fmt.Errorf("perps equity point: got %d values, want 2", len(tuple))
+	}
+	if err := json.Unmarshal(tuple[0], &p.Timestamp); err != nil {
+		return fmt.Errorf("perps equity point timestamp: %w", err)
+	}
+	if err := json.Unmarshal(tuple[1], &p.Equity); err != nil {
+		return fmt.Errorf("perps equity point value: %w", err)
+	}
+	return nil
+}
+
+// PerpsPnlPoint is a timestamped PnL history sample.
+type PerpsPnlPoint struct {
+	Timestamp int64
+	PnL       string
+}
+
+// UnmarshalJSON decodes the official [timestamp, pnl] tuple.
+func (p *PerpsPnlPoint) UnmarshalJSON(data []byte) error {
+	var tuple []json.RawMessage
+	if err := json.Unmarshal(data, &tuple); err != nil {
+		return fmt.Errorf("perps pnl point: %w", err)
+	}
+	if len(tuple) != 2 {
+		return fmt.Errorf("perps pnl point: got %d values, want 2", len(tuple))
+	}
+	if err := json.Unmarshal(tuple[0], &p.Timestamp); err != nil {
+		return fmt.Errorf("perps pnl point timestamp: %w", err)
+	}
+	if err := json.Unmarshal(tuple[1], &p.PnL); err != nil {
+		return fmt.Errorf("perps pnl point value: %w", err)
+	}
+	return nil
 }
 
 // perpsDataResponse is the paginated list envelope used by candles, trades, and
