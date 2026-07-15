@@ -3,6 +3,7 @@ package ws
 import (
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/nijaru/go-clob-client/clob"
+	"github.com/nijaru/go-clob-client/internal/polyauth"
 )
 
 func TestHandleMessageBookEvent(t *testing.T) {
@@ -545,6 +547,25 @@ func TestUserSubscriptionsRefcountAndScopedUnsubscribe(t *testing.T) {
 	if got := messageStrings(msg["markets"]); len(got) != 1 || got[0] != "market-1" {
 		t.Fatalf("markets = %#v, want [market-1]", got)
 	}
+	auth, ok := msg["auth"].(map[string]any)
+	if !ok {
+		t.Fatalf("auth = %#v, want object", msg["auth"])
+	}
+	timestampText, ok := auth["timestamp"].(string)
+	if !ok {
+		t.Fatalf("auth timestamp = %#v, want string", auth["timestamp"])
+	}
+	timestamp, err := strconv.ParseInt(timestampText, 10, 64)
+	if err != nil {
+		t.Fatalf("parse auth timestamp %q: %v", timestampText, err)
+	}
+	expectedSignature, err := polyauth.HMACSignature("secret", timestamp, "GET", "/ws/user", nil)
+	if err != nil {
+		t.Fatalf("derive expected signature: %v", err)
+	}
+	if got := auth["signature"]; got != expectedSignature {
+		t.Fatalf("auth signature = %v, want %v", got, expectedSignature)
+	}
 
 	if err := client.SubscribeTrades(t.Context(), []string{"market-1"}); err != nil {
 		t.Fatalf("subscribe trades: %v", err)
@@ -574,6 +595,45 @@ func TestUserSubscriptionsRefcountAndScopedUnsubscribe(t *testing.T) {
 	}
 	if got := client.SubscriptionCount(); got != 0 {
 		t.Fatalf("subscription count = %d, want 0", got)
+	}
+}
+
+func TestWithCredentialsDecodesSecret(t *testing.T) {
+	t.Parallel()
+
+	client := NewClient("").WithCredentials(clob.Credentials{
+		Key:        "key",
+		Secret:     "secret",
+		Passphrase: "pass",
+	})
+	auth, err := client.deriveWSAuth(t.Context())
+	if err != nil {
+		t.Fatalf("derive WS auth: %v", err)
+	}
+	timestamp, err := strconv.ParseInt(auth.Timestamp, 10, 64)
+	if err != nil {
+		t.Fatalf("parse auth timestamp %q: %v", auth.Timestamp, err)
+	}
+	expectedSignature, err := polyauth.HMACSignature("secret", timestamp, "GET", "/ws/user", nil)
+	if err != nil {
+		t.Fatalf("derive expected signature: %v", err)
+	}
+	if auth.Signature != expectedSignature {
+		t.Fatalf("auth signature = %q, want %q", auth.Signature, expectedSignature)
+	}
+}
+
+func TestInvalidWebSocketSecretReturnsError(t *testing.T) {
+	t.Parallel()
+
+	client := NewAuthenticatedClient("", clob.Credentials{
+		Key:        "key",
+		Secret:     "%%%",
+		Passphrase: "pass",
+	})
+	if _, err := client.deriveWSAuth(t.Context()); err == nil ||
+		!strings.Contains(err.Error(), "invalid API secret") {
+		t.Fatalf("derive WS auth error = %v, want invalid API secret error", err)
 	}
 }
 

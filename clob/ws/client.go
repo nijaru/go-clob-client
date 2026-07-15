@@ -44,6 +44,7 @@ type Client struct {
 	url           string
 	creds         *clob.Credentials
 	decodedSecret []byte
+	secretErr     error
 
 	mu       sync.Mutex
 	conn     *websocket.Conn
@@ -111,9 +112,16 @@ func NewAuthenticatedClient(url string, creds clob.Credentials) *Client {
 
 func newClient(url string, creds *clob.Credentials) *Client {
 	ctx, cancel := context.WithCancel(context.Background())
+	var decodedSecret []byte
+	var secretErr error
+	if creds != nil {
+		decodedSecret, secretErr = polyauth.DecodeAPISecret(creds.Secret)
+	}
 	return &Client{
 		url:               url,
 		creds:             creds,
+		decodedSecret:     decodedSecret,
+		secretErr:         secretErr,
 		events:            make(chan Event, 100),
 		errs:              make(chan error, 10),
 		stop:              make(chan struct{}),
@@ -130,9 +138,12 @@ func newClient(url string, creds *clob.Credentials) *Client {
 // WithCredentials sets API credentials for user channel subscriptions.
 // Returns the client to allow chaining.
 func (c *Client) WithCredentials(creds clob.Credentials) *Client {
+	decodedSecret, secretErr := polyauth.DecodeAPISecret(creds.Secret)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.creds = &creds
+	c.decodedSecret = decodedSecret
+	c.secretErr = secretErr
 	return c
 }
 
@@ -443,12 +454,16 @@ func (c *Client) deriveWSAuth(ctx context.Context) (clob.WSAuth, error) {
 	c.mu.Lock()
 	creds := c.creds
 	decodedSecret := c.decodedSecret
+	secretErr := c.secretErr
 	c.mu.Unlock()
 
 	if creds == nil {
 		return clob.WSAuth{}, errors.New(
 			"user channel subscriptions require credentials: use NewAuthenticatedClient or WithCredentials",
 		)
+	}
+	if secretErr != nil {
+		return clob.WSAuth{}, fmt.Errorf("invalid API secret: %w", secretErr)
 	}
 
 	timestamp := time.Now().Unix()
