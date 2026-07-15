@@ -194,6 +194,12 @@ Token wallet operations use the same explicit split: `SignerClient.ApproveERC20`
 EOA; the corresponding `AuthenticatedClient` `*Gasless` methods route calls through proxy, Safe,
 or deposit wallets. `clob.MaxUint256()` returns a fresh unlimited-approval amount.
 
+For one-call trading setup, `PrepareTradingApprovals` reads the current on-chain state and skips
+allowances already present. Use `SignerClient.SetupTradingApprovals` for sequential EOA
+transactions or `AuthenticatedClient.SetupTradingApprovalsGasless` for one relayed batch. The
+resolver follows the current Polygon contract set; callers should treat a nil gasless handle as
+“already approved.”
+
 ## Error Handling
 
 API errors are returned as `*clob.APIError` with HTTP status and body:

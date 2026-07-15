@@ -5,21 +5,35 @@ import "fmt"
 const zeroAddress = "0x0000000000000000000000000000000000000000"
 
 type contractConfig struct {
-	Exchange        string
-	NegRiskExchange string
-	NegRiskAdapter  string
-	Collateral      string
-	Conditional     string
+	Exchange                 string
+	NegRiskExchange          string
+	NegRiskAdapter           string
+	Collateral               string
+	Conditional              string
+	CollateralAdapter        string
+	NegRiskCollateralAdapter string
+	ExchangeV3               string
+	ProtocolV2Router         string
+	PositionManager          string
+	AutoRedeemOperator       string
+	PerpsDepositContract     string
 }
 
 // Polygon (137) and Amoy (80002) contract configurations.
 var contractConfigs = map[int64]contractConfig{
 	137: {
-		Exchange:        "0xE111180000d2663C0091e4f400237545B87B996B",
-		NegRiskExchange: "0xe2222d279d744050d28e00520010520000310F59",
-		NegRiskAdapter:  "0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296",
-		Collateral:      "0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB",
-		Conditional:     "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045",
+		Exchange:                 "0xE111180000d2663C0091e4f400237545B87B996B",
+		NegRiskExchange:          "0xe2222d279d744050d28e00520010520000310F59",
+		NegRiskAdapter:           "0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296",
+		Collateral:               "0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB",
+		Conditional:              "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045",
+		CollateralAdapter:        "0xAdA100Db00Ca00073811820692005400218FcE1f",
+		NegRiskCollateralAdapter: "0xadA2005600Dec949baf300f4C6120000bDB6eAab",
+		ExchangeV3:               "0xe3333700cA9d93003F00f0F71f8515005F6c00Aa",
+		ProtocolV2Router:         "0x12121212006e4CD160D18e3f00711DA5c3372600",
+		PositionManager:          "0x006F54F7f9A22e0000CC2AB60031000000ae9fEF",
+		AutoRedeemOperator:       "0xa1200000d0002264C9a1698e001292D00E1b00af",
+		PerpsDepositContract:     "0xDCa4af75705dbB50f62437045afF9921947917d2",
 	},
 	80002: {
 		Exchange:        "0xE111180000d2663C0091e4f400237545B87B996B",
