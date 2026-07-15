@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/nijaru/go-clob-client/internal/polyauth"
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
 )
 
@@ -31,6 +32,9 @@ type Config struct {
 	// WebSocketHost overrides the authenticated session URL. Defaults to
 	// DefaultWebSocketHost.
 	WebSocketHost string
+	// ChainID identifies the EIP-712 domain used by signed session commands.
+	// Defaults to Polygon mainnet (137).
+	ChainID int64
 	// HTTPClient is the underlying HTTP client. Defaults to a 15s-timeout client.
 	HTTPClient *http.Client
 	// UserAgent sets the User-Agent header. Defaults to "go-clob-client/perps".
@@ -43,6 +47,9 @@ func (c Config) normalized() Config {
 	}
 	if c.WebSocketHost == "" {
 		c.WebSocketHost = DefaultWebSocketHost
+	}
+	if c.ChainID == 0 {
+		c.ChainID = 137
 	}
 	if c.HTTPClient == nil {
 		c.HTTPClient = &http.Client{Timeout: 15 * time.Second}
@@ -77,6 +84,7 @@ type AuthenticatedConfig struct {
 type AuthenticatedClient struct {
 	*Client
 	webSocketHost string
+	chainID       int64
 	credentials   PerpsCredentials
 }
 
@@ -95,6 +103,7 @@ func NewAuthenticated(config AuthenticatedConfig) (*AuthenticatedClient, error) 
 	return &AuthenticatedClient{
 		Client:        New(baseConfig),
 		webSocketHost: baseConfig.WebSocketHost,
+		chainID:       baseConfig.ChainID,
 		credentials:   config.Credentials,
 	}, nil
 }
@@ -102,6 +111,20 @@ func NewAuthenticated(config AuthenticatedConfig) (*AuthenticatedClient, error) 
 // Credentials returns a copy of the delegated credentials used by the client.
 func (c *AuthenticatedClient) Credentials() PerpsCredentials {
 	return c.credentials
+}
+
+func (c *AuthenticatedClient) delegatedSigner() (*polyauth.Signer, error) {
+	if c.credentials.PrivateKey == "" {
+		return nil, nil
+	}
+	signer, err := polyauth.ParsePrivateKey(c.credentials.PrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("perps: parse delegated signing key: %w", err)
+	}
+	if signer.Address() != common.HexToAddress(c.credentials.Proxy) {
+		return nil, fmt.Errorf("perps: delegated signing key does not match proxy")
+	}
+	return signer, nil
 }
 
 func (c *AuthenticatedClient) getAuthenticatedJSON(

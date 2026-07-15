@@ -11,10 +11,11 @@
 > **Parity status (2026-07-15):** Core mechanics and the non-perps CLOB/Data/Gamma/Bridge/CTF/
 > RTDS/RFQ surfaces are tracked against the current official Rust, TypeScript, and Python SDKs,
 > with current combo pagination, Gamma discovery endpoints, and full CLOB WebSocket event fields.
-> **Perps** remains a separate package: public market-data REST plus authenticated account reads
-> and delegated session startup are wire-compatible with the current TS SDK. Signed order commands
-> remain a separate follow-up. Parity here means contract-level capability with idiomatic Go APIs,
-> not a drop-in copy of TypeScript or Python method names. See `ai/ROADMAP.md`.
+> **Perps** remains a separate package: public market-data REST, authenticated account reads,
+> delegated session startup, and low-level signed order/cancel/leverage commands are wire-compatible
+> with the current TS SDK. TP/SL orchestration and owner-signed credential lifecycle remain separate
+> follow-ups. Parity here means contract-level capability with idiomatic Go APIs, not a drop-in copy
+> of TypeScript or Python method names. See `ai/ROADMAP.md`.
 
 Go SDK for the [Polymarket](https://polymarket.com) CLOB and adjacent APIs. Tracks stable capability
 parity with the official [Rust V2](https://github.com/Polymarket/rs-clob-client-v2),
@@ -230,8 +231,9 @@ for event := range session.Events() {
 }
 ```
 
-Signed perps order commands and owner-signed delegated-credential creation/revocation remain
-separate follow-up surfaces.
+Low-level signed perps entry-order, cancel, cancel-all, and leverage commands are available when
+the delegated private key is supplied in `PerpsCredentials`. TP/SL orchestration and owner-signed
+delegated-credential creation/revocation remain separate follow-up surfaces.
 
 ## Error Handling
 

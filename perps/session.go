@@ -3,10 +3,15 @@ package perps
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"sync"
 
 	"github.com/coder/websocket"
+
+	"github.com/nijaru/go-clob-client/internal/polyauth"
 )
 
 var defaultSessionChannels = []string{
@@ -46,6 +51,11 @@ type sessionFrame struct {
 	Data json.RawMessage `json:"data,omitempty"`
 }
 
+type sessionResponse struct {
+	data json.RawMessage
+	err  error
+}
+
 type sessionOp struct {
 	Type string         `json:"type"`
 	Args map[string]any `json:"args,omitempty"`
@@ -57,19 +67,30 @@ type sessionAck struct {
 }
 
 // Session is an authenticated Perps account WebSocket session. It performs
-// the official auth and subscription handshake and exposes account updates.
-// Signed trading commands are intentionally kept separate until their exact
-// MessagePack/EIP-712 contract is implemented and tested.
+// the official auth and subscription handshake, exposes account updates, and
+// supports the stable low-level signed trading commands. TP/SL orchestration
+// remains separate from this transport-level API.
 type Session struct {
-	conn      *websocket.Conn
-	events    chan PerpsSessionEvent
-	errors    chan error
-	ctx       context.Context
-	cancel    context.CancelFunc
-	done      chan struct{}
-	closeOnce sync.Once
-	closeErr  error
+	conn        *websocket.Conn
+	client      *AuthenticatedClient
+	events      chan PerpsSessionEvent
+	errors      chan error
+	ctx         context.Context
+	cancel      context.CancelFunc
+	done        chan struct{}
+	chainID     int64
+	signer      *polyauth.Signer
+	writeMu     sync.Mutex
+	pendingMu   sync.Mutex
+	pending     map[int]chan sessionResponse
+	nextRequest int
+	closeOnce   sync.Once
+	closeErr    error
 }
+
+// ErrPerpsSigningKeyRequired indicates that a signed command needs the
+// delegated proxy private key in PerpsCredentials.
+var ErrPerpsSigningKeyRequired = errors.New("perps delegated signing key required")
 
 // OpenSession connects and authenticates a delegated Perps account session.
 func (c *AuthenticatedClient) OpenSession(
@@ -92,12 +113,22 @@ func (c *AuthenticatedClient) OpenSession(
 	}
 	sessionCtx, cancel := context.WithCancel(context.Background())
 	session := &Session{
-		conn:   conn,
-		events: make(chan PerpsSessionEvent, 128),
-		errors: make(chan error, 8),
-		ctx:    sessionCtx,
-		cancel: cancel,
-		done:   make(chan struct{}),
+		conn:        conn,
+		client:      c,
+		events:      make(chan PerpsSessionEvent, 128),
+		errors:      make(chan error, 8),
+		ctx:         sessionCtx,
+		cancel:      cancel,
+		done:        make(chan struct{}),
+		chainID:     c.chainID,
+		pending:     make(map[int]chan sessionResponse),
+		nextRequest: 3,
+	}
+	session.signer, err = c.delegatedSigner()
+	if err != nil {
+		cancel()
+		_ = conn.Close(websocket.StatusPolicyViolation, "invalid signing key")
+		return nil, err
 	}
 	if err := session.handshake(ctx, c.credentials, channels); err != nil {
 		cancel()
@@ -143,6 +174,12 @@ func (s *Session) writeJSON(ctx context.Context, frame sessionFrame) error {
 	if err != nil {
 		return err
 	}
+	return s.writeRaw(ctx, payload)
+}
+
+func (s *Session) writeRaw(ctx context.Context, payload []byte) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
 	return s.conn.Write(ctx, websocket.MessageText, payload)
 }
 
@@ -194,9 +231,20 @@ func (s *Session) readLoop() {
 		_, payload, err := s.conn.Read(s.ctx)
 		if err != nil {
 			if s.ctx.Err() == nil {
-				s.reportError(fmt.Errorf("perps: session read: %w", err))
+				err = fmt.Errorf("perps: session read: %w", err)
+				s.reportError(err)
 			}
+			s.rejectPending(err)
 			return
+		}
+		var response struct {
+			ID   int             `json:"id"`
+			Data json.RawMessage `json:"data"`
+		}
+		if json.Unmarshal(payload, &response) == nil && response.ID != 0 {
+			if s.resolvePending(response.ID, response.Data) {
+				continue
+			}
 		}
 		var frame struct {
 			Channel   string          `json:"ch"`
@@ -225,6 +273,68 @@ func (s *Session) readLoop() {
 	}
 }
 
+func (s *Session) resolvePending(id int, data json.RawMessage) bool {
+	s.pendingMu.Lock()
+	response, ok := s.pending[id]
+	if ok {
+		delete(s.pending, id)
+	}
+	s.pendingMu.Unlock()
+	if !ok {
+		return false
+	}
+	response <- sessionResponse{data: append(json.RawMessage(nil), data...)}
+	return true
+}
+
+func (s *Session) rejectPending(err error) {
+	s.pendingMu.Lock()
+	responses := slices.Collect(maps.Values(s.pending))
+	s.pending = make(map[int]chan sessionResponse)
+	s.pendingMu.Unlock()
+	for _, response := range responses {
+		response <- sessionResponse{err: err}
+	}
+}
+
+func (s *Session) nextID() int {
+	s.pendingMu.Lock()
+	defer s.pendingMu.Unlock()
+	id := s.nextRequest
+	s.nextRequest++
+	return id
+}
+
+func (s *Session) sendCommand(ctx context.Context, body map[string]any) (json.RawMessage, error) {
+	id := s.nextID()
+	body["id"] = id
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("perps: marshal session command: %w", err)
+	}
+	response := make(chan sessionResponse, 1)
+	s.pendingMu.Lock()
+	s.pending[id] = response
+	s.pendingMu.Unlock()
+	if err := s.writeRaw(ctx, payload); err != nil {
+		s.pendingMu.Lock()
+		delete(s.pending, id)
+		s.pendingMu.Unlock()
+		return nil, fmt.Errorf("perps: send session command: %w", err)
+	}
+	select {
+	case result := <-response:
+		return result.data, result.err
+	case <-ctx.Done():
+		s.pendingMu.Lock()
+		delete(s.pending, id)
+		s.pendingMu.Unlock()
+		return nil, ctx.Err()
+	case <-s.ctx.Done():
+		return nil, errors.New("perps session closed")
+	}
+}
+
 func (s *Session) reportError(err error) {
 	select {
 	case s.errors <- err:
@@ -242,6 +352,7 @@ func (s *Session) Errors() <-chan error { return s.errors }
 func (s *Session) Close() error {
 	s.closeOnce.Do(func() {
 		s.cancel()
+		s.rejectPending(errors.New("perps session closed"))
 		s.closeErr = s.conn.Close(websocket.StatusNormalClosure, "")
 		<-s.done
 	})
