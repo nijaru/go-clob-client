@@ -1,6 +1,10 @@
 package gamma
 
-import "time"
+import (
+	"encoding/json"
+	"fmt"
+	"time"
+)
 
 // Market represents a single Polymarket market outcome.
 type Market struct {
@@ -201,6 +205,82 @@ type RelatedTag struct {
 	TagID        string `json:"tagID,omitzero"`
 	RelatedTagID string `json:"relatedTagID,omitzero"`
 	Rank         int    `json:"rank,omitzero"`
+}
+
+// RelatedTagResourceParams controls optional filtering for related-tag
+// resource lookups.
+type RelatedTagResourceParams struct {
+	Locale    string
+	OmitEmpty *bool
+	Status    string
+}
+
+// MarketClarificationState is the lifecycle state of a market clarification.
+type MarketClarificationState string
+
+const (
+	MarketClarificationStatePending   MarketClarificationState = "pending"
+	MarketClarificationStateQueued    MarketClarificationState = "queued"
+	MarketClarificationStateSuccess   MarketClarificationState = "success"
+	MarketClarificationStateFailed    MarketClarificationState = "failed"
+	MarketClarificationStateCancelled MarketClarificationState = "cancelled"
+)
+
+// FlexibleID accepts the string-or-integer IDs used by Gamma's clarification
+// endpoint while presenting one stable Go value to callers.
+type FlexibleID string
+
+func (id *FlexibleID) UnmarshalJSON(data []byte) error {
+	var text string
+	if err := json.Unmarshal(data, &text); err == nil {
+		*id = FlexibleID(text)
+		return nil
+	}
+	var number json.Number
+	if err := json.Unmarshal(data, &number); err != nil {
+		return fmt.Errorf("gamma id: %w", err)
+	}
+	*id = FlexibleID(number.String())
+	return nil
+}
+
+// MarketClarification is an official note that resolves ambiguity in how a
+// market settles.
+type MarketClarification struct {
+	ID               int                      `json:"id"`
+	MarketID         FlexibleID               `json:"marketId,omitzero"`
+	EventID          FlexibleID               `json:"eventId,omitzero"`
+	QuestionID       string                   `json:"questionId,omitzero"`
+	Content          string                   `json:"content,omitzero"`
+	State            MarketClarificationState `json:"state,omitzero"`
+	ClearBook        *bool                    `json:"clearBook,omitzero"`
+	NotifyDiscord    *bool                    `json:"notifyDiscord,omitzero"`
+	ShowInFrontend   *bool                    `json:"showInFrontend,omitzero"`
+	AdapterAddress   string                   `json:"adapterAddress,omitzero"`
+	NegRiskRequestID string                   `json:"negRiskRequestId,omitzero"`
+	TxHash           string                   `json:"txHash,omitzero"`
+	CreatedAt        *time.Time               `json:"createdAt,omitzero"`
+	QueuedAt         *time.Time               `json:"queuedAt,omitzero"`
+	ScheduledFor     *time.Time               `json:"scheduledFor,omitzero"`
+	TxTimestamp      *time.Time               `json:"txTimestamp,omitzero"`
+}
+
+// MarketClarificationsParams filters the market-clarifications endpoint.
+type MarketClarificationsParams struct {
+	MarketID       string
+	MarketIDs      []string
+	EventID        string
+	EventIDs       []string
+	QuestionID     string
+	QuestionIDs    []string
+	State          MarketClarificationState
+	States         []MarketClarificationState
+	ShowInFrontend *bool
+	TxHash         string
+	Order          string
+	Ascending      *bool
+	Limit          int
+	Offset         int
 }
 
 // Category represents a grouping for tags/events.

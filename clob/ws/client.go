@@ -3,6 +3,7 @@ package ws
 import (
 	"bytes"
 	"context"
+	stdjson "encoding/json"
 	"errors"
 	"fmt"
 	"math/rand/v2"
@@ -850,27 +851,34 @@ func extractEventType(data []byte) (EventType, bool) {
 }
 
 func (c *Client) handleMessage(ctx context.Context, data []byte) {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || (trimmed[0] != '{' && trimmed[0] != '[') {
+		// Non-JSON message (text heartbeat, etc.) — not an error.
+		return
+	}
+	if trimmed[0] == '[' {
+		var messages []stdjson.RawMessage
+		if err := stdjson.Unmarshal(trimmed, &messages); err != nil {
+			c.reportDecodeError("batch", err)
+			return
+		}
+		for _, message := range messages {
+			c.handleEventMessage(ctx, message)
+		}
+		return
+	}
+	c.handleEventMessage(ctx, trimmed)
+}
+
+func (c *Client) handleEventMessage(ctx context.Context, data []byte) {
 	eventType, ok := extractEventType(data)
 	if !ok {
-		// Non-JSON message (text heartbeat, etc.) — not an error.
 		return
 	}
 
 	var event Event
 	switch eventType {
 	case EventTypeBook:
-		// The market endpoint sends the initial dump as a JSON array of
-		// per-asset book snapshots. Keep compatibility with older/synthetic
-		// single-object payloads, but flatten the live wire batch into the
-		// same Event stream exposed by the official clients.
-		var books []BookEvent
-		if err := json.Unmarshal(data, &books); err == nil {
-			for i := range books {
-				books[i].BaseEvent = BaseEvent{EventType: EventTypeBook}
-				c.emitEvent(ctx, &books[i])
-			}
-			return
-		}
 		event = &BookEvent{}
 	case EventTypePriceChange:
 		event = &PriceChangeEvent{}

@@ -119,8 +119,18 @@ func TestHandleMessageLiveWireBatchFixtures(t *testing.T) {
 	t.Parallel()
 
 	c := NewClient("")
-	c.handleMessage(t.Context(), []byte(`[{"event_type":"book","market":"m1","asset_id":"a1","bids":[{"price":"0.4","size":"2"}],"asks":[{"price":"0.6","size":"3"}],"timestamp":"1710000000000"},{"event_type":"book","market":"m1","asset_id":"a2","bids":[],"asks":[],"timestamp":"1710000000000"}]`))
-	c.handleMessage(t.Context(), []byte(`{"event_type":"price_change","market":"m1","price_changes":[{"asset_id":"a1","price":"0.41","size":"1","side":"BUY","hash":"h1","best_bid":"0.41","best_ask":"0.6"}],"timestamp":"1710000000123"}`))
+	c.handleMessage(
+		t.Context(),
+		[]byte(
+			`[{"event_type":"book","market":"m1","asset_id":"a1","bids":[{"price":"0.4","size":"2"}],"asks":[{"price":"0.6","size":"3"}],"timestamp":"1710000000000"},{"event_type":"book","market":"m1","asset_id":"a2","bids":[],"asks":[],"timestamp":"1710000000000"}]`,
+		),
+	)
+	c.handleMessage(
+		t.Context(),
+		[]byte(
+			`{"event_type":"price_change","market":"m1","price_changes":[{"asset_id":"a1","price":"0.41","size":"1","side":"BUY","hash":"h1","best_bid":"0.41","best_ask":"0.6"}],"timestamp":"1710000000123"}`,
+		),
+	)
 
 	for i := 0; i < 3; i++ {
 		select {
@@ -130,6 +140,97 @@ func TestHandleMessageLiveWireBatchFixtures(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Fatal("timed out waiting for fixture event")
 		}
+	}
+}
+
+func TestHandleMessageMixedBatchDispatchesPerEvent(t *testing.T) {
+	t.Parallel()
+
+	c := NewClient("")
+	c.handleMessage(t.Context(), []byte(`[{
+		"event_type":"book",
+		"market":"m1",
+		"asset_id":"a1",
+		"bids":[],"asks":[],"timestamp":"1"
+	},{
+		"event_type":"price_change",
+		"market":"m1",
+		"price_changes":[{"asset_id":"a1","price":"0.41","size":"1","side":"BUY"}],
+		"timestamp":"2"
+	}]`))
+
+	var got []Event
+	for range 2 {
+		select {
+		case event := <-c.Events():
+			got = append(got, event)
+		case err := <-c.Errors():
+			t.Fatalf("unexpected mixed batch error: %v", err)
+		case <-time.After(time.Second):
+			t.Fatal("timed out waiting for mixed batch event")
+		}
+	}
+	if _, ok := got[0].(*BookEvent); !ok {
+		t.Fatalf("first event = %T, want *BookEvent", got[0])
+	}
+	if _, ok := got[1].(*PriceChangeEvent); !ok {
+		t.Fatalf("second event = %T, want *PriceChangeEvent", got[1])
+	}
+}
+
+func TestHandleMessageFullUserEventFields(t *testing.T) {
+	t.Parallel()
+
+	c := NewClient("")
+	c.handleMessage(t.Context(), []byte(`{
+		"event_type":"order","id":"ord-1","owner":"owner-1","market":"m1","asset_id":"a1",
+		"side":"BUY","order_owner":"order-owner","original_size":"10","size_matched":"2",
+		"associate_trades":["trade-1"],"outcome":"Yes","type":"UPDATE","status":"LIVE",
+		"maker_address":"maker-1","timestamp":"3"
+	}`))
+	c.handleMessage(t.Context(), []byte(`{
+		"event_type":"trade","type":"TRADE","id":"trade-1","taker_order_id":"ord-1",
+		"market":"m1","asset_id":"a1","side":"BUY","size":"2","fee_rate_bps":"5",
+		"price":"0.5","status":"TRADE_STATUS_MATCHED_NOT_BROADCASTED","owner":"owner-1",
+		"trade_owner":"trade-owner","transaction_hash":"0xhash","trader_side":"TAKER",
+		"maker_orders":[{"order_id":"maker-order","owner":"maker-owner","matched_amount":"2","price":"0.5","asset_id":"a1","side":"SELL"}],
+		"timestamp":"4"
+	}`))
+
+	select {
+	case event := <-c.Events():
+		order, ok := event.(*OrderEvent)
+		if !ok || order.OrderID != "ord-1" || order.SizeMatched != "2" ||
+			order.OrderEventType != UserOrderEventTypeUpdate {
+			t.Fatalf("unexpected order event: %#v", event)
+		}
+	case err := <-c.Errors():
+		t.Fatalf("order decode: %v", err)
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for order event")
+	}
+
+	select {
+	case event := <-c.Events():
+		trade, ok := event.(*TradeEvent)
+		if !ok || trade.TradeID != "trade-1" || trade.Status != TradeStatusMatchedNotBroadcasted ||
+			len(trade.MakerOrders) != 1 {
+			t.Fatalf("unexpected trade event: %#v", event)
+		}
+	case err := <-c.Errors():
+		t.Fatalf("trade decode: %v", err)
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for trade event")
+	}
+}
+
+func TestMarketEventAssetIDAlias(t *testing.T) {
+	var event NewMarketEvent
+	if err := json.Unmarshal([]byte(`{"event_type":"new_market","asset_ids":["a1"]}`), &event); err != nil {
+		t.Fatalf("unmarshal new market event: %v", err)
+	}
+	if len(event.AssetIDs) != 1 || event.AssetIDs[0] != "a1" {
+		t.Fatalf("asset ids = %v", event.AssetIDs)
 	}
 }
 

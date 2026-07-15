@@ -23,7 +23,10 @@ const (
 )
 
 // GetInstruments lists perps instruments, optionally filtered.
-func (c *Client) GetInstruments(ctx context.Context, p InstrumentsParams) ([]PerpsInstrument, error) {
+func (c *Client) GetInstruments(
+	ctx context.Context,
+	p InstrumentsParams,
+) ([]PerpsInstrument, error) {
 	query := url.Values{}
 	if p.InstrumentID != nil {
 		query.Set("instrument_id", strconv.Itoa(*p.InstrumentID))
@@ -120,7 +123,10 @@ func (c *Client) GetFees(ctx context.Context) ([]PerpsFeeScheduleEntry, error) {
 // GetCandlesPage returns one page of candles and an opaque cursor for the next
 // page (empty when exhausted). Pass CandlesParams.Cursor from a previous call to
 // resume.
-func (c *Client) GetCandlesPage(ctx context.Context, p CandlesParams) ([]PerpsCandle, string, error) {
+func (c *Client) GetCandlesPage(
+	ctx context.Context,
+	p CandlesParams,
+) ([]PerpsCandle, string, error) {
 	state, err := candlesState(p)
 	if err != nil {
 		return nil, "", err
@@ -162,7 +168,10 @@ func (c *Client) IterCandles(ctx context.Context, p CandlesParams) iter.Seq2[[]P
 	}
 }
 
-func (c *Client) candlesPage(ctx context.Context, s candlesCursor) ([]PerpsCandle, bool, *PerpsCandle, error) {
+func (c *Client) candlesPage(
+	ctx context.Context,
+	s candlesCursor,
+) ([]PerpsCandle, bool, *PerpsCandle, error) {
 	query := url.Values{}
 	query.Set("instrument_id", strconv.Itoa(s.InstrumentID))
 	query.Set("interval", string(s.Interval))
@@ -180,7 +189,10 @@ func (c *Client) candlesPage(ctx context.Context, s candlesCursor) ([]PerpsCandl
 }
 
 // GetTradesPage returns one page of public trades and an opaque next cursor.
-func (c *Client) GetTradesPage(ctx context.Context, p TradesParams) ([]PerpsPublicTrade, string, error) {
+func (c *Client) GetTradesPage(
+	ctx context.Context,
+	p TradesParams,
+) ([]PerpsPublicTrade, string, error) {
 	state, err := tradesState(p)
 	if err != nil {
 		return nil, "", err
@@ -204,7 +216,10 @@ func (c *Client) GetTradesPage(ctx context.Context, p TradesParams) ([]PerpsPubl
 
 // IterTrades ranges over all public-trade pages for an instrument, de-duplicating
 // trades that share a timestamp across page boundaries.
-func (c *Client) IterTrades(ctx context.Context, p TradesParams) iter.Seq2[[]PerpsPublicTrade, error] {
+func (c *Client) IterTrades(
+	ctx context.Context,
+	p TradesParams,
+) iter.Seq2[[]PerpsPublicTrade, error] {
 	return func(yield func([]PerpsPublicTrade, error) bool) {
 		state, err := tradesState(p)
 		if err != nil {
@@ -237,7 +252,10 @@ func (c *Client) IterTrades(ctx context.Context, p TradesParams) iter.Seq2[[]Per
 	}
 }
 
-func (c *Client) tradesPage(ctx context.Context, s tradesCursor) ([]PerpsPublicTrade, bool, *PerpsPublicTrade, error) {
+func (c *Client) tradesPage(
+	ctx context.Context,
+	s tradesCursor,
+) ([]PerpsPublicTrade, bool, *PerpsPublicTrade, error) {
 	query := url.Values{}
 	query.Set("instrument_id", strconv.Itoa(s.InstrumentID))
 	query.Set("start_timestamp", strconv.FormatInt(s.StartTimestamp, 10))
@@ -265,7 +283,10 @@ func (c *Client) tradesPage(ctx context.Context, s tradesCursor) ([]PerpsPublicT
 }
 
 // GetFundingHistoryPage returns one page of funding-rate samples and a next cursor.
-func (c *Client) GetFundingHistoryPage(ctx context.Context, p FundingParams) ([]PerpsFundingRate, string, error) {
+func (c *Client) GetFundingHistoryPage(
+	ctx context.Context,
+	p FundingParams,
+) ([]PerpsFundingRate, string, error) {
 	state, err := fundingState(p)
 	if err != nil {
 		return nil, "", err
@@ -283,7 +304,10 @@ func (c *Client) GetFundingHistoryPage(ctx context.Context, p FundingParams) ([]
 }
 
 // IterFundingHistory ranges over all funding-rate history pages for an instrument.
-func (c *Client) IterFundingHistory(ctx context.Context, p FundingParams) iter.Seq2[[]PerpsFundingRate, error] {
+func (c *Client) IterFundingHistory(
+	ctx context.Context,
+	p FundingParams,
+) iter.Seq2[[]PerpsFundingRate, error] {
 	return func(yield func([]PerpsFundingRate, error) bool) {
 		state, err := fundingState(p)
 		if err != nil {
@@ -307,7 +331,10 @@ func (c *Client) IterFundingHistory(ctx context.Context, p FundingParams) iter.S
 	}
 }
 
-func (c *Client) fundingPage(ctx context.Context, s fundingCursor) ([]PerpsFundingRate, bool, *PerpsFundingRate, error) {
+func (c *Client) fundingPage(
+	ctx context.Context,
+	s fundingCursor,
+) ([]PerpsFundingRate, bool, *PerpsFundingRate, error) {
 	query := url.Values{}
 	query.Set("instrument_id", strconv.Itoa(s.InstrumentID))
 	query.Set("start_timestamp", strconv.FormatInt(s.StartTimestamp, 10))

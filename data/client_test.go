@@ -93,15 +93,22 @@ func TestGetComboPositions(t *testing.T) {
 		if q.Get("status") != "OPEN" {
 			t.Errorf("status = %q", q.Get("status"))
 		}
-		if q.Get("combo_condition_id") != "cid-1" {
-			t.Errorf("combo_condition_id = %q", q.Get("combo_condition_id"))
+		if q.Get("market_id") != "cid-1" {
+			t.Errorf("market_id = %q", q.Get("market_id"))
 		}
-		json.NewEncoder(w).Encode([]ComboPosition{{
-			ConditionID: "cid-1",
-			PositionID:  "pos-1",
-			Status:      ComboPositionStatusOpen,
-			LegsTotal:   2,
-		}})
+		json.NewEncoder(w).Encode(struct {
+			Combos     []ComboPosition `json:"combos"`
+			Pagination comboPagination `json:"pagination"`
+		}{
+			Combos: []ComboPosition{{
+				ConditionID: "cid-1",
+				PositionID:  "pos-1",
+				Outcome:     ComboPositionOutcomeYes,
+				Status:      ComboPositionStatusOpen,
+				LegsTotal:   2,
+			}},
+			Pagination: comboPagination{Limit: 20, HasMore: false},
+		})
 	})
 	defer srv.Close()
 
@@ -124,11 +131,22 @@ func TestIterComboPositions(t *testing.T) {
 		call++
 		switch call {
 		case 1:
-			json.NewEncoder(w).Encode([]ComboPosition{
-				{PositionID: "a"}, {PositionID: "b"},
+			json.NewEncoder(w).Encode(struct {
+				Combos     []ComboPosition `json:"combos"`
+				Pagination comboPagination `json:"pagination"`
+			}{
+				Combos: []ComboPosition{
+					{PositionID: "a"}, {PositionID: "b"},
+				},
+				Pagination: comboPagination{Limit: 2, HasMore: true, NextCursor: "cursor-2"},
 			})
 		default:
-			json.NewEncoder(w).Encode([]ComboPosition{})
+			json.NewEncoder(w).Encode(struct {
+				Combos     []ComboPosition `json:"combos"`
+				Pagination comboPagination `json:"pagination"`
+			}{
+				Pagination: comboPagination{Limit: 2, HasMore: false},
+			})
 		}
 	})
 	defer srv.Close()
@@ -144,6 +162,55 @@ func TestIterComboPositions(t *testing.T) {
 	}
 	if len(ids) != 2 {
 		t.Errorf("got %d ids", len(ids))
+	}
+}
+
+func TestIterComboActivityUsesOfficialEnvelope(t *testing.T) {
+	call := 0
+	srv, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/activity/combos" {
+			t.Errorf("path = %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("market_id") != "cid-1" {
+			t.Errorf("market_id = %q", r.URL.Query().Get("market_id"))
+		}
+		call++
+		if call == 1 {
+			json.NewEncoder(w).Encode(struct {
+				Activity   []ComboActivity `json:"activity"`
+				Pagination comboPagination `json:"pagination"`
+			}{
+				Activity: []ComboActivity{{
+					ID:          "activity-1",
+					Type:        ComboActivityTypeSplit,
+					ConditionID: "cid-1",
+				}},
+				Pagination: comboPagination{Limit: 50, HasMore: true, NextCursor: "cursor-2"},
+			})
+			return
+		}
+		json.NewEncoder(w).Encode(struct {
+			Activity   []ComboActivity `json:"activity"`
+			Pagination comboPagination `json:"pagination"`
+		}{
+			Activity:   []ComboActivity{{ID: "activity-2", Type: ComboActivityTypeRedeem}},
+			Pagination: comboPagination{Limit: 50, HasMore: false},
+		})
+	})
+	defer srv.Close()
+
+	var ids []string
+	for item, err := range client.IterComboActivity(t.Context(), ComboActivityParams{
+		User:        "0x123",
+		ConditionID: "cid-1",
+	}) {
+		if err != nil {
+			t.Fatalf("IterComboActivity: %v", err)
+		}
+		ids = append(ids, item.ID)
+	}
+	if len(ids) != 2 || ids[0] != "activity-1" || ids[1] != "activity-2" {
+		t.Fatalf("unexpected combo activity ids: %v", ids)
 	}
 }
 
@@ -253,12 +320,18 @@ func TestDataClient(t *testing.T) {
 				}},
 			}})
 		case "/v1/positions/combos":
-			json.NewEncoder(w).Encode([]ComboPosition{{
-				ConditionID: "cid-1",
-				PositionID:  "pos-1",
-				Status:      ComboPositionStatusOpen,
-				LegsTotal:   2,
-			}})
+			json.NewEncoder(w).Encode(struct {
+				Combos     []ComboPosition `json:"combos"`
+				Pagination comboPagination `json:"pagination"`
+			}{
+				Combos: []ComboPosition{{
+					ConditionID: "cid-1",
+					PositionID:  "pos-1",
+					Status:      ComboPositionStatusOpen,
+					LegsTotal:   2,
+				}},
+				Pagination: comboPagination{Limit: 20, HasMore: false},
+			})
 		case "/v1/accounting/snapshot":
 			w.Write([]byte("\x50\x4b\x03\x04"))
 		}
@@ -858,18 +931,21 @@ func TestComboPositionQueryParams(t *testing.T) {
 	srv, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		checks := map[string]string{
-			"user":               "0x123",
-			"status":             "OPEN",
-			"combo_condition_id": "cid-1",
-			"combo_position_id":  "pos-1",
-			"limit":              "5",
+			"user":              "0x123",
+			"status":            "OPEN",
+			"market_id":         "cid-1",
+			"combo_position_id": "pos-1",
+			"limit":             "5",
 		}
 		for k, want := range checks {
 			if got := q.Get(k); got != want {
 				t.Errorf("%s = %q, want %q", k, got, want)
 			}
 		}
-		writeTestJSON(t, w, []ComboPosition{})
+		writeTestJSON(t, w, struct {
+			Combos     []ComboPosition `json:"combos"`
+			Pagination comboPagination `json:"pagination"`
+		}{Pagination: comboPagination{Limit: 5, HasMore: false}})
 	})
 	defer srv.Close()
 

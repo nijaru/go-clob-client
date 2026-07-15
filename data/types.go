@@ -18,14 +18,15 @@ const (
 type ActivityType string
 
 const (
-	ActivityTypeTrade       ActivityType = "TRADE"
-	ActivityTypeSplit       ActivityType = "SPLIT"
-	ActivityTypeMerge       ActivityType = "MERGE"
-	ActivityTypeRedeem      ActivityType = "REDEEM"
-	ActivityTypeReward      ActivityType = "REWARD"
-	ActivityTypeConversion  ActivityType = "CONVERSION"
-	ActivityTypeYield       ActivityType = "YIELD"
-	ActivityTypeMakerRebate ActivityType = "MAKERREBATE"
+	ActivityTypeTrade          ActivityType = "TRADE"
+	ActivityTypeSplit          ActivityType = "SPLIT"
+	ActivityTypeMerge          ActivityType = "MERGE"
+	ActivityTypeRedeem         ActivityType = "REDEEM"
+	ActivityTypeReward         ActivityType = "REWARD"
+	ActivityTypeConversion     ActivityType = "CONVERSION"
+	ActivityTypeYield          ActivityType = "YIELD"
+	ActivityTypeMakerRebate    ActivityType = "MAKER_REBATE"
+	ActivityTypeReferralReward ActivityType = "REFERRAL_REWARD"
 )
 
 type PositionSortBy string
@@ -421,72 +422,160 @@ type MarketPositionParams struct {
 type ComboPositionStatus string
 
 const (
-	ComboPositionStatusOpen         ComboPositionStatus = "OPEN"
-	ComboPositionStatusPartial      ComboPositionStatus = "PARTIAL"
-	ComboPositionStatusResolvedWin  ComboPositionStatus = "RESOLVED_WIN"
-	ComboPositionStatusResolvedLoss ComboPositionStatus = "RESOLVED_LOSS"
+	ComboPositionStatusOpen            ComboPositionStatus = "OPEN"
+	ComboPositionStatusPartial         ComboPositionStatus = "PARTIAL"
+	ComboPositionStatusResolvedPartial ComboPositionStatus = "RESOLVED_PARTIAL"
+	ComboPositionStatusResolvedWin     ComboPositionStatus = "RESOLVED_WIN"
+	ComboPositionStatusResolvedLoss    ComboPositionStatus = "RESOLVED_LOSS"
+)
+
+// ComboPositionOutcome identifies the outcome represented by a combo position.
+type ComboPositionOutcome string
+
+const (
+	ComboPositionOutcomeYes ComboPositionOutcome = "YES"
+	ComboPositionOutcomeNo  ComboPositionOutcome = "NO"
 )
 
 // ComboPositionMarketEvent holds event metadata for a combo leg's market.
 type ComboPositionMarketEvent struct {
-	EventID    string `json:"eventId,omitzero"`
-	EventSlug  string `json:"eventSlug,omitzero"`
-	EventTitle string `json:"eventTitle,omitzero"`
-	EventImage string `json:"eventImage,omitzero"`
+	EventID    string `json:"event_id,omitzero"`
+	EventSlug  string `json:"event_slug,omitzero"`
+	EventTitle string `json:"event_title,omitzero"`
+	EventImage string `json:"event_image,omitzero"`
 }
 
 // ComboPositionMarket holds market metadata for a combo leg.
 type ComboPositionMarket struct {
-	MarketID    string                    `json:"marketId,omitzero"`
+	MarketID    string                    `json:"market_id,omitzero"`
 	Slug        string                    `json:"slug,omitzero"`
 	Title       string                    `json:"title,omitzero"`
 	Outcome     string                    `json:"outcome,omitzero"`
-	ImageURL    string                    `json:"imageUrl,omitzero"`
-	IconURL     string                    `json:"iconUrl,omitzero"`
+	ImageURL    string                    `json:"image_url,omitzero"`
+	IconURL     string                    `json:"icon_url,omitzero"`
 	Category    string                    `json:"category,omitzero"`
 	Subcategory string                    `json:"subcategory,omitzero"`
 	Tags        []string                  `json:"tags,omitzero"`
-	EndDate     string                    `json:"endDate,omitzero"`
+	EndDate     string                    `json:"end_date,omitzero"`
 	Event       *ComboPositionMarketEvent `json:"event,omitzero"`
 }
 
 // ComboPositionLeg represents one leg of a combo position.
 type ComboPositionLeg struct {
-	LegIndex        int                  `json:"legIndex"`
-	LegPositionID   string               `json:"legPositionId"`
-	LegConditionID  string               `json:"legConditionId"`
-	LegOutcomeIndex int                  `json:"legOutcomeIndex"`
-	LegOutcomeLabel string               `json:"legOutcomeLabel,omitzero"`
-	LegStatus       ComboPositionStatus  `json:"legStatus"`
-	LegResolvedAt   string               `json:"legResolvedAt,omitzero"`
-	LegCurrentPrice *Decimal             `json:"legCurrentPrice,omitzero"`
+	LegIndex        int                  `json:"leg_index"`
+	LegPositionID   string               `json:"leg_position_id"`
+	LegConditionID  string               `json:"leg_condition_id"`
+	LegOutcomeIndex int                  `json:"leg_outcome_index"`
+	LegOutcomeLabel string               `json:"leg_outcome_label,omitzero"`
+	LegStatus       ComboPositionStatus  `json:"leg_status"`
+	LegResolvedAt   string               `json:"leg_resolved_at,omitzero"`
+	LegCurrentPrice *Decimal             `json:"leg_current_price,omitzero"`
 	Market          *ComboPositionMarket `json:"market,omitzero"`
 }
 
 // ComboPosition represents a multi-leg combo position.
 type ComboPosition struct {
-	ConditionID       string              `json:"conditionId"`
-	PositionID        string              `json:"positionId"`
-	ModuleID          int                 `json:"moduleId"`
-	UserAddress       string              `json:"userAddress"`
-	Shares            Decimal             `json:"shares"`
-	EntryAvgPriceUsdc *Decimal            `json:"entryAvgPriceUsdc,omitzero"`
-	EntryCostUsdc     *Decimal            `json:"entryCostUsdc,omitzero"`
-	Status            ComboPositionStatus `json:"status"`
-	FirstEntryAt      string              `json:"firstEntryAt"`
-	ResolvedAt        string              `json:"resolvedAt,omitzero"`
-	LegsTotal         int                 `json:"legsTotal"`
-	LegsResolved      int                 `json:"legsResolved"`
-	LegsPending       int                 `json:"legsPending"`
-	Legs              []ComboPositionLeg  `json:"legs"`
+	ConditionID        string               `json:"combo_condition_id"`
+	PositionID         string               `json:"combo_position_id"`
+	Outcome            ComboPositionOutcome `json:"side"`
+	ModuleID           int                  `json:"module_id"`
+	UserAddress        string               `json:"user_address"`
+	Shares             Decimal              `json:"shares_balance"`
+	EntryAvgPriceUsdc  *Decimal             `json:"entry_avg_price_usdc,omitzero"`
+	EntryCostUsdc      *Decimal             `json:"entry_cost_usdc,omitzero"`
+	RealizedPayoutUsdc *Decimal             `json:"realized_payout_usdc,omitzero"`
+	TotalCostUsdc      *Decimal             `json:"total_cost_usdc,omitzero"`
+	Status             ComboPositionStatus  `json:"status"`
+	Redeemable         bool                 `json:"redeemable"`
+	FirstEntryAt       string               `json:"first_entry_at"`
+	ResolvedAt         string               `json:"resolved_at,omitzero"`
+	UpdatedAt          string               `json:"updated_at,omitzero"`
+	LegsTotal          int                  `json:"legs_total"`
+	LegsResolved       int                  `json:"legs_resolved"`
+	LegsPending        int                  `json:"legs_pending"`
+	Legs               []ComboPositionLeg   `json:"legs"`
+}
+
+// ComboPositionPage is one cursor-paginated combo-position response.
+type ComboPositionPage struct {
+	Items      []ComboPosition
+	Limit      int
+	Offset     int
+	HasMore    bool
+	NextCursor string
 }
 
 // ComboPositionParams filters the /v1/positions/combos endpoint.
 type ComboPositionParams struct {
-	User        string
-	Status      ComboPositionStatus
-	ConditionID string
-	PositionID  string
-	Limit       int
-	Offset      int
+	User          string
+	Status        ComboPositionStatus
+	Sort          ComboPositionSort
+	ConditionID   string
+	ConditionIDs  []string
+	PositionID    string // Deprecated: the current official filter is condition-based.
+	UpdatedAfter  int64
+	UpdatedBefore int64
+	Limit         int
+	Cursor        string
+	Offset        int // Deprecated: the current API uses Cursor pagination.
+}
+
+// ComboPositionSort controls combo-position ordering.
+type ComboPositionSort string
+
+const (
+	ComboPositionSortCurrentValueDesc ComboPositionSort = "current_value_desc"
+	ComboPositionSortFirstEntryDesc   ComboPositionSort = "first_entry_desc"
+	ComboPositionSortEntryCostDesc    ComboPositionSort = "entry_cost_desc"
+	ComboPositionSortResolvedAtDesc   ComboPositionSort = "resolved_at_desc"
+	ComboPositionSortUpdatedAsc       ComboPositionSort = "updated_asc"
+)
+
+// ComboActivityType identifies a combo lifecycle event.
+type ComboActivityType string
+
+const (
+	ComboActivityTypeSplit    ComboActivityType = "SPLIT"
+	ComboActivityTypeMerge    ComboActivityType = "MERGE"
+	ComboActivityTypeConvert  ComboActivityType = "CONVERT"
+	ComboActivityTypeCompress ComboActivityType = "COMPRESS"
+	ComboActivityTypeWrap     ComboActivityType = "WRAP"
+	ComboActivityTypeUnwrap   ComboActivityType = "UNWRAP"
+	ComboActivityTypeRedeem   ComboActivityType = "REDEEM"
+)
+
+// ComboActivity is one combo lifecycle event from the Data API.
+type ComboActivity struct {
+	ID              string             `json:"id"`
+	Type            ComboActivityType  `json:"type"`
+	UserAddress     string             `json:"user_address"`
+	ConditionID     string             `json:"combo_condition_id"`
+	PositionID      string             `json:"combo_position_id"`
+	ModuleID        int                `json:"module_id"`
+	AmountUsdc      *Decimal           `json:"amount_usdc"`
+	PayoutUsdc      *Decimal           `json:"payout_usdc"`
+	Timestamp       int64              `json:"timestamp"`
+	TransactionAt   string             `json:"tx_dttm"`
+	TransactionHash string             `json:"tx_hash"`
+	LogIndex        int                `json:"log_index"`
+	BlockNumber     int                `json:"block_number"`
+	Legs            []ComboPositionLeg `json:"legs"`
+}
+
+// ComboActivityPage is one cursor-paginated combo-activity response.
+type ComboActivityPage struct {
+	Items      []ComboActivity
+	Limit      int
+	Offset     int
+	HasMore    bool
+	NextCursor string
+}
+
+// ComboActivityParams filters combo lifecycle activity.
+type ComboActivityParams struct {
+	User         string
+	ConditionID  string
+	ConditionIDs []string
+	Limit        int
+	Cursor       string
 }

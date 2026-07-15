@@ -150,29 +150,127 @@ type LastTradePriceEvent struct {
 // OrderEvent is emitted when a user's order status changes (placed, canceled).
 type OrderEvent struct {
 	BaseEvent
-	OrderID   string      `json:"order_id"`
-	AssetID   string      `json:"asset_id"`
-	Market    string      `json:"market"`
-	Price     string      `json:"price"`
-	Size      string      `json:"size"`
-	Side      clob.Side   `json:"side"`
-	Status    OrderStatus `json:"status"`
-	Reason    string      `json:"reason,omitzero"`
-	Timestamp string      `json:"timestamp"`
+	OrderID         string             `json:"id"`
+	Owner           string             `json:"owner"`
+	AssetID         string             `json:"asset_id"`
+	Market          string             `json:"market"`
+	Price           string             `json:"price"`
+	Size            string             `json:"size"`
+	Side            clob.Side          `json:"side"`
+	OrderOwner      string             `json:"order_owner,omitzero"`
+	OriginalSize    string             `json:"original_size,omitzero"`
+	SizeMatched     string             `json:"size_matched,omitzero"`
+	AssociateTrades []string           `json:"associate_trades,omitzero"`
+	Outcome         string             `json:"outcome,omitzero"`
+	OrderEventType  UserOrderEventType `json:"type,omitzero"`
+	CreatedAt       string             `json:"created_at,omitzero"`
+	Expiration      string             `json:"expiration,omitzero"`
+	OrderType       clob.OrderType     `json:"order_type,omitzero"`
+	Status          OrderStatus        `json:"status,omitzero"`
+	MakerAddress    string             `json:"maker_address,omitzero"`
+	Reason          string             `json:"reason,omitzero"`
+	Timestamp       string             `json:"timestamp"`
+}
+
+// UnmarshalJSON keeps compatibility with older user payloads that called the
+// order identifier order_id instead of id.
+func (e *OrderEvent) UnmarshalJSON(data []byte) error {
+	type alias OrderEvent
+	var value alias
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	if value.OrderID == "" {
+		var legacy struct {
+			OrderID string `json:"order_id"`
+		}
+		if err := json.Unmarshal(data, &legacy); err != nil {
+			return err
+		}
+		value.OrderID = legacy.OrderID
+	}
+	*e = OrderEvent(value)
+	return nil
+}
+
+// MakerOrder contains the maker-order details included with trade events.
+type MakerOrder struct {
+	OrderID       string    `json:"order_id"`
+	Owner         string    `json:"owner"`
+	MakerAddress  string    `json:"maker_address,omitzero"`
+	MatchedAmount string    `json:"matched_amount"`
+	Price         string    `json:"price"`
+	FeeRateBps    string    `json:"fee_rate_bps,omitzero"`
+	AssetID       string    `json:"asset_id"`
+	Outcome       string    `json:"outcome,omitzero"`
+	OutcomeIndex  *int      `json:"outcome_index,omitzero"`
+	Side          clob.Side `json:"side"`
 }
 
 // TradeEvent is emitted when a user's order is filled (partially or fully).
 type TradeEvent struct {
 	BaseEvent
-	TradeID   string      `json:"trade_id"`
-	AssetID   string      `json:"asset_id"`
-	Market    string      `json:"market"`
-	Price     string      `json:"price"`
-	Size      string      `json:"size"`
-	Side      clob.Side   `json:"side"`
-	Status    TradeStatus `json:"status"`
-	Timestamp string      `json:"timestamp"`
+	TradeID         string       `json:"id"`
+	TakerOrderID    string       `json:"taker_order_id,omitzero"`
+	Market          string       `json:"market"`
+	AssetID         string       `json:"asset_id"`
+	Side            clob.Side    `json:"side"`
+	Size            string       `json:"size"`
+	FeeRateBps      string       `json:"fee_rate_bps,omitzero"`
+	Price           string       `json:"price"`
+	TradeType       string       `json:"type,omitzero"`
+	Status          TradeStatus  `json:"status"`
+	MatchTime       string       `json:"match_time,omitzero"`
+	Matchtime       string       `json:"matchtime,omitzero"`
+	LastUpdate      string       `json:"last_update,omitzero"`
+	Outcome         string       `json:"outcome,omitzero"`
+	Owner           string       `json:"owner,omitzero"`
+	TradeOwner      string       `json:"trade_owner,omitzero"`
+	MakerAddress    string       `json:"maker_address,omitzero"`
+	TransactionHash string       `json:"transaction_hash,omitzero"`
+	BucketIndex     *int         `json:"bucket_index,omitzero"`
+	MakerOrders     []MakerOrder `json:"maker_orders,omitzero"`
+	TraderSide      TraderSide   `json:"trader_side,omitzero"`
+	Timestamp       string       `json:"timestamp"`
 }
+
+// UnmarshalJSON keeps compatibility with older user payloads that called the
+// trade identifier trade_id instead of id.
+func (e *TradeEvent) UnmarshalJSON(data []byte) error {
+	type alias TradeEvent
+	var value alias
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	if value.TradeID == "" {
+		var legacy struct {
+			TradeID string `json:"trade_id"`
+		}
+		if err := json.Unmarshal(data, &legacy); err != nil {
+			return err
+		}
+		value.TradeID = legacy.TradeID
+	}
+	*e = TradeEvent(value)
+	return nil
+}
+
+// UserOrderEventType identifies the order lifecycle transition.
+type UserOrderEventType string
+
+const (
+	UserOrderEventTypePlacement    UserOrderEventType = "PLACEMENT"
+	UserOrderEventTypeUpdate       UserOrderEventType = "UPDATE"
+	UserOrderEventTypeCancellation UserOrderEventType = "CANCELLATION"
+)
+
+// TraderSide identifies whether a user trade was maker or taker executed.
+type TraderSide string
+
+const (
+	TraderSideMaker TraderSide = "MAKER"
+	TraderSideTaker TraderSide = "TAKER"
+)
 
 // BestBidAskEvent is emitted when the best bid or ask for a market changes.
 type BestBidAskEvent struct {
@@ -208,6 +306,27 @@ type NewMarketEvent struct {
 	Timestamp    string        `json:"timestamp"`
 }
 
+// UnmarshalJSON accepts both the current assets_ids spelling and the older
+// asset_ids spelling used by some market-event payloads.
+func (e *NewMarketEvent) UnmarshalJSON(data []byte) error {
+	type alias NewMarketEvent
+	var value alias
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	if len(value.AssetIDs) == 0 {
+		var legacy struct {
+			AssetIDs []string `json:"asset_ids"`
+		}
+		if err := json.Unmarshal(data, &legacy); err != nil {
+			return err
+		}
+		value.AssetIDs = legacy.AssetIDs
+	}
+	*e = NewMarketEvent(value)
+	return nil
+}
+
 // MarketResolvedEvent is emitted when a market is resolved.
 type MarketResolvedEvent struct {
 	BaseEvent
@@ -224,27 +343,53 @@ type MarketResolvedEvent struct {
 	Timestamp      string        `json:"timestamp"`
 }
 
+// UnmarshalJSON accepts both the current assets_ids spelling and the older
+// asset_ids spelling used by some market-event payloads.
+func (e *MarketResolvedEvent) UnmarshalJSON(data []byte) error {
+	type alias MarketResolvedEvent
+	var value alias
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	if len(value.AssetIDs) == 0 {
+		var legacy struct {
+			AssetIDs []string `json:"asset_ids"`
+		}
+		if err := json.Unmarshal(data, &legacy); err != nil {
+			return err
+		}
+		value.AssetIDs = legacy.AssetIDs
+	}
+	*e = MarketResolvedEvent(value)
+	return nil
+}
+
 // OrderStatus represents the lifecycle state of an order as streamed by the user channel.
 type OrderStatus string
 
 const (
-	OrderStatusOpen     OrderStatus = "OPEN"
-	OrderStatusCanceled OrderStatus = "CANCELED"
-	OrderStatusFilled   OrderStatus = "FILLED"
-	OrderStatusExpired  OrderStatus = "EXPIRED"
-	OrderStatusRetrying OrderStatus = "RETRYING"
-	OrderStatusFailed   OrderStatus = "FAILED"
+	OrderStatusOpen      OrderStatus = "OPEN"
+	OrderStatusLive      OrderStatus = "LIVE"
+	OrderStatusMatched   OrderStatus = "MATCHED"
+	OrderStatusDelayed   OrderStatus = "DELAYED"
+	OrderStatusUnmatched OrderStatus = "UNMATCHED"
+	OrderStatusCanceled  OrderStatus = "CANCELED"
+	OrderStatusFilled    OrderStatus = "FILLED"
+	OrderStatusExpired   OrderStatus = "EXPIRED"
+	OrderStatusRetrying  OrderStatus = "RETRYING"
+	OrderStatusFailed    OrderStatus = "FAILED"
 )
 
 // TradeStatus represents the lifecycle state of a trade as streamed by the user channel.
 type TradeStatus string
 
 const (
-	TradeStatusMatched   TradeStatus = "MATCHED"
-	TradeStatusMined     TradeStatus = "MINED"
-	TradeStatusConfirmed TradeStatus = "CONFIRMED"
-	TradeStatusRetrying  TradeStatus = "RETRYING"
-	TradeStatusFailed    TradeStatus = "FAILED"
+	TradeStatusMatched               TradeStatus = "MATCHED"
+	TradeStatusMatchedNotBroadcasted TradeStatus = "MATCHED_NOT_BROADCASTED"
+	TradeStatusMined                 TradeStatus = "MINED"
+	TradeStatusConfirmed             TradeStatus = "CONFIRMED"
+	TradeStatusRetrying              TradeStatus = "RETRYING"
+	TradeStatusFailed                TradeStatus = "FAILED"
 )
 
 // UnmarshalJSON implements case-insensitive deserialization for TradeStatus,
@@ -255,6 +400,8 @@ func (s *TradeStatus) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
-	*s = TradeStatus(strings.ToUpper(raw))
+	raw = strings.ToUpper(raw)
+	raw = strings.TrimPrefix(raw, "TRADE_STATUS_")
+	*s = TradeStatus(raw)
 	return nil
 }

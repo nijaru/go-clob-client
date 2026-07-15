@@ -25,16 +25,12 @@ func newFakeServer(t *testing.T) (*fakeServer, *httptest.Server) {
 	fs.mux.HandleFunc("/v1/info/tickers", fs.jsonHandler(t, []PerpsTicker{
 		{InstrumentID: 1, Symbol: "BTC-USDC", LastPrice: "60000.0", MidPrice: "60000.5"},
 	}))
-	fs.mux.HandleFunc("/v1/info/statistics", fs.jsonHandler(t, []PerpsStatistic{
-		{InstrumentID: 1, Volume: "123.0", OpenPrice: "59000.0"},
-	}))
-	fs.mux.HandleFunc("/v1/info/book", fs.jsonHandler(t, PerpsBook{
-		InstrumentID: 1,
-		Bids:         []PerpsBookLevel{{Price: "59999.0", Quantity: "1.5"}},
-		Asks:         []PerpsBookLevel{{Price: "60001.0", Quantity: "2.0"}},
-		Timestamp:    1000,
-		Sequence:     7,
-	}))
+	fs.mux.HandleFunc("/v1/info/statistics", fs.jsonHandler(t, json.RawMessage(
+		`[{"instrument_id":1,"volume":"123.0","open_price":"59000.0","klines":[[1000,"1","2","1","2","10",3]]}]`,
+	)))
+	fs.mux.HandleFunc("/v1/info/book", fs.jsonHandler(t, json.RawMessage(
+		`{"instrument_id":1,"bids":[["59999.0","1.5"]],"asks":[["60001.0","2.0"]],"timestamp":1000,"sequence":7}`,
+	)))
 	fs.mux.HandleFunc("/v1/info/klines", fs.klinesHandler)
 	fs.mux.HandleFunc("/v1/info/trades", fs.tradesHandler)
 	fs.mux.HandleFunc("/v1/info/funding", fs.fundingHandler)
@@ -66,16 +62,14 @@ func (fs *fakeServer) klinesHandler(w http.ResponseWriter, r *http.Request) {
 	fs.mu.Unlock()
 	more := n == 1
 	if more {
-		_ = json.NewEncoder(w).Encode(perpsDataResponse[PerpsCandle]{
-			Data: []PerpsCandle{{Timestamp: 1000, Open: "1", High: "2", Low: "1", Close: "2", Volume: "10", Trades: 3}},
-			More: true,
-		})
+		_ = json.NewEncoder(w).Encode(json.RawMessage(
+			`{"data":[[1000,"1","2","1","2","10",3]],"more":true}`,
+		))
 		return
 	}
-	_ = json.NewEncoder(w).Encode(perpsDataResponse[PerpsCandle]{
-		Data: []PerpsCandle{{Timestamp: 2000, Open: "2", High: "3", Low: "2", Close: "3", Volume: "5", Trades: 1}},
-		More: false,
-	})
+	_ = json.NewEncoder(w).Encode(json.RawMessage(
+		`{"data":[[2000,"2","3","2","3","5",1]],"more":false}`,
+	))
 }
 
 func (fs *fakeServer) tradesHandler(w http.ResponseWriter, r *http.Request) {
@@ -87,9 +81,30 @@ func (fs *fakeServer) tradesHandler(w http.ResponseWriter, r *http.Request) {
 		// Last trade (t3) shares ts=30 with a trade in page 2.
 		_ = json.NewEncoder(w).Encode(perpsDataResponse[PerpsPublicTrade]{
 			Data: []PerpsPublicTrade{
-				{TradeID: 1, InstrumentID: 1, Side: PerpsSideLong, Price: "10", Quantity: "1", Timestamp: 10},
-				{TradeID: 2, InstrumentID: 1, Side: PerpsSideShort, Price: "10", Quantity: "2", Timestamp: 20},
-				{TradeID: 3, InstrumentID: 1, Side: PerpsSideLong, Price: "10", Quantity: "3", Timestamp: 30},
+				{
+					TradeID:      1,
+					InstrumentID: 1,
+					Side:         PerpsSideLong,
+					Price:        "10",
+					Quantity:     "1",
+					Timestamp:    10,
+				},
+				{
+					TradeID:      2,
+					InstrumentID: 1,
+					Side:         PerpsSideShort,
+					Price:        "10",
+					Quantity:     "2",
+					Timestamp:    20,
+				},
+				{
+					TradeID:      3,
+					InstrumentID: 1,
+					Side:         PerpsSideLong,
+					Price:        "10",
+					Quantity:     "3",
+					Timestamp:    30,
+				},
 			},
 			More: true,
 		})
@@ -98,9 +113,30 @@ func (fs *fakeServer) tradesHandler(w http.ResponseWriter, r *http.Request) {
 	// Raw page 2 includes t3 again (duplicate of page-1 last) plus new trades.
 	_ = json.NewEncoder(w).Encode(perpsDataResponse[PerpsPublicTrade]{
 		Data: []PerpsPublicTrade{
-			{TradeID: 3, InstrumentID: 1, Side: PerpsSideLong, Price: "10", Quantity: "3", Timestamp: 30},
-			{TradeID: 4, InstrumentID: 1, Side: PerpsSideShort, Price: "11", Quantity: "4", Timestamp: 30},
-			{TradeID: 5, InstrumentID: 1, Side: PerpsSideLong, Price: "12", Quantity: "5", Timestamp: 20},
+			{
+				TradeID:      3,
+				InstrumentID: 1,
+				Side:         PerpsSideLong,
+				Price:        "10",
+				Quantity:     "3",
+				Timestamp:    30,
+			},
+			{
+				TradeID:      4,
+				InstrumentID: 1,
+				Side:         PerpsSideShort,
+				Price:        "11",
+				Quantity:     "4",
+				Timestamp:    30,
+			},
+			{
+				TradeID:      5,
+				InstrumentID: 1,
+				Side:         PerpsSideLong,
+				Price:        "12",
+				Quantity:     "5",
+				Timestamp:    20,
+			},
 		},
 		More: false,
 	})
@@ -209,7 +245,10 @@ func TestIterCandlesPagination(t *testing.T) {
 func TestGetCandlesPageCursor(t *testing.T) {
 	_, srv := newFakeServer(t)
 	c := newTestClient(t, srv)
-	p1, next, err := c.GetCandlesPage(t.Context(), CandlesParams{InstrumentID: 1, Interval: PerpsKline1m, Start: 0, End: 9999})
+	p1, next, err := c.GetCandlesPage(
+		t.Context(),
+		CandlesParams{InstrumentID: 1, Interval: PerpsKline1m, Start: 0, End: 9999},
+	)
 	if err != nil {
 		t.Fatalf("page1: %v", err)
 	}
@@ -265,7 +304,13 @@ func TestIterFundingHistory(t *testing.T) {
 }
 
 func TestCursorRoundTrip(t *testing.T) {
-	orig := candlesCursor{Kind: "perpsCandles", InstrumentID: 42, Interval: PerpsKline1d, StartTimestamp: 100, EndTimestamp: 200}
+	orig := candlesCursor{
+		Kind:           "perpsCandles",
+		InstrumentID:   42,
+		Interval:       PerpsKline1d,
+		StartTimestamp: 100,
+		EndTimestamp:   200,
+	}
 	enc := encodeCursor(orig)
 	if enc == "" {
 		t.Fatal("encodeCursor returned empty")

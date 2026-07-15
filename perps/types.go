@@ -1,5 +1,11 @@
 package perps
 
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+)
+
 // PerpsCategory is the market category of a perps instrument.
 type PerpsCategory string
 
@@ -111,6 +117,30 @@ type PerpsBookLevel struct {
 	Quantity string `json:"quantity"`
 }
 
+// UnmarshalJSON accepts the tuple wire format used by the official perps API
+// and the object form emitted by older local fixtures.
+func (l *PerpsBookLevel) UnmarshalJSON(data []byte) error {
+	if isJSONArray(data) {
+		var tuple []string
+		if err := json.Unmarshal(data, &tuple); err != nil {
+			return fmt.Errorf("perps book level tuple: %w", err)
+		}
+		if len(tuple) != 2 {
+			return fmt.Errorf("perps book level tuple: got %d values, want 2", len(tuple))
+		}
+		l.Price, l.Quantity = tuple[0], tuple[1]
+		return nil
+	}
+
+	type alias PerpsBookLevel
+	var value alias
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*l = PerpsBookLevel(value)
+	return nil
+}
+
 // PerpsBook is a perps order book snapshot.
 type PerpsBook struct {
 	InstrumentID int              `json:"instrument_id"`
@@ -129,6 +159,63 @@ type PerpsCandle struct {
 	Close     string `json:"close"`
 	Volume    string `json:"volume"`
 	Trades    int    `json:"trades"`
+}
+
+// UnmarshalJSON accepts the seven-element tuple used by the official perps
+// API and the object form retained for compatibility with older callers.
+func (c *PerpsCandle) UnmarshalJSON(data []byte) error {
+	if isJSONArray(data) {
+		var tuple []json.RawMessage
+		if err := json.Unmarshal(data, &tuple); err != nil {
+			return fmt.Errorf("perps candle tuple: %w", err)
+		}
+		if len(tuple) != 7 {
+			return fmt.Errorf("perps candle tuple: got %d values, want 7", len(tuple))
+		}
+		var value PerpsCandle
+		decode := func(index int, target any) error {
+			if err := json.Unmarshal(tuple[index], target); err != nil {
+				return fmt.Errorf("value %d: %w", index, err)
+			}
+			return nil
+		}
+		if err := decode(0, &value.Timestamp); err != nil {
+			return fmt.Errorf("perps candle tuple: %w", err)
+		}
+		if err := decode(1, &value.Open); err != nil {
+			return fmt.Errorf("perps candle tuple: %w", err)
+		}
+		if err := decode(2, &value.High); err != nil {
+			return fmt.Errorf("perps candle tuple: %w", err)
+		}
+		if err := decode(3, &value.Low); err != nil {
+			return fmt.Errorf("perps candle tuple: %w", err)
+		}
+		if err := decode(4, &value.Close); err != nil {
+			return fmt.Errorf("perps candle tuple: %w", err)
+		}
+		if err := decode(5, &value.Volume); err != nil {
+			return fmt.Errorf("perps candle tuple: %w", err)
+		}
+		if err := decode(6, &value.Trades); err != nil {
+			return fmt.Errorf("perps candle tuple: %w", err)
+		}
+		*c = value
+		return nil
+	}
+
+	type alias PerpsCandle
+	var value alias
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*c = PerpsCandle(value)
+	return nil
+}
+
+func isJSONArray(data []byte) bool {
+	data = bytes.TrimSpace(data)
+	return len(data) > 0 && data[0] == '['
 }
 
 // PerpsPublicTrade is a single public trade print.

@@ -450,22 +450,70 @@ func (c *Client) DownloadAccountingSnapshot(
 
 const comboPositionsEndpoint = "/v1/positions/combos"
 
+type comboPagination struct {
+	Limit      int    `json:"limit"`
+	Offset     int    `json:"offset"`
+	HasMore    bool   `json:"has_more"`
+	NextCursor string `json:"next_cursor"`
+}
+
+type comboPositionsResponse struct {
+	Combos     []ComboPosition `json:"combos"`
+	Pagination comboPagination `json:"pagination"`
+}
+
+type comboActivityResponse struct {
+	Activity   []ComboActivity `json:"activity"`
+	Pagination comboPagination `json:"pagination"`
+}
+
+func comboPositionQuery(p ComboPositionParams) url.Values {
+	q := url.Values{}
+	q.Set("user", p.User)
+	setString(q, "status", p.Status)
+	setString(q, "sort", p.Sort)
+	if len(p.ConditionIDs) > 0 {
+		setCommaList(q, "market_id", p.ConditionIDs)
+	} else {
+		setString(q, "market_id", p.ConditionID)
+	}
+	setInt64(q, "updated_after", p.UpdatedAfter)
+	setInt64(q, "updated_before", p.UpdatedBefore)
+	setInt(q, "limit", boundedLimit(p.Limit, 500))
+	setString(q, "cursor", p.Cursor)
+	// Keep the pre-keyset filters usable for callers migrating from the
+	// previous unofficial implementation. Current official clients use the
+	// market_id/cursor fields above.
+	setString(q, "combo_position_id", p.PositionID)
+	setInt(q, "offset", p.Offset)
+	return q
+}
+
+// GetComboPositionsPage returns one official cursor-paginated response.
+func (c *Client) GetComboPositionsPage(
+	ctx context.Context,
+	p ComboPositionParams,
+) (ComboPositionPage, error) {
+	var out comboPositionsResponse
+	if err := c.getJSON(ctx, comboPositionsEndpoint, comboPositionQuery(p), &out); err != nil {
+		return ComboPositionPage{}, err
+	}
+	return ComboPositionPage{
+		Items:      out.Combos,
+		Limit:      out.Pagination.Limit,
+		Offset:     out.Pagination.Offset,
+		HasMore:    out.Pagination.HasMore,
+		NextCursor: out.Pagination.NextCursor,
+	}, nil
+}
+
 // GetComboPositions returns combo positions for a wallet.
 func (c *Client) GetComboPositions(
 	ctx context.Context,
 	p ComboPositionParams,
 ) ([]ComboPosition, error) {
-	q := url.Values{}
-	q.Set("user", p.User)
-	setString(q, "status", p.Status)
-	setString(q, "combo_condition_id", p.ConditionID)
-	setString(q, "combo_position_id", p.PositionID)
-	setInt(q, "limit", boundedLimit(p.Limit, 500))
-	setInt(q, "offset", p.Offset)
-
-	var out []ComboPosition
-	err := c.getJSON(ctx, comboPositionsEndpoint, q, &out)
-	return out, err
+	page, err := c.GetComboPositionsPage(ctx, p)
+	return page.Items, err
 }
 
 // IterComboPositions returns an iterator over combo positions.
@@ -474,29 +522,95 @@ func (c *Client) IterComboPositions(
 	p ComboPositionParams,
 ) iter.Seq2[ComboPosition, error] {
 	return func(yield func(ComboPosition, error) bool) {
-		offset := p.Offset
-		limit := iteratorLimit(p.Limit, 100, 500)
+		cursor := p.Cursor
 		for {
 			q := p
-			q.Limit = limit
-			q.Offset = offset
-			items, err := c.GetComboPositions(ctx, q)
+			q.Cursor = cursor
+			q.Offset = 0
+			page, err := c.GetComboPositionsPage(ctx, q)
 			if err != nil {
 				yield(ComboPosition{}, err)
 				return
 			}
-			if len(items) == 0 {
-				return
-			}
-			for _, item := range items {
+			for _, item := range page.Items {
 				if !yield(item, nil) {
 					return
 				}
 			}
-			if len(items) < limit {
+			if !page.HasMore || page.NextCursor == "" || page.NextCursor == cursor {
 				return
 			}
-			offset += len(items)
+			cursor = page.NextCursor
+		}
+	}
+}
+
+const comboActivityEndpoint = "/v1/activity/combos"
+
+func comboActivityQuery(p ComboActivityParams) url.Values {
+	q := url.Values{}
+	q.Set("user", p.User)
+	if len(p.ConditionIDs) > 0 {
+		setCommaList(q, "market_id", p.ConditionIDs)
+	} else {
+		setString(q, "market_id", p.ConditionID)
+	}
+	setInt(q, "limit", boundedLimit(p.Limit, 500))
+	setString(q, "cursor", p.Cursor)
+	return q
+}
+
+// GetComboActivityPage returns one official cursor-paginated response.
+func (c *Client) GetComboActivityPage(
+	ctx context.Context,
+	p ComboActivityParams,
+) (ComboActivityPage, error) {
+	var out comboActivityResponse
+	if err := c.getJSON(ctx, comboActivityEndpoint, comboActivityQuery(p), &out); err != nil {
+		return ComboActivityPage{}, err
+	}
+	return ComboActivityPage{
+		Items:      out.Activity,
+		Limit:      out.Pagination.Limit,
+		Offset:     out.Pagination.Offset,
+		HasMore:    out.Pagination.HasMore,
+		NextCursor: out.Pagination.NextCursor,
+	}, nil
+}
+
+// GetComboActivity returns the first page of combo lifecycle activity.
+func (c *Client) GetComboActivity(
+	ctx context.Context,
+	p ComboActivityParams,
+) ([]ComboActivity, error) {
+	page, err := c.GetComboActivityPage(ctx, p)
+	return page.Items, err
+}
+
+// IterComboActivity returns an iterator over all combo lifecycle activity pages.
+func (c *Client) IterComboActivity(
+	ctx context.Context,
+	p ComboActivityParams,
+) iter.Seq2[ComboActivity, error] {
+	return func(yield func(ComboActivity, error) bool) {
+		cursor := p.Cursor
+		for {
+			q := p
+			q.Cursor = cursor
+			page, err := c.GetComboActivityPage(ctx, q)
+			if err != nil {
+				yield(ComboActivity{}, err)
+				return
+			}
+			for _, item := range page.Items {
+				if !yield(item, nil) {
+					return
+				}
+			}
+			if !page.HasMore || page.NextCursor == "" || page.NextCursor == cursor {
+				return
+			}
+			cursor = page.NextCursor
 		}
 	}
 }

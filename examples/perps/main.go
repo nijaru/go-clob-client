@@ -34,7 +34,10 @@ func main() {
 	fmt.Printf("last=%s mark=%s index=%s fundingRate=%s\n",
 		ticker.LastPrice, ticker.MarkPrice, ticker.IndexPrice, ticker.FundingRate)
 
-	book, err := client.GetBook(ctx, perps.BookParams{InstrumentID: inst.ID, Depth: perps.PerpsBookDepth100})
+	book, err := client.GetBook(
+		ctx,
+		perps.BookParams{InstrumentID: inst.ID, Depth: perps.PerpsBookDepth100},
+	)
 	if err != nil {
 		log.Fatalf("get book: %v", err)
 	}

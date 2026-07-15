@@ -15,16 +15,17 @@ import (
 const (
 	DefaultHost = "https://gamma-api.polymarket.com"
 
-	marketsEndpoint  = "/markets"
-	eventsEndpoint   = "/events"
-	seriesEndpoint   = "/series"
-	tagsEndpoint     = "/tags"
-	sportsEndpoint   = "/sports"
-	teamsEndpoint    = "/teams"
-	commentsEndpoint = "/comments"
-	profileEndpoint  = "/public-profile"
-	searchEndpoint   = "/public-search"
-	statusEndpoint   = "/status"
+	marketsEndpoint              = "/markets"
+	eventsEndpoint               = "/events"
+	seriesEndpoint               = "/series"
+	tagsEndpoint                 = "/tags"
+	sportsEndpoint               = "/sports"
+	teamsEndpoint                = "/teams"
+	commentsEndpoint             = "/comments"
+	profileEndpoint              = "/public-profile"
+	searchEndpoint               = "/public-search"
+	statusEndpoint               = "/status"
+	marketClarificationsEndpoint = "/market-clarifications"
 )
 
 // Client is a read-only client for the Polymarket Gamma API.
@@ -421,6 +422,48 @@ func (c *Client) GetTagsRelatedToTagBySlug(ctx context.Context, slug string) ([]
 	return out, err
 }
 
+func relatedTagResourceQuery(p RelatedTagResourceParams) url.Values {
+	query := url.Values{}
+	setString(query, "locale", p.Locale)
+	setBool(query, "omit_empty", p.OmitEmpty)
+	setString(query, "status", p.Status)
+	return query
+}
+
+// GetRelatedTagResources returns Gamma resources linked from related tags by ID.
+func (c *Client) GetRelatedTagResources(
+	ctx context.Context,
+	tagID string,
+	p RelatedTagResourceParams,
+) ([]Tag, error) {
+	var out []Tag
+	err := c.http.GetJSON(
+		ctx,
+		tagsEndpoint+"/"+tagID+"/related-tags/tags",
+		relatedTagResourceQuery(p),
+		polyhttp.AuthNone,
+		&out,
+	)
+	return out, err
+}
+
+// GetRelatedTagResourcesBySlug returns Gamma resources linked from related tags by slug.
+func (c *Client) GetRelatedTagResourcesBySlug(
+	ctx context.Context,
+	slug string,
+	p RelatedTagResourceParams,
+) ([]Tag, error) {
+	var out []Tag
+	err := c.http.GetJSON(
+		ctx,
+		tagsEndpoint+"/slug/"+slug+"/related-tags/tags",
+		relatedTagResourceQuery(p),
+		polyhttp.AuthNone,
+		&out,
+	)
+	return out, err
+}
+
 // GetTags returns all tags.
 func (c *Client) GetTags(ctx context.Context) ([]Tag, error) {
 	var out []Tag
@@ -469,6 +512,83 @@ func (c *Client) GetStatus(ctx context.Context) (string, error) {
 	var out string
 	err := c.http.GetJSON(ctx, statusEndpoint, nil, polyhttp.AuthNone, &out)
 	return out, err
+}
+
+func addGammaFilterValues(query url.Values, key, single string, values []string) {
+	if len(values) > 0 {
+		for _, value := range values {
+			query.Add(key, value)
+		}
+		return
+	}
+	setString(query, key, single)
+}
+
+func addGammaStateValues(query url.Values, p MarketClarificationsParams) {
+	if len(p.States) > 0 {
+		for _, state := range p.States {
+			query.Add("state", string(state))
+		}
+		return
+	}
+	setString(query, "state", p.State)
+}
+
+// GetMarketClarifications returns one page of official market clarifications.
+func (c *Client) GetMarketClarifications(
+	ctx context.Context,
+	p MarketClarificationsParams,
+) ([]MarketClarification, error) {
+	query := url.Values{}
+	addGammaFilterValues(query, "market_id", p.MarketID, p.MarketIDs)
+	addGammaFilterValues(query, "event_id", p.EventID, p.EventIDs)
+	addGammaFilterValues(query, "question_id", p.QuestionID, p.QuestionIDs)
+	addGammaStateValues(query, p)
+	setBool(query, "show_in_frontend", p.ShowInFrontend)
+	setString(query, "tx_hash", p.TxHash)
+	setString(query, "order", p.Order)
+	setBool(query, "ascending", p.Ascending)
+	setInt(query, "limit", p.Limit)
+	setInt(query, "offset", p.Offset)
+
+	var out []MarketClarification
+	err := c.http.GetJSON(ctx, marketClarificationsEndpoint, query, polyhttp.AuthNone, &out)
+	return out, err
+}
+
+// IterMarketClarifications walks all market clarifications using offset
+// pagination, matching the official SDK's cursor abstraction.
+func (c *Client) IterMarketClarifications(
+	ctx context.Context,
+	p MarketClarificationsParams,
+) iter.Seq2[MarketClarification, error] {
+	return func(yield func(MarketClarification, error) bool) {
+		limit := iteratorLimit(p.Limit, 20, 100)
+		offset := p.Offset
+		for {
+			q := p
+			q.Limit = limit + 1
+			q.Offset = offset
+			items, err := c.GetMarketClarifications(ctx, q)
+			if err != nil {
+				yield(MarketClarification{}, err)
+				return
+			}
+			more := len(items) > limit
+			if more {
+				items = items[:limit]
+			}
+			for _, item := range items {
+				if !yield(item, nil) {
+					return
+				}
+			}
+			if !more {
+				return
+			}
+			offset += limit
+		}
+	}
 }
 
 // GetComments returns a list of comments based on the provided filters.

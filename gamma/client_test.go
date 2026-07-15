@@ -641,6 +641,71 @@ func TestClient_GetTagsRelatedToTagBySlug(t *testing.T) {
 	}
 }
 
+func TestClient_GetRelatedTagResources(t *testing.T) {
+	omitEmpty := true
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/tags/tag-1/related-tags/tags" {
+			t.Errorf("path = %s", r.URL.Path)
+		}
+		q := r.URL.Query()
+		if q.Get("locale") != "en" || q.Get("status") != "active" || q.Get("omit_empty") != "true" {
+			t.Errorf("query = %v", q)
+		}
+		writeJSON(w, []Tag{{ID: "market-1"}})
+	})
+
+	tags, err := client.GetRelatedTagResources(t.Context(), "tag-1", RelatedTagResourceParams{
+		Locale: "en", OmitEmpty: &omitEmpty, Status: "active",
+	})
+	if err != nil {
+		t.Fatalf("GetRelatedTagResources: %v", err)
+	}
+	if len(tags) != 1 || tags[0].ID != "market-1" {
+		t.Errorf("tags = %+v", tags)
+	}
+}
+
+func TestClient_IterMarketClarifications(t *testing.T) {
+	call := 0
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/market-clarifications" {
+			t.Errorf("path = %s", r.URL.Path)
+		}
+		call++
+		if call == 1 {
+			writeJSON(w, []MarketClarification{
+				{ID: 1, MarketID: FlexibleID("100")},
+				{ID: 2, MarketID: FlexibleID("101")},
+				{ID: 3, MarketID: FlexibleID("102")},
+			})
+			return
+		}
+		writeJSON(w, []MarketClarification{
+			{ID: 3, MarketID: FlexibleID("102")},
+			{ID: 4, MarketID: FlexibleID("103")},
+		})
+	})
+
+	var ids []int
+	for clarification, err := range client.IterMarketClarifications(t.Context(), MarketClarificationsParams{Limit: 2}) {
+		if err != nil {
+			t.Fatalf("IterMarketClarifications: %v", err)
+		}
+		ids = append(ids, clarification.ID)
+	}
+	if len(ids) != 4 || ids[0] != 1 || ids[3] != 4 {
+		t.Fatalf("ids = %v", ids)
+	}
+
+	var clarification MarketClarification
+	if err := json.Unmarshal([]byte(`{"id":5,"marketId":123}`), &clarification); err != nil {
+		t.Fatalf("numeric market id: %v", err)
+	}
+	if clarification.MarketID != FlexibleID("123") {
+		t.Fatalf("market id = %q", clarification.MarketID)
+	}
+}
+
 func TestClient_GetTags(t *testing.T) {
 	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/tags" {
