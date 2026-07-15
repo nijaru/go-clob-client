@@ -23,9 +23,18 @@ func (c *SignerClient) sendTxAndWait(
 	to common.Address,
 	data []byte,
 ) (*types.Receipt, error) {
+	return c.sendContractTxAndWait(ctx, to, data, "ctf")
+}
+
+func (c *SignerClient) sendContractTxAndWait(
+	ctx context.Context,
+	to common.Address,
+	data []byte,
+	label string,
+) (*types.Receipt, error) {
 	ec, err := c.dialRPC(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("ctf: dial rpc: %w", err)
+		return nil, fmt.Errorf("%s: dial rpc: %w", label, err)
 	}
 	defer ec.Close()
 
@@ -34,18 +43,18 @@ func (c *SignerClient) sendTxAndWait(
 
 	nonce, err := ec.PendingNonceAt(ctx, from)
 	if err != nil {
-		return nil, fmt.Errorf("ctf: get nonce: %w", err)
+		return nil, fmt.Errorf("%s: get nonce: %w", label, err)
 	}
 
 	chainID := big.NewInt(c.chainID)
 	gasTipCap, err := ec.SuggestGasTipCap(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("ctf: suggest gas tip: %w", err)
+		return nil, fmt.Errorf("%s: suggest gas tip: %w", label, err)
 	}
 
 	head, err := ec.HeaderByNumber(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("ctf: get latest header: %w", err)
+		return nil, fmt.Errorf("%s: get latest header: %w", label, err)
 	}
 	gasFeeCap := new(big.Int).Add(
 		gasTipCap,
@@ -61,7 +70,7 @@ func (c *SignerClient) sendTxAndWait(
 	}
 	gasLimit, err := ec.EstimateGas(ctx, msg)
 	if err != nil {
-		return nil, fmt.Errorf("ctf: estimate gas: %w", err)
+		return nil, fmt.Errorf("%s: estimate gas: %w", label, err)
 	}
 
 	tx := types.NewTx(&types.DynamicFeeTx{
@@ -77,19 +86,19 @@ func (c *SignerClient) sendTxAndWait(
 
 	signed, err := types.SignTx(tx, types.LatestSignerForChainID(chainID), key)
 	if err != nil {
-		return nil, fmt.Errorf("ctf: sign tx: %w", err)
+		return nil, fmt.Errorf("%s: sign tx: %w", label, err)
 	}
 
 	if err := ec.SendTransaction(ctx, signed); err != nil {
-		return nil, fmt.Errorf("ctf: send tx: %w", err)
+		return nil, fmt.Errorf("%s: send tx: %w", label, err)
 	}
 
-	receipt, err := waitForReceipt(ctx, ec, signed.Hash())
+	receipt, err := waitForReceipt(ctx, ec, signed.Hash(), label)
 	if err != nil {
 		return nil, err
 	}
 	if receipt.Status == types.ReceiptStatusFailed {
-		return nil, fmt.Errorf("ctf: transaction %s reverted", signed.Hash().Hex())
+		return nil, fmt.Errorf("%s: transaction %s reverted", label, signed.Hash().Hex())
 	}
 	return receipt, nil
 }
@@ -101,20 +110,21 @@ func waitForReceipt(
 	ctx context.Context,
 	ec *ethclient.Client,
 	txHash common.Hash,
+	label string,
 ) (*types.Receipt, error) {
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			return nil, fmt.Errorf("ctf: waiting for receipt %s: %w", txHash.Hex(), ctx.Err())
+			return nil, fmt.Errorf("%s: waiting for receipt %s: %w", label, txHash.Hex(), ctx.Err())
 		case <-ticker.C:
 			receipt, err := ec.TransactionReceipt(ctx, txHash)
 			if err == nil {
 				return receipt, nil
 			}
 			if !errors.Is(err, ethereum.NotFound) {
-				return nil, fmt.Errorf("ctf: get receipt %s: %w", txHash.Hex(), err)
+				return nil, fmt.Errorf("%s: get receipt %s: %w", label, txHash.Hex(), err)
 			}
 		}
 	}

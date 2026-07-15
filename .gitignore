@@ -37,3 +37,6 @@ go.work.sum
 
 # macOS
 .DS_Store
+
+# Local Pi task runtime artifacts; durable work is tracked in the local-only tk store.
+/.pi/tasks/

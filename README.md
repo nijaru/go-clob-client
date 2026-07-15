@@ -16,7 +16,10 @@
 > means contract-level capability with idiomatic Go APIs, not a drop-in copy of TypeScript or
 > Python method names. See `ai/ROADMAP.md`.
 
-Go SDK for the [Polymarket](https://polymarket.com) CLOB and Data APIs. Tracks feature parity with the [official Rust V2 SDK](https://github.com/Polymarket/rs-clob-client-v2).
+Go SDK for the [Polymarket](https://polymarket.com) CLOB and adjacent APIs. Tracks stable capability
+parity with the official [Rust V2](https://github.com/Polymarket/rs-clob-client-v2),
+[TypeScript](https://github.com/Polymarket/ts-sdk), and [Python](https://github.com/Polymarket/py-sdk)
+SDKs while keeping an idiomatic Go API.
 
 ## Install
 
@@ -26,7 +29,7 @@ Requires **Go 1.26+**.
 go get github.com/nijaru/go-clob-client@latest
 ```
 
-The module exposes two main packages:
+The module exposes several focused packages:
 
 - **`clob`** — trading, orderbooks, prices, account management, websockets, heartbeats
 - **`data`** — read-only analytics: positions, trades, activity, combo portfolios, holders, leaderboards
@@ -186,6 +189,11 @@ handle, err := client.MergePositionsGasless(ctx, clob.MergeBinary(usdc, conditio
 outcome, err := handle.Wait(ctx)
 ```
 
+Token wallet operations use the same explicit split: `SignerClient.ApproveERC20`,
+`SignerClient.ApproveERC1155ForAll`, and `SignerClient.TransferERC20` broadcast directly from an
+EOA; the corresponding `AuthenticatedClient` `*Gasless` methods route calls through proxy, Safe,
+or deposit wallets. `clob.MaxUint256()` returns a fresh unlimited-approval amount.
+
 ## Error Handling
 
 API errors are returned as `*clob.APIError` with HTTP status and body:
@@ -206,7 +214,7 @@ if errors.Is(err, clob.ErrUnauthorized){ /* 401/403 */ }
 | Limit order    | `examples/clob/limit_order`    | Placing a GTC limit order                    |
 | Market order   | `examples/clob/market_order`   | Placing a FOK market order                   |
 | CTF operations | `examples/clob/ctf_operations` | Splitting, merging, and redeeming shares     |
-| Gasless        | `examples/clob/gasless`        | Submitting calls through the relayer        |
+| Gasless        | `examples/clob/gasless`        | Submitting CTF and arbitrary calls through the relayer |
 | WebSocket      | `examples/ws`                  | Real-time orderbook and user event streaming |
 | Data API       | `examples/data`                | Positions and read-only data endpoints       |
 | Bridge         | `examples/bridge`              | Deposit addresses (EVM, Solana, Bitcoin)     |
@@ -220,7 +228,8 @@ go run ./examples/clob/read_only
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Primary reference for API parity is the [Rust V2 SDK](https://github.com/Polymarket/rs-clob-client-v2).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the tiered official-SDK oracle model and contribution
+workflow.
 
 ## Security
 

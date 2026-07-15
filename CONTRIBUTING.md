@@ -23,10 +23,14 @@ Contributions are welcome. Please follow these guidelines:
 
 - Match the style of the surrounding code.
 - Add tests for new behavior, especially for auth flows, order construction, and request/response shaping.
-- When adding new API endpoints, mirror the Rust SDK's behavior first, then express that idiomatically in Go.
+- When adding new API endpoints, compare the current Rust, TypeScript, and Python SDKs using the
+  tiered oracle model: Rust anchors core mechanics and stable non-perps contracts; TS/Python fill
+  newer or broader surfaces. Express the result idiomatically in Go.
 - Prefer package-level separation (`clob/`, `data/`, `gamma/`, `bridge/`) over growing one package too wide.
-- Avoid compatibility shims unless they are explicitly required; this repo prefers clean breaks when interfaces change.
-- Reference the [Rust SDK](https://github.com/Polymarket/rs-clob-client) for API parity questions.
+- Avoid gratuitous compatibility shims; preserve wire compatibility when a migration requires it,
+  and prefer clean breaks for pre-1.0 Go interfaces.
+- Keep perps as a separate package and keep wallet-model-specific on-chain operations explicit.
+- Reference the [Rust V2 SDK](https://github.com/Polymarket/rs-clob-client-v2), [TypeScript SDK](https://github.com/Polymarket/ts-sdk), and [Python SDK](https://github.com/Polymarket/py-sdk) for parity questions.
 
 ## Commit messages
 

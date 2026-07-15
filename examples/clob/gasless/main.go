@@ -8,27 +8,29 @@
 // Env: POLYMARKET_PRIVATE_KEY (the EOA that controls the wallet),
 //
 //	POLYMARKET_API_KEY / POLYMARKET_API_SECRET / POLYMARKET_API_PASSPHRASE,
-//	POLYMARKET_FUNDER (the proxy/Safe/deposit wallet address).
+//	POLYMARKET_FUNDER (the proxy/Safe/deposit wallet address),
+//	POLYMARKET_APPROVAL_SPENDER (the exchange or adapter to approve).
 package main
 
 import (
 	"context"
 	"fmt"
 	"log"
-	"math/big"
 	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/nijaru/go-clob-client/clob"
-	"github.com/nijaru/go-clob-client/internal/polyrelay"
 )
 
 func main() {
 	key := os.Getenv("POLYMARKET_PRIVATE_KEY")
 	funder := os.Getenv("POLYMARKET_FUNDER")
-	if key == "" || funder == "" {
-		log.Fatal("POLYMARKET_PRIVATE_KEY and POLYMARKET_FUNDER are required")
+	spender := os.Getenv("POLYMARKET_APPROVAL_SPENDER")
+	if key == "" || funder == "" || spender == "" {
+		log.Fatal(
+			"POLYMARKET_PRIVATE_KEY, POLYMARKET_FUNDER, and POLYMARKET_APPROVAL_SPENDER are required",
+		)
 	}
 
 	client, err := clob.NewAuthenticatedClient(clob.Config{
@@ -47,12 +49,11 @@ func main() {
 	}
 	defer client.Close()
 
-	// Build a simple call: approve the exchange to spend 1 USDC of collateral.
-	// (Calldata shape is illustrative — use your own ABI encoding in practice.)
+	// Approve the configured exchange or adapter to spend collateral. The
+	// spender is deliberately an environment variable because the correct
+	// address depends on the chain and trading product.
 	collateral := common.HexToAddress("0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174")
-	calls := []polyrelay.TransactionCall{
-		{To: collateral, Data: common.FromHex("0x..."), Value: big.NewInt(0)},
-	}
+	approvalSpender := common.HexToAddress(spender)
 
 	ctx := context.Background()
 
@@ -65,9 +66,13 @@ func main() {
 	}
 
 	fmt.Println("Submitting approval through the relayer...")
-	handle, err := client.PrepareGaslessTransaction(ctx, calls, "approve")
+	handle, err := client.ApproveERC20Gasless(ctx, clob.ERC20ApprovalRequest{
+		TokenAddress:   collateral,
+		SpenderAddress: approvalSpender,
+		Amount:         clob.MaxUint256(),
+	}, "approve")
 	if err != nil {
-		log.Fatalf("PrepareGaslessTransaction: %v", err)
+		log.Fatalf("ApproveERC20Gasless: %v", err)
 	}
 	fmt.Printf("Submitted: transactionID=%s\n", handle.TransactionID)
 
