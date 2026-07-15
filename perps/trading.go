@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
 )
@@ -54,6 +55,77 @@ type PerpsLeverageResult struct {
 	Leverage     int    `json:"leverage"`
 	Cross        bool   `json:"cross"`
 	Error        string `json:"error,omitempty"`
+}
+
+type perpsOrderUpdate struct {
+	ID               int              `json:"oid"`
+	InstrumentID     int              `json:"iid"`
+	Buy              bool             `json:"buy"`
+	Price            string           `json:"p"`
+	Quantity         string           `json:"qty"`
+	TimeInForce      PerpsTimeInForce `json:"tif"`
+	PostOnly         bool             `json:"po"`
+	ReduceOnly       bool             `json:"ro"`
+	Status           PerpsOrderStatus `json:"status"`
+	RestingQuantity  string           `json:"rest"`
+	FilledQuantity   string           `json:"fill"`
+	CreatedTimestamp int64            `json:"cts"`
+	UpdatedTimestamp int64            `json:"uts"`
+	ClientOrderID    string           `json:"coid,omitempty"`
+}
+
+func (u perpsOrderUpdate) order() PerpsOrder {
+	return PerpsOrder{
+		ID:               u.ID,
+		InstrumentID:     u.InstrumentID,
+		Buy:              u.Buy,
+		Price:            u.Price,
+		Quantity:         u.Quantity,
+		TimeInForce:      u.TimeInForce,
+		PostOnly:         u.PostOnly,
+		ReduceOnly:       u.ReduceOnly,
+		Status:           u.Status,
+		RestingQuantity:  u.RestingQuantity,
+		FilledQuantity:   u.FilledQuantity,
+		CreatedTimestamp: u.CreatedTimestamp,
+		UpdatedTimestamp: u.UpdatedTimestamp,
+		ClientOrderID:    u.ClientOrderID,
+	}
+}
+
+// PlaceOrder submits one entry order and waits for its first authenticated
+// orders update. Use PostOrders when the acknowledgement is sufficient or when
+// submitting a batch. TP/SL order groups remain a separate API.
+func (s *Session) PlaceOrder(
+	ctx context.Context,
+	order PerpsOrderRequest,
+	expiresAt int64,
+) (*PerpsOrder, error) {
+	acknowledgements, err := s.PostOrders(ctx, []PerpsOrderRequest{order}, expiresAt)
+	if err != nil {
+		return nil, err
+	}
+	if len(acknowledgements) != 1 {
+		return nil, fmt.Errorf(
+			"perps: expected one order acknowledgement, got %d",
+			len(acknowledgements),
+		)
+	}
+	acknowledgement := acknowledgements[0]
+	if acknowledgement.Status != "ok" {
+		if acknowledgement.Error == "" {
+			acknowledgement.Error = "order rejected"
+		}
+		return nil, fmt.Errorf("perps: %s", acknowledgement.Error)
+	}
+	waitContext, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	update, err := s.waitForOrderUpdate(waitContext, acknowledgement.OrderID)
+	if err != nil {
+		return nil, fmt.Errorf("perps: wait for order update: %w", err)
+	}
+	orderResult := update.order()
+	return &orderResult, nil
 }
 
 // PostOrders signs and submits one or more entry orders over the authenticated

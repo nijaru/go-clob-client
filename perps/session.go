@@ -56,6 +56,11 @@ type sessionResponse struct {
 	err  error
 }
 
+type orderWaitResponse struct {
+	update perpsOrderUpdate
+	err    error
+}
+
 type sessionOp struct {
 	Type string         `json:"type"`
 	Args map[string]any `json:"args,omitempty"`
@@ -71,21 +76,24 @@ type sessionAck struct {
 // supports the stable low-level signed trading commands. TP/SL orchestration
 // remains separate from this transport-level API.
 type Session struct {
-	conn        *websocket.Conn
-	client      *AuthenticatedClient
-	events      chan PerpsSessionEvent
-	errors      chan error
-	ctx         context.Context
-	cancel      context.CancelFunc
-	done        chan struct{}
-	chainID     int64
-	signer      *polyauth.Signer
-	writeMu     sync.Mutex
-	pendingMu   sync.Mutex
-	pending     map[int]chan sessionResponse
-	nextRequest int
-	closeOnce   sync.Once
-	closeErr    error
+	conn         *websocket.Conn
+	client       *AuthenticatedClient
+	events       chan PerpsSessionEvent
+	errors       chan error
+	ctx          context.Context
+	cancel       context.CancelFunc
+	done         chan struct{}
+	chainID      int64
+	signer       *polyauth.Signer
+	writeMu      sync.Mutex
+	pendingMu    sync.Mutex
+	pending      map[int]chan sessionResponse
+	nextRequest  int
+	orderWaitMu  sync.Mutex
+	orderWaiters map[int][]chan orderWaitResponse
+	orderUpdates []perpsOrderUpdate
+	closeOnce    sync.Once
+	closeErr     error
 }
 
 // ErrPerpsSigningKeyRequired indicates that a signed command needs the
@@ -113,16 +121,17 @@ func (c *AuthenticatedClient) OpenSession(
 	}
 	sessionCtx, cancel := context.WithCancel(context.Background())
 	session := &Session{
-		conn:        conn,
-		client:      c,
-		events:      make(chan PerpsSessionEvent, 128),
-		errors:      make(chan error, 8),
-		ctx:         sessionCtx,
-		cancel:      cancel,
-		done:        make(chan struct{}),
-		chainID:     c.chainID,
-		pending:     make(map[int]chan sessionResponse),
-		nextRequest: 3,
+		conn:         conn,
+		client:       c,
+		events:       make(chan PerpsSessionEvent, 128),
+		errors:       make(chan error, 8),
+		ctx:          sessionCtx,
+		cancel:       cancel,
+		done:         make(chan struct{}),
+		chainID:      c.chainID,
+		pending:      make(map[int]chan sessionResponse),
+		nextRequest:  3,
+		orderWaiters: make(map[int][]chan orderWaitResponse),
 	}
 	session.signer, err = c.delegatedSigner()
 	if err != nil {
@@ -235,6 +244,7 @@ func (s *Session) readLoop() {
 				s.reportError(err)
 			}
 			s.rejectPending(err)
+			s.rejectOrderWaiters(err)
 			return
 		}
 		var response struct {
@@ -265,10 +275,94 @@ func (s *Session) readLoop() {
 			Sequence:  frame.Sequence,
 			Data:      append(json.RawMessage(nil), frame.Data...),
 		}
+		s.resolveOrderWaiters(event)
 		select {
 		case s.events <- event:
 		case <-s.ctx.Done():
 			return
+		}
+	}
+}
+
+func (s *Session) resolveOrderWaiters(event PerpsSessionEvent) {
+	if event.Channel != "orders" {
+		return
+	}
+	var update perpsOrderUpdate
+	if err := json.Unmarshal(event.Data, &update); err != nil {
+		return
+	}
+	s.orderWaitMu.Lock()
+	waiters := s.orderWaiters[update.ID]
+	delete(s.orderWaiters, update.ID)
+	if len(waiters) == 0 {
+		s.orderUpdates = append(s.orderUpdates, update)
+		if len(s.orderUpdates) > 64 {
+			s.orderUpdates = s.orderUpdates[len(s.orderUpdates)-64:]
+		}
+	}
+	s.orderWaitMu.Unlock()
+	for _, waiter := range waiters {
+		waiter <- orderWaitResponse{update: update}
+	}
+}
+
+func (s *Session) waitForOrderUpdate(
+	ctx context.Context,
+	orderID int,
+) (perpsOrderUpdate, error) {
+	response := make(chan orderWaitResponse, 1)
+	s.orderWaitMu.Lock()
+	for i, update := range s.orderUpdates {
+		if update.ID == orderID {
+			s.orderUpdates = append(s.orderUpdates[:i], s.orderUpdates[i+1:]...)
+			s.orderWaitMu.Unlock()
+			return update, nil
+		}
+	}
+	s.orderWaiters[orderID] = append(s.orderWaiters[orderID], response)
+	s.orderWaitMu.Unlock()
+	select {
+	case result := <-response:
+		return result.update, result.err
+	case <-ctx.Done():
+		s.removeOrderWaiter(orderID, response)
+		return perpsOrderUpdate{}, ctx.Err()
+	case <-s.ctx.Done():
+		s.removeOrderWaiter(orderID, response)
+		return perpsOrderUpdate{}, errors.New("perps session closed")
+	}
+}
+
+func (s *Session) removeOrderWaiter(
+	orderID int,
+	response chan orderWaitResponse,
+) {
+	s.orderWaitMu.Lock()
+	defer s.orderWaitMu.Unlock()
+	waiters := s.orderWaiters[orderID]
+	for i, waiter := range waiters {
+		if waiter == response {
+			waiters = append(waiters[:i], waiters[i+1:]...)
+			break
+		}
+	}
+	if len(waiters) == 0 {
+		delete(s.orderWaiters, orderID)
+	} else {
+		s.orderWaiters[orderID] = waiters
+	}
+}
+
+func (s *Session) rejectOrderWaiters(err error) {
+	s.orderWaitMu.Lock()
+	waiters := slices.Collect(maps.Values(s.orderWaiters))
+	s.orderWaiters = make(map[int][]chan orderWaitResponse)
+	s.orderUpdates = nil
+	s.orderWaitMu.Unlock()
+	for _, group := range waiters {
+		for _, waiter := range group {
+			waiter <- orderWaitResponse{err: err}
 		}
 	}
 }
@@ -353,6 +447,7 @@ func (s *Session) Close() error {
 	s.closeOnce.Do(func() {
 		s.cancel()
 		s.rejectPending(errors.New("perps session closed"))
+		s.rejectOrderWaiters(errors.New("perps session closed"))
 		s.closeErr = s.conn.Close(websocket.StatusNormalClosure, "")
 		<-s.done
 	})

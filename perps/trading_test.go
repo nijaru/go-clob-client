@@ -113,6 +113,91 @@ func TestPostOrdersSignsAndSendsOfficialCommandShape(t *testing.T) {
 	}
 }
 
+func TestPlaceOrderWaitsForMatchingOrderUpdate(t *testing.T) {
+	const proxy = "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf"
+	const privateKey = "0x0000000000000000000000000000000000000000000000000000000000000001"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close(websocket.StatusNormalClosure, "")
+		for i := 1; i <= 3; i++ {
+			_, payload, err := conn.Read(r.Context())
+			if err != nil {
+				return
+			}
+			var frame map[string]any
+			if err := json.Unmarshal(payload, &frame); err != nil {
+				return
+			}
+			id := int(frame["id"].(float64))
+			response := map[string]any{"id": id, "data": map[string]any{"status": "ok"}}
+			if i == 3 {
+				response["data"] = []map[string]any{{"status": "ok", "oid": 123}}
+			}
+			encoded, _ := json.Marshal(response)
+			if err := conn.Write(r.Context(), websocket.MessageText, encoded); err != nil {
+				return
+			}
+			if i == 3 {
+				event, _ := json.Marshal(map[string]any{
+					"ch": "orders",
+					"ts": 1234,
+					"sq": 9,
+					"data": map[string]any{
+						"oid":    123,
+						"iid":    1,
+						"buy":    true,
+						"p":      "100.50",
+						"qty":    "10",
+						"tif":    "gtc",
+						"po":     false,
+						"ro":     false,
+						"status": "open",
+						"rest":   "10",
+						"fill":   "0",
+						"cts":    1230,
+						"uts":    1234,
+					},
+				})
+				_ = conn.Write(r.Context(), websocket.MessageText, event)
+			}
+		}
+		<-r.Context().Done()
+	}))
+	t.Cleanup(server.Close)
+
+	client, err := NewAuthenticated(AuthenticatedConfig{
+		Config: Config{
+			WebSocketHost: "ws" + strings.TrimPrefix(server.URL, "http"),
+			ChainID:       31337,
+		},
+		Credentials: PerpsCredentials{Proxy: proxy, Secret: "secret", PrivateKey: privateKey},
+	})
+	if err != nil {
+		t.Fatalf("NewAuthenticated: %v", err)
+	}
+	session, err := client.OpenSession(t.Context(), SessionConfig{})
+	if err != nil {
+		t.Fatalf("OpenSession: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+	order, err := session.PlaceOrder(t.Context(), PerpsOrderRequest{
+		InstrumentID: 1,
+		Side:         PerpsOrderBuy,
+		Price:        "100.50",
+		Quantity:     "10",
+		TimeInForce:  PerpsTIFGTC,
+	}, 0)
+	if err != nil {
+		t.Fatalf("PlaceOrder: %v", err)
+	}
+	if order.ID != 123 || order.Status != PerpsOrderOpen || order.FilledQuantity != "0" {
+		t.Fatalf("order = %+v, want open order 123", order)
+	}
+}
+
 func TestCancelAllOrdersUsesSignedAuthenticatedREST(t *testing.T) {
 	const proxy = "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf"
 	const privateKey = "0x0000000000000000000000000000000000000000000000000000000000000001"

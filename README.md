@@ -12,7 +12,7 @@
 > RTDS/RFQ surfaces are tracked against the current official Rust, TypeScript, and Python SDKs,
 > with current combo pagination, Gamma discovery endpoints, and full CLOB WebSocket event fields.
 > **Perps** remains a separate package: public market-data REST, authenticated account reads,
-> delegated session startup, and low-level signed order/cancel/leverage commands are wire-compatible
+> delegated session startup, and signed entry-order placement/cancel/leverage commands are wire-compatible
 > with the current TS SDK. TP/SL orchestration and owner-signed credential lifecycle remain separate
 > follow-ups. Parity here means contract-level capability with idiomatic Go APIs, not a drop-in copy
 > of TypeScript or Python method names. See `ai/ROADMAP.md`.
@@ -231,9 +231,9 @@ for event := range session.Events() {
 }
 ```
 
-Low-level signed perps entry-order, cancel, cancel-all, and leverage commands are available when
-the delegated private key is supplied in `PerpsCredentials`. TP/SL orchestration and owner-signed
-delegated-credential creation/revocation remain separate follow-up surfaces.
+Signed perps entry-order placement, low-level batch/cancel/cancel-all, and leverage commands are
+available when the delegated private key is supplied in `PerpsCredentials`. TP/SL orchestration and
+owner-signed delegated-credential creation/revocation remain separate follow-up surfaces.
 
 ## Error Handling
 
