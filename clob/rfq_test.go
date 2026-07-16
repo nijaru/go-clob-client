@@ -318,9 +318,11 @@ func TestRFQErrorCodes(t *testing.T) {
 		RFQCodeLegMetadataUnavailable:          "LEG_METADATA_UNAVAILABLE",
 		RFQCodeMakerAlreadyResponded:           "MAKER_ALREADY_RESPONDED",
 		RFQCodeMakerNotRequired:                "MAKER_NOT_REQUIRED",
+		RFQCodeMakerQuoteLimited:               "MAKER_QUOTE_LIMITED",
 		RFQCodePreExecBalanceReservationFailed: "PRE_EXECUTION_BALANCE_RESERVATION_FAILED",
 		RFQCodeQuoteMismatch:                   "QUOTE_MISMATCH",
 		RFQCodeQuoteUnavailable:                "QUOTE_UNAVAILABLE",
+		RFQCodeQuoteValidationTimeoutInternal:  "QUOTE_VALIDATION_TIMEOUT_INTERNAL",
 		RFQCodeRateLimited:                     "RATE_LIMITED",
 		RFQCodeRequestFailed:                   "REQUEST_FAILED",
 		RFQCodeServiceUnavailable:              "SERVICE_UNAVAILABLE",
@@ -361,6 +363,21 @@ func TestRFQErrorInterface(t *testing.T) {
 	want2 := "rfq error RATE_LIMITED: too many requests"
 	if got := err2.Error(); got != want2 {
 		t.Errorf("RFQError.Error() = %q, want %q", got, want2)
+	}
+}
+
+func TestRFQErrorPreservesUnknownCode(t *testing.T) {
+	t.Parallel()
+
+	var err RFQError
+	if unmarshalErr := json.Unmarshal([]byte(`{
+		"code":"FUTURE_ERROR_CODE",
+		"error":"future rejection"
+	}`), &err); unmarshalErr != nil {
+		t.Fatalf("unmarshal RFQ error: %v", unmarshalErr)
+	}
+	if err.Code != RFQErrorCode("FUTURE_ERROR_CODE") {
+		t.Fatalf("code = %q, want future code", err.Code)
 	}
 }
 
