@@ -180,6 +180,66 @@ func TestHandleMessageMixedBatchDispatchesPerEvent(t *testing.T) {
 	}
 }
 
+func TestLargeMarketBatchIsDelivered(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			t.Errorf("accept: %v", err)
+			return
+		}
+		defer conn.Close(websocket.StatusNormalClosure, "")
+		if _, _, err := conn.Read(r.Context()); err != nil {
+			t.Errorf("read subscription: %v", err)
+			return
+		}
+
+		books := make([]BookEvent, 40)
+		for i := range books {
+			books[i] = BookEvent{
+				BaseEvent: BaseEvent{EventType: EventTypeBook},
+				AssetID:   "asset-" + strconv.Itoa(i),
+				Market:    "market-1",
+				Hash:      strings.Repeat("x", 1000),
+				Timestamp: "1710000000000",
+			}
+		}
+		payload, err := json.Marshal(books)
+		if err != nil {
+			t.Errorf("marshal books: %v", err)
+			return
+		}
+		if len(payload) <= 32768 {
+			t.Errorf("test payload = %d bytes, want > 32768", len(payload))
+		}
+		if err := conn.Write(r.Context(), websocket.MessageText, payload); err != nil {
+			t.Errorf("write books: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient("ws" + strings.TrimPrefix(server.URL, "http"))
+	if err := client.Connect(t.Context()); err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer client.Close()
+	if err := client.SubscribeOrderBook(t.Context(), []string{"asset-0"}); err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+
+	select {
+	case event := <-client.Events():
+		if _, ok := event.(*BookEvent); !ok {
+			t.Fatalf("event = %T, want *BookEvent", event)
+		}
+	case err := <-client.Errors():
+		t.Fatalf("large batch read: %v", err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for large batch event")
+	}
+}
+
 func TestHandleMessageFullUserEventFields(t *testing.T) {
 	t.Parallel()
 

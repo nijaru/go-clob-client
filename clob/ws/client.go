@@ -25,6 +25,11 @@ const (
 	defaultUserURL           = "wss://ws-subscriptions-clob.polymarket.com/ws/user"
 	defaultHeartbeatInterval = 5 * time.Second
 	defaultHeartbeatTimeout  = 15 * time.Second
+	// Market initial dumps can contain one full book per subscribed asset. The
+	// websocket package defaults to 32 KiB, which is smaller than ordinary
+	// multi-asset snapshots and causes an otherwise healthy connection to
+	// reconnect forever without delivering any events.
+	defaultReadLimit = 4 << 20
 
 	channelTypeOrderBook      = "order_book"
 	channelTypeLastTradePrice = "last_trade_price"
@@ -164,6 +169,7 @@ func (c *Client) connect(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)
 	}
+	conn.SetReadLimit(defaultReadLimit)
 
 	loopCtx, cancel := context.WithCancel(c.ctx)
 
