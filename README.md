@@ -8,13 +8,14 @@
 > Unofficial, community-maintained SDK. Not extensively tested in production trading environments. Use at your own risk.
 
 > [!NOTE]
-> **Parity status (2026-07-15):** Core mechanics and the non-perps CLOB/Data/Gamma/Bridge/CTF/
+> **Parity status (2026-07-20):** Core mechanics and the non-perps CLOB/Data/Gamma/Bridge/CTF/
 > RTDS/RFQ surfaces are tracked against the current official Rust, TypeScript, and Python SDKs,
 > with current combo pagination, Gamma discovery endpoints, and full CLOB WebSocket event fields.
 > **Perps** remains a separate package: public market-data REST, authenticated account reads,
 > delegated session startup, and signed entry-order placement/cancel/leverage commands are wire-compatible
-> with the current TS SDK. TP/SL orchestration and owner-signed credential lifecycle remain separate
-> follow-ups. Parity here means contract-level capability with idiomatic Go APIs, not a drop-in copy
+> with the current TS SDK. Owner-signed credential lifecycle, collateral mutations, TP/SL orchestration,
+> and public BBO streams remain separate follow-ups. Parity here means contract-level capability with
+> idiomatic Go APIs, not a drop-in copy
 > of TypeScript or Python method names. See `ai/ROADMAP.md`.
 
 Go SDK for the [Polymarket](https://polymarket.com) CLOB and adjacent APIs. Tracks stable capability
@@ -81,7 +82,7 @@ resp, err := client.CreateAndPostOrder(ctx, clob.OrderArgs{
 	Price:   udecimal.MustParse("0.45"),
 	Size:    udecimal.MustParse("5"),
 	Side:    clob.SideBuy,
-}, nil, clob.OrderTypeGTC, false, false)
+}, nil, clob.OrderTypeGTC, false)
 ```
 
 ### Market Orders
