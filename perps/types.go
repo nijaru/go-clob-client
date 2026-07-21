@@ -70,6 +70,7 @@ const (
 	PerpsOrderPositionClosed             PerpsOrderStatus = "position_closed"
 	PerpsOrderPositionFlipped            PerpsOrderStatus = "position_flipped"
 	PerpsOrderReduceOnlyInvalidAtTrigger PerpsOrderStatus = "reduce_only_invalid_at_trigger"
+	PerpsOrderStatusExpired              PerpsOrderStatus = "expired"
 )
 
 // PerpsKlineInterval is the candle interval for perps klines.

@@ -1,6 +1,7 @@
 package perps
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -34,10 +35,27 @@ type PerpsOrderRequest struct {
 
 // PerpsOrderAck is the acknowledgement returned by createOrders.
 type PerpsOrderAck struct {
-	Status        string `json:"status"`
-	OrderID       int    `json:"oid,omitempty"`
-	ClientOrderID string `json:"coid,omitempty"`
-	Error         string `json:"error,omitempty"`
+	Status         string `json:"status"`
+	OrderID        int    `json:"oid,omitempty"`
+	ClientOrderID  string `json:"coid,omitempty"`
+	Error          string `json:"error,omitempty"`
+	orderIDPresent bool
+}
+
+func (a *PerpsOrderAck) UnmarshalJSON(data []byte) error {
+	type alias PerpsOrderAck
+	var value alias
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*a = PerpsOrderAck(value)
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	orderID, ok := fields["oid"]
+	a.orderIDPresent = ok && !bytes.Equal(bytes.TrimSpace(orderID), []byte("null"))
+	return nil
 }
 
 // PerpsCancelResult is the acknowledgement returned by a cancel command.
@@ -112,11 +130,8 @@ func (s *Session) PlaceOrder(
 		)
 	}
 	acknowledgement := acknowledgements[0]
-	if acknowledgement.Status != "ok" {
-		if acknowledgement.Error == "" {
-			acknowledgement.Error = "order rejected"
-		}
-		return nil, fmt.Errorf("perps: %s", acknowledgement.Error)
+	if err := validatePerpsPostOrderAck(acknowledgement); err != nil {
+		return nil, fmt.Errorf("perps: %w", err)
 	}
 	waitContext, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
@@ -321,7 +336,33 @@ func (s *Session) UpdateLeverage(
 	if err := json.Unmarshal(data, &result); err != nil {
 		return nil, fmt.Errorf("perps: decode leverage acknowledgement: %w", err)
 	}
+	if err := validatePerpsLeverageResult(result); err != nil {
+		return nil, fmt.Errorf("perps: %w", err)
+	}
 	return &result, nil
+}
+
+func validatePerpsPostOrderAck(ack PerpsOrderAck) error {
+	if ack.Status != "ok" {
+		if ack.Error == "" {
+			ack.Error = "order rejected"
+		}
+		return fmt.Errorf("%s", ack.Error)
+	}
+	if !ack.orderIDPresent {
+		return fmt.Errorf("successful order acknowledgement missing order ID")
+	}
+	return nil
+}
+
+func validatePerpsLeverageResult(result PerpsLeverageResult) error {
+	if result.Status == "ok" {
+		return nil
+	}
+	if result.Error == "" {
+		return fmt.Errorf("leverage update rejected")
+	}
+	return fmt.Errorf("%s", result.Error)
 }
 
 func (s *Session) sendSignedCommand(

@@ -282,3 +282,33 @@ func TestPerpsTradingInputValidationMatchesOfficialConstraints(t *testing.T) {
 		t.Fatal("UpdateLeverage accepted non-positive leverage")
 	}
 }
+
+func TestPerpsPostOrderAckRequiresOrderID(t *testing.T) {
+	var missing PerpsOrderAck
+	if err := json.Unmarshal([]byte(`{"status":"ok"}`), &missing); err != nil {
+		t.Fatalf("decode missing order ID ack: %v", err)
+	}
+	if err := validatePerpsPostOrderAck(missing); err == nil {
+		t.Fatal("ack without order ID was accepted")
+	}
+
+	var zero PerpsOrderAck
+	if err := json.Unmarshal([]byte(`{"status":"ok","oid":0}`), &zero); err != nil {
+		t.Fatalf("decode zero order ID ack: %v", err)
+	}
+	if err := validatePerpsPostOrderAck(zero); err != nil {
+		t.Fatalf("valid zero order ID ack rejected: %v", err)
+	}
+}
+
+func TestPerpsLeverageRejectedResultReturnsError(t *testing.T) {
+	if err := validatePerpsLeverageResult(PerpsLeverageResult{
+		Status: "err",
+		Error:  "insufficient margin",
+	}); err == nil {
+		t.Fatal("rejected leverage result was accepted")
+	}
+	if err := validatePerpsLeverageResult(PerpsLeverageResult{Status: "ok"}); err != nil {
+		t.Fatalf("successful leverage result rejected: %v", err)
+	}
+}

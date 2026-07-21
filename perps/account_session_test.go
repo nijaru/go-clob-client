@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -243,6 +244,136 @@ func TestOpenSessionAuthenticatesSubscribesAndEmitsEvents(t *testing.T) {
 		}
 	case <-framesCtx.Done():
 		t.Fatal("timed out waiting for session event")
+	}
+}
+
+func TestSessionHandlesBatchedFramesAndOrderWaiters(t *testing.T) {
+	session := &Session{
+		ctx:          context.Background(),
+		events:       make(chan PerpsSessionEvent, 2),
+		errors:       make(chan error, 1),
+		orderWaiters: make(map[int][]chan orderWaitResponse),
+	}
+	session.handlePayload([]byte(`[
+		{"ch":"orders","ts":1,"sq":2,"data":{"oid":77,"status":"open"}},
+		{"ch":"balances","ts":3,"sq":4,"data":{"asset":"USDC"}}
+	]`))
+
+	update, err := session.waitForOrderUpdate(context.Background(), 77)
+	if err != nil || update.ID != 77 {
+		t.Fatalf("waitForOrderUpdate = %+v, %v", update, err)
+	}
+	events := []PerpsSessionEvent{<-session.events, <-session.events}
+	if events[0].Channel != "orders" || events[1].Channel != "balances" {
+		t.Fatalf("batched events = %+v", events)
+	}
+}
+
+func TestSessionHeartbeatSendsApplicationPing(t *testing.T) {
+	received := make(chan []byte, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close(websocket.StatusNormalClosure, "")
+		_, payload, err := conn.Read(r.Context())
+		if err == nil {
+			received <- append([]byte(nil), payload...)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	conn, _, err := websocket.Dial(
+		t.Context(),
+		"ws"+strings.TrimPrefix(server.URL, "http"),
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("websocket dial: %v", err)
+	}
+	sessionCtx, cancel := context.WithCancel(t.Context())
+	session := &Session{conn: conn, ctx: sessionCtx, cancel: cancel}
+	session.lastMessage.Store(time.Now().UnixNano())
+	go session.heartbeatLoopWith(5*time.Millisecond, time.Second)
+	t.Cleanup(func() {
+		cancel()
+		_ = conn.Close(websocket.StatusNormalClosure, "")
+	})
+
+	select {
+	case payload := <-received:
+		if string(payload) != string(perpsHeartbeatPayload) {
+			t.Fatalf("heartbeat payload = %s, want %s", payload, perpsHeartbeatPayload)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for heartbeat")
+	}
+}
+
+func TestSessionReconnectsAndResubscribes(t *testing.T) {
+	connections := atomic.Int32{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close(websocket.StatusNormalClosure, "")
+		connection := connections.Add(1)
+		for i := 0; i < 2; i++ {
+			_, payload, err := conn.Read(r.Context())
+			if err != nil {
+				return
+			}
+			var frame map[string]any
+			if json.Unmarshal(payload, &frame) != nil {
+				return
+			}
+			response, _ := json.Marshal(map[string]any{
+				"id":   frame["id"],
+				"data": map[string]any{"status": "ok"},
+			})
+			if err := conn.Write(r.Context(), websocket.MessageText, response); err != nil {
+				return
+			}
+		}
+		if connection == 1 {
+			return
+		}
+		event, _ := json.Marshal(map[string]any{
+			"ch":   "balances",
+			"ts":   10,
+			"sq":   11,
+			"data": map[string]any{"asset": "USDC"},
+		})
+		_ = conn.Write(r.Context(), websocket.MessageText, event)
+		<-r.Context().Done()
+	}))
+	t.Cleanup(server.Close)
+
+	client, err := NewAuthenticated(AuthenticatedConfig{
+		Config:      Config{WebSocketHost: "ws" + strings.TrimPrefix(server.URL, "http")},
+		Credentials: testPerpsCredentials(),
+	})
+	if err != nil {
+		t.Fatalf("NewAuthenticated: %v", err)
+	}
+	session, err := client.OpenSession(t.Context(), SessionConfig{})
+	if err != nil {
+		t.Fatalf("OpenSession: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+
+	select {
+	case event, ok := <-session.Events():
+		if !ok || event.Channel != "balances" || event.Sequence != 11 {
+			t.Fatalf("reconnected event = %+v, open = %v", event, ok)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for reconnected event")
+	}
+	if got := connections.Load(); got < 2 {
+		t.Fatalf("connections = %d, want reconnect", got)
 	}
 }
 

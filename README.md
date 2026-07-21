@@ -12,7 +12,7 @@
 > RTDS/RFQ surfaces are tracked against the current official Rust, TypeScript, and Python SDKs,
 > with current combo pagination, Gamma discovery endpoints, and full CLOB WebSocket event fields.
 > **Perps** remains a separate package: public market-data REST, authenticated account reads,
-> delegated session startup, and signed entry-order placement/cancel/leverage commands are wire-compatible
+> delegated account sessions (including heartbeat/reconnect), and signed entry-order placement/cancel/leverage commands are wire-compatible
 > with the current TS SDK. Owner-signed credential lifecycle, collateral mutations, TP/SL orchestration,
 > and public BBO streams remain separate follow-ups. Parity here means contract-level capability with
 > idiomatic Go APIs, not a drop-in copy
@@ -203,7 +203,8 @@ resolver follows the current Polygon contract set; callers should treat a nil ga
 “already approved.”
 
 Perps account reads use an existing delegated credential, and `OpenSession` performs the official
-authenticated WebSocket handshake and account-channel subscription:
+authenticated WebSocket handshake, account-channel subscription, application heartbeat, and
+automatic reconnect/resubscription:
 
 ```go
 import "github.com/nijaru/go-clob-client/perps"

@@ -1,6 +1,7 @@
 package perps
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,6 +9,8 @@ import (
 	"maps"
 	"slices"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/coder/websocket"
 
@@ -24,6 +27,16 @@ var defaultSessionChannels = []string{
 	"withdrawals",
 	"tpsl",
 }
+
+const (
+	perpsHeartbeatInterval    = 25 * time.Second
+	perpsHeartbeatStale       = 65 * time.Second
+	perpsReconnectInitialWait = 100 * time.Millisecond
+	perpsReconnectMaxWait     = 5 * time.Second
+	perpsReconnectTimeout     = 15 * time.Second
+)
+
+var perpsHeartbeatPayload = []byte(`{"id":0,"req":"post","op":{"type":"ping"}}`)
 
 // SessionConfig configures an authenticated Perps WebSocket session.
 type SessionConfig struct {
@@ -72,12 +85,15 @@ type sessionAck struct {
 }
 
 // Session is an authenticated Perps account WebSocket session. It performs
-// the official auth and subscription handshake, exposes account updates, and
-// supports the stable low-level signed trading commands. TP/SL orchestration
-// remains separate from this transport-level API.
+// the official auth and subscription handshake, maintains an application-level
+// heartbeat, reconnects and resubscribes after unexpected disconnects, exposes
+// account updates, and supports the stable low-level signed trading commands.
+// TP/SL orchestration remains separate from this transport-level API.
 type Session struct {
 	conn         *websocket.Conn
 	client       *AuthenticatedClient
+	webSocketURL string
+	channels     []string
 	events       chan PerpsSessionEvent
 	errors       chan error
 	ctx          context.Context
@@ -85,6 +101,8 @@ type Session struct {
 	done         chan struct{}
 	chainID      int64
 	signer       *polyauth.Signer
+	lastMessage  atomic.Int64
+	connMu       sync.RWMutex
 	writeMu      sync.Mutex
 	pendingMu    sync.Mutex
 	pending      map[int]chan sessionResponse
@@ -129,31 +147,36 @@ func (c *AuthenticatedClient) OpenSession(
 		cancel:       cancel,
 		done:         make(chan struct{}),
 		chainID:      c.chainID,
+		webSocketURL: webSocketURL,
+		channels:     channels,
 		pending:      make(map[int]chan sessionResponse),
 		nextRequest:  3,
 		orderWaiters: make(map[int][]chan orderWaitResponse),
 	}
+	session.lastMessage.Store(time.Now().UnixNano())
 	session.signer, err = c.delegatedSigner()
 	if err != nil {
 		cancel()
 		_ = conn.Close(websocket.StatusPolicyViolation, "invalid signing key")
 		return nil, err
 	}
-	if err := session.handshake(ctx, c.credentials, channels); err != nil {
+	if err := session.handshake(ctx, conn, c.credentials, channels); err != nil {
 		cancel()
 		_ = conn.Close(websocket.StatusPolicyViolation, "authentication failed")
 		return nil, err
 	}
 	go session.readLoop()
+	go session.heartbeatLoop()
 	return session, nil
 }
 
 func (s *Session) handshake(
 	ctx context.Context,
+	conn *websocket.Conn,
 	credentials PerpsCredentials,
 	channels []string,
 ) error {
-	if err := s.writeJSON(ctx, sessionFrame{
+	if err := s.writeJSONConn(ctx, conn, sessionFrame{
 		ID: 1,
 		Op: &sessionOp{
 			Type: "auth",
@@ -166,34 +189,60 @@ func (s *Session) handshake(
 	}); err != nil {
 		return fmt.Errorf("perps: send session auth: %w", err)
 	}
-	if err := s.readAck(ctx, 1); err != nil {
+	if err := s.readAckConn(ctx, conn, 1); err != nil {
 		return fmt.Errorf("perps: session auth rejected: %w", err)
 	}
-	if err := s.writeJSON(ctx, sessionFrame{ID: 2, Req: "sub", Chs: channels}); err != nil {
+	if err := s.writeJSONConn(
+		ctx,
+		conn,
+		sessionFrame{ID: 2, Req: "sub", Chs: channels},
+	); err != nil {
 		return fmt.Errorf("perps: send session subscription: %w", err)
 	}
-	if err := s.readAck(ctx, 2); err != nil {
+	if err := s.readAckConn(ctx, conn, 2); err != nil {
 		return fmt.Errorf("perps: session subscription rejected: %w", err)
 	}
 	return nil
 }
 
-func (s *Session) writeJSON(ctx context.Context, frame sessionFrame) error {
+func (s *Session) writeJSONConn(
+	ctx context.Context,
+	conn *websocket.Conn,
+	frame sessionFrame,
+) error {
 	payload, err := json.Marshal(frame)
 	if err != nil {
 		return err
 	}
-	return s.writeRaw(ctx, payload)
+	return s.writeRawConn(ctx, conn, payload)
 }
 
 func (s *Session) writeRaw(ctx context.Context, payload []byte) error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
-	return s.conn.Write(ctx, websocket.MessageText, payload)
+	conn := s.currentConn()
+	if conn == nil {
+		return errors.New("perps: session connection unavailable")
+	}
+	return conn.Write(ctx, websocket.MessageText, payload)
 }
 
-func (s *Session) readAck(ctx context.Context, wantID int) error {
-	_, payload, err := s.conn.Read(ctx)
+func (s *Session) writeRawConn(
+	ctx context.Context,
+	conn *websocket.Conn,
+	payload []byte,
+) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	return conn.Write(ctx, websocket.MessageText, payload)
+}
+
+func (s *Session) readAckConn(
+	ctx context.Context,
+	conn *websocket.Conn,
+	wantID int,
+) error {
+	_, payload, err := conn.Read(ctx)
 	if err != nil {
 		return err
 	}
@@ -237,50 +286,166 @@ func (s *Session) readLoop() {
 	defer close(s.events)
 	defer close(s.errors)
 	for {
-		_, payload, err := s.conn.Read(s.ctx)
+		conn := s.currentConn()
+		if conn == nil {
+			s.rejectPending(errors.New("perps: session connection unavailable"))
+			s.rejectOrderWaiters(errors.New("perps: session connection unavailable"))
+			return
+		}
+		_, payload, err := conn.Read(s.ctx)
 		if err != nil {
-			if s.ctx.Err() == nil {
-				err = fmt.Errorf("perps: session read: %w", err)
-				s.reportError(err)
+			if s.ctx.Err() != nil {
+				s.rejectPending(errors.New("perps session closed"))
+				s.rejectOrderWaiters(errors.New("perps session closed"))
+				return
+			}
+			if s.reconnect(err) {
+				continue
 			}
 			s.rejectPending(err)
 			s.rejectOrderWaiters(err)
 			return
 		}
-		var response struct {
-			ID   int             `json:"id"`
-			Data json.RawMessage `json:"data"`
-		}
-		if json.Unmarshal(payload, &response) == nil && response.ID != 0 {
-			if s.resolvePending(response.ID, response.Data) {
-				continue
-			}
-		}
-		var frame struct {
-			Channel   string          `json:"ch"`
-			Timestamp int64           `json:"ts"`
-			Sequence  int64           `json:"sq"`
-			Data      json.RawMessage `json:"data"`
-		}
-		if err := json.Unmarshal(payload, &frame); err != nil {
-			s.reportError(fmt.Errorf("perps: decode session event: %w", err))
-			continue
-		}
-		if frame.Channel == "" {
-			continue
-		}
-		event := PerpsSessionEvent{
-			Channel:   frame.Channel,
-			Timestamp: frame.Timestamp,
-			Sequence:  frame.Sequence,
-			Data:      append(json.RawMessage(nil), frame.Data...),
-		}
-		s.resolveOrderWaiters(event)
-		select {
-		case s.events <- event:
-		case <-s.ctx.Done():
+		s.lastMessage.Store(time.Now().UnixNano())
+		s.handlePayload(payload)
+	}
+}
+
+func (s *Session) handlePayload(payload []byte) {
+	payload = bytes.TrimSpace(payload)
+	if len(payload) == 0 {
+		return
+	}
+	if payload[0] == '[' {
+		var messages []json.RawMessage
+		if err := json.Unmarshal(payload, &messages); err != nil {
+			s.reportError(fmt.Errorf("perps: decode session batch: %w", err))
 			return
 		}
+		for _, message := range messages {
+			s.handlePayload(message)
+		}
+		return
+	}
+
+	var response struct {
+		ID   int             `json:"id"`
+		Data json.RawMessage `json:"data"`
+	}
+	if json.Unmarshal(payload, &response) == nil && response.ID != 0 {
+		if s.resolvePending(response.ID, response.Data) {
+			return
+		}
+		return
+	}
+	var frame struct {
+		Channel   string          `json:"ch"`
+		Timestamp int64           `json:"ts"`
+		Sequence  int64           `json:"sq"`
+		Data      json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(payload, &frame); err != nil {
+		s.reportError(fmt.Errorf("perps: decode session event: %w", err))
+		return
+	}
+	if frame.Channel == "" {
+		return
+	}
+	event := PerpsSessionEvent{
+		Channel:   frame.Channel,
+		Timestamp: frame.Timestamp,
+		Sequence:  frame.Sequence,
+		Data:      append(json.RawMessage(nil), frame.Data...),
+	}
+	s.resolveOrderWaiters(event)
+	select {
+	case s.events <- event:
+	case <-s.ctx.Done():
+	}
+}
+
+func (s *Session) heartbeatLoop() {
+	s.heartbeatLoopWith(perpsHeartbeatInterval, perpsHeartbeatStale)
+}
+
+func (s *Session) heartbeatLoopWith(interval, stale time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-ticker.C:
+			last := time.Unix(0, s.lastMessage.Load())
+			if time.Since(last) > stale {
+				s.closeCurrentConn()
+				continue
+			}
+			if err := s.writeRaw(s.ctx, perpsHeartbeatPayload); err != nil {
+				s.closeCurrentConn()
+			}
+		}
+	}
+}
+
+func (s *Session) reconnect(cause error) bool {
+	s.rejectPending(cause)
+	s.rejectOrderWaiters(cause)
+	s.reportError(fmt.Errorf("perps: session disconnected: %w", cause))
+
+	wait := perpsReconnectInitialWait
+	for {
+		select {
+		case <-s.ctx.Done():
+			return false
+		case <-time.After(wait):
+		}
+
+		dialCtx, cancel := context.WithTimeout(s.ctx, perpsReconnectTimeout)
+		conn, _, err := websocket.Dial(dialCtx, s.webSocketURL, nil)
+		if err == nil {
+			err = s.handshake(dialCtx, conn, s.client.credentials, s.channels)
+		}
+		cancel()
+		if err == nil {
+			s.connMu.Lock()
+			if s.ctx.Err() != nil {
+				s.connMu.Unlock()
+				_ = conn.Close(websocket.StatusNormalClosure, "session closed")
+				return false
+			}
+			old := s.conn
+			s.conn = conn
+			s.connMu.Unlock()
+			if old != nil {
+				_ = old.Close(websocket.StatusNormalClosure, "replaced")
+			}
+			s.lastMessage.Store(time.Now().UnixNano())
+			return true
+		}
+		if conn != nil {
+			_ = conn.Close(websocket.StatusPolicyViolation, "reconnect failed")
+		}
+		if s.ctx.Err() != nil {
+			return false
+		}
+		wait *= 2
+		if wait > perpsReconnectMaxWait {
+			wait = perpsReconnectMaxWait
+		}
+	}
+}
+
+func (s *Session) currentConn() *websocket.Conn {
+	s.connMu.RLock()
+	defer s.connMu.RUnlock()
+	return s.conn
+}
+
+func (s *Session) closeCurrentConn() {
+	conn := s.currentConn()
+	if conn != nil {
+		_ = conn.Close(websocket.StatusGoingAway, "reconnect")
 	}
 }
 
@@ -448,7 +613,13 @@ func (s *Session) Close() error {
 		s.cancel()
 		s.rejectPending(errors.New("perps session closed"))
 		s.rejectOrderWaiters(errors.New("perps session closed"))
-		s.closeErr = s.conn.Close(websocket.StatusNormalClosure, "")
+		s.connMu.Lock()
+		conn := s.conn
+		s.conn = nil
+		s.connMu.Unlock()
+		if conn != nil {
+			s.closeErr = conn.Close(websocket.StatusNormalClosure, "")
+		}
 		<-s.done
 	})
 	return s.closeErr
