@@ -370,13 +370,11 @@ func TestHandleMessageUnknownEventType(t *testing.T) {
 
 	select {
 	case err := <-c.Errors():
-		if !strings.Contains(err.Error(), "unknown event type") {
-			t.Errorf("expected unknown event type error, got: %v", err)
-		}
+		t.Fatalf("unexpected error: %v", err)
 	case <-c.Events():
 		t.Fatal("should not receive event for unknown type")
-	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for error")
+	case <-time.After(50 * time.Millisecond):
+		// Expected: unknown events are silently dropped.
 	}
 }
 
@@ -389,13 +387,11 @@ func TestHandleMessageMalformedEventJSON(t *testing.T) {
 
 	select {
 	case err := <-c.Errors():
-		if !strings.Contains(err.Error(), "decode event book") {
-			t.Errorf("expected decode error, got: %v", err)
-		}
+		t.Fatalf("unexpected error: %v", err)
 	case <-c.Events():
 		t.Fatal("should not receive event for malformed data")
-	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for error")
+	case <-time.After(50 * time.Millisecond):
+		// Expected: malformed frames are silently dropped.
 	}
 }
 

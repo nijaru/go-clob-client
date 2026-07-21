@@ -76,7 +76,6 @@ const (
 	RFQCodePreExecBalanceReservationFailed RFQErrorCode = "PRE_EXECUTION_BALANCE_RESERVATION_FAILED"
 	RFQCodeQuoteMismatch                   RFQErrorCode = "QUOTE_MISMATCH"
 	RFQCodeQuoteUnavailable                RFQErrorCode = "QUOTE_UNAVAILABLE"
-	RFQCodeQuoteValidationTimeoutInternal  RFQErrorCode = "QUOTE_VALIDATION_TIMEOUT_INTERNAL"
 	RFQCodeRateLimited                     RFQErrorCode = "RATE_LIMITED"
 	RFQCodeRequestFailed                   RFQErrorCode = "REQUEST_FAILED"
 	RFQCodeServiceUnavailable              RFQErrorCode = "SERVICE_UNAVAILABLE"

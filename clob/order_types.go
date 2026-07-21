@@ -81,7 +81,7 @@ func (r *PostOrderResponse) UnmarshalJSON(data []byte) error {
 		r.TransactionsHashes = val
 	}
 
-	if val, ok, err := decodeStringSliceAlias(fields, "trade_ids", "tradeIds"); err != nil {
+	if val, ok, err := decodeStringSliceAlias(fields, "trade_ids", "tradeIds", "tradeIDs"); err != nil {
 		return err
 	} else if ok {
 		r.TradeIDs = val

@@ -880,7 +880,6 @@ func (c *Client) handleMessage(ctx context.Context, data []byte) {
 	if trimmed[0] == '[' {
 		var messages []stdjson.RawMessage
 		if err := stdjson.Unmarshal(trimmed, &messages); err != nil {
-			c.reportDecodeError("batch", err)
 			return
 		}
 		for _, message := range messages {
@@ -918,26 +917,15 @@ func (c *Client) handleEventMessage(ctx context.Context, data []byte) {
 	case EventTypeMarketResolved:
 		event = &MarketResolvedEvent{}
 	default:
-		// Unknown event type — report so callers can notice new API events.
-		select {
-		case c.errs <- fmt.Errorf("unknown event type: %s", eventType):
-		default:
-		}
+		// Unknown event types are forward-compatible additions to the wire protocol.
+		// Drop them while keeping the connection usable, as the official SDKs do.
 		return
 	}
 
 	if err := json.Unmarshal(data, event); err != nil {
-		c.reportDecodeError(eventType, err)
 		return
 	}
 	c.emitEvent(ctx, event)
-}
-
-func (c *Client) reportDecodeError(eventType EventType, err error) {
-	select {
-	case c.errs <- fmt.Errorf("decode event %s: %w", eventType, err):
-	default:
-	}
 }
 
 func (c *Client) emitEvent(ctx context.Context, event Event) {

@@ -232,10 +232,6 @@ func requiredTradingApprovals(
 	if err != nil {
 		return nil, nil, err
 	}
-	negRiskAdapter, err := resolve("neg-risk adapter", config.NegRiskAdapter)
-	if err != nil {
-		return nil, nil, err
-	}
 	collateralAdapter, err := resolve("collateral adapter", config.CollateralAdapter)
 	if err != nil {
 		return nil, nil, err
@@ -271,7 +267,6 @@ func requiredTradingApprovals(
 	erc20 := []ERC20ApprovalRequest{
 		{TokenAddress: collateral, SpenderAddress: standardExchange, Amount: MaxUint256()},
 		{TokenAddress: collateral, SpenderAddress: negRiskExchange, Amount: MaxUint256()},
-		{TokenAddress: collateral, SpenderAddress: negRiskAdapter, Amount: MaxUint256()},
 		{TokenAddress: collateral, SpenderAddress: collateralAdapter, Amount: MaxUint256()},
 		{TokenAddress: collateral, SpenderAddress: negRiskCollateralAdapter, Amount: MaxUint256()},
 		{TokenAddress: collateral, SpenderAddress: protocolV2Router, Amount: MaxUint256()},
@@ -281,7 +276,6 @@ func requiredTradingApprovals(
 	erc1155 := []ERC1155ApprovalForAllRequest{
 		{TokenAddress: conditional, OperatorAddress: standardExchange, Approved: true},
 		{TokenAddress: conditional, OperatorAddress: negRiskExchange, Approved: true},
-		{TokenAddress: conditional, OperatorAddress: negRiskAdapter, Approved: true},
 		{TokenAddress: conditional, OperatorAddress: collateralAdapter, Approved: true},
 		{TokenAddress: conditional, OperatorAddress: negRiskCollateralAdapter, Approved: true},
 		{TokenAddress: conditional, OperatorAddress: autoRedeemOperator, Approved: true},

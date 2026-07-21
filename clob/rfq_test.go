@@ -322,7 +322,6 @@ func TestRFQErrorCodes(t *testing.T) {
 		RFQCodePreExecBalanceReservationFailed: "PRE_EXECUTION_BALANCE_RESERVATION_FAILED",
 		RFQCodeQuoteMismatch:                   "QUOTE_MISMATCH",
 		RFQCodeQuoteUnavailable:                "QUOTE_UNAVAILABLE",
-		RFQCodeQuoteValidationTimeoutInternal:  "QUOTE_VALIDATION_TIMEOUT_INTERNAL",
 		RFQCodeRateLimited:                     "RATE_LIMITED",
 		RFQCodeRequestFailed:                   "REQUEST_FAILED",
 		RFQCodeServiceUnavailable:              "SERVICE_UNAVAILABLE",

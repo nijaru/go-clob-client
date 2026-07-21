@@ -250,6 +250,15 @@ func (c *AuthenticatedClient) PostOrder(
 ) (*PostOrderResponse, error) {
 	var out PostOrderResponse
 	err := c.postJSON(ctx, postOrderEndpoint, request, polyhttp.AuthL2Builder, &out)
+	if err == nil && shouldResolvePostOrder(request, out) {
+		hashes := transactionHashesForTradeIDs(
+			out.TradeIDs,
+			c.waitForResolvedTrades(ctx, out.TradeIDs),
+		)
+		if len(hashes) > 0 {
+			out.TransactionsHashes = hashes
+		}
+	}
 	return &out, err
 }
 
@@ -266,6 +275,33 @@ func (c *AuthenticatedClient) PostOrders(
 	}
 	var out []PostOrderResponse
 	err := c.postJSON(ctx, postOrdersEndpoint, requests, polyhttp.AuthL2Builder, &out)
+	if err == nil {
+		var tradeIDs []string
+		pending := make([]int, 0, len(out))
+		for i := range out {
+			var request PostOrderRequest
+			if i < len(requests) {
+				request = requests[i]
+			}
+			if !shouldResolvePostOrder(request, out[i]) {
+				continue
+			}
+			pending = append(pending, i)
+			tradeIDs = append(tradeIDs, out[i].TradeIDs...)
+		}
+		if len(tradeIDs) > 0 {
+			resolved := c.waitForResolvedTrades(ctx, tradeIDs)
+			for _, i := range pending {
+				hashes := transactionHashesForTradeIDs(
+					out[i].TradeIDs,
+					resolved,
+				)
+				if len(hashes) > 0 {
+					out[i].TransactionsHashes = hashes
+				}
+			}
+		}
+	}
 	return out, err
 }
 

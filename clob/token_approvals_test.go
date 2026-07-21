@@ -24,9 +24,9 @@ func TestRequiredTradingApprovalsMatchesOfficialContractSet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(erc20) != 8 || len(erc1155) != 9 {
+	if len(erc20) != 7 || len(erc1155) != 8 {
 		t.Fatalf(
-			"approval requirements = %d ERC20, %d ERC1155; want 8, 9",
+			"approval requirements = %d ERC20, %d ERC1155; want 7, 8",
 			len(erc20),
 			len(erc1155),
 		)
@@ -35,7 +35,6 @@ func TestRequiredTradingApprovalsMatchesOfficialContractSet(t *testing.T) {
 	wantERC20Spenders := []string{
 		config.Exchange,
 		config.NegRiskExchange,
-		config.NegRiskAdapter,
 		config.CollateralAdapter,
 		config.NegRiskCollateralAdapter,
 		config.ProtocolV2Router,
@@ -53,7 +52,6 @@ func TestRequiredTradingApprovalsMatchesOfficialContractSet(t *testing.T) {
 	wantERC1155 := [][2]string{
 		{config.Conditional, config.Exchange},
 		{config.Conditional, config.NegRiskExchange},
-		{config.Conditional, config.NegRiskAdapter},
 		{config.Conditional, config.CollateralAdapter},
 		{config.Conditional, config.NegRiskCollateralAdapter},
 		{config.Conditional, config.AutoRedeemOperator},
@@ -112,8 +110,8 @@ func TestPrepareTradingApprovalsSkipsSatisfiedState(t *testing.T) {
 	if !plan.Empty() {
 		t.Fatalf("plan = %+v, want empty", plan)
 	}
-	if got := calls.Load(); got != 17 {
-		t.Fatalf("eth_call count = %d, want 17", got)
+	if got := calls.Load(); got != 15 {
+		t.Fatalf("eth_call count = %d, want 15", got)
 	}
 }
 
@@ -134,15 +132,15 @@ func TestPrepareTradingApprovalsReturnsMissingState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PrepareTradingApprovals: %v", err)
 	}
-	if len(plan.ERC20Approvals) != 8 || len(plan.ERC1155Approvals) != 9 {
+	if len(plan.ERC20Approvals) != 7 || len(plan.ERC1155Approvals) != 8 {
 		t.Fatalf(
-			"plan = %d ERC20, %d ERC1155; want 8, 9",
+			"plan = %d ERC20, %d ERC1155; want 7, 8",
 			len(plan.ERC20Approvals),
 			len(plan.ERC1155Approvals),
 		)
 	}
-	if got := calls.Load(); got != 17 {
-		t.Fatalf("eth_call count = %d, want 17", got)
+	if got := calls.Load(); got != 15 {
+		t.Fatalf("eth_call count = %d, want 15", got)
 	}
 }
 
@@ -162,8 +160,8 @@ func TestSetupTradingApprovalsGaslessBatchesMissingState(t *testing.T) {
 	if handle == nil || handle.TransactionID != "tx-ctf" {
 		t.Fatalf("handle = %+v, want tx-ctf", handle)
 	}
-	if got := calls.Load(); got != 17 {
-		t.Fatalf("eth_call count = %d, want 17", got)
+	if got := calls.Load(); got != 15 {
+		t.Fatalf("eth_call count = %d, want 15", got)
 	}
 	if got, _ := captured["metadata"].(string); got != "Trading setup approvals" {
 		t.Fatalf("metadata = %q, want default setup metadata", got)
@@ -195,8 +193,8 @@ func TestSetupTradingApprovalsGaslessReturnsNilWhenComplete(t *testing.T) {
 	if handle != nil {
 		t.Fatalf("handle = %+v, want nil when approvals are complete", handle)
 	}
-	if got := calls.Load(); got != 17 {
-		t.Fatalf("eth_call count = %d, want 17", got)
+	if got := calls.Load(); got != 15 {
+		t.Fatalf("eth_call count = %d, want 15", got)
 	}
 	if got := relayerCalls.Load(); got != 0 {
 		t.Fatalf("relayer request count = %d, want 0", got)
