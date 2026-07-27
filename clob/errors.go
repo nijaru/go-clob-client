@@ -20,6 +20,20 @@ var (
 	ErrRateLimit    = httpSentinel{429}
 	ErrGeoBlock     = httpSentinel{451}
 	ErrBadRequest   = httpSentinel{400}
+
+	// ErrInvalidSettlementOptions indicates an invalid settlement wait option.
+	ErrInvalidSettlementOptions = errors.New("invalid settlement options")
+	// ErrSettlementTimeout indicates that one or more order fills did not settle
+	// before the configured timeout.
+	ErrSettlementTimeout = errors.New("order fill settlement timed out")
+	// ErrSettlementFailed indicates that every fill in an order failed execution.
+	ErrSettlementFailed = errors.New("every order fill failed execution")
+	// ErrCollateralReturnUnsupportedWallet indicates that collateral return is
+	// unavailable for the configured EOA wallet model.
+	ErrCollateralReturnUnsupportedWallet = errors.New("collateral return requires a smart wallet")
+	// ErrCollateralReturnPlanMismatch indicates that a plan cannot be executed
+	// by this client because its wallet or chain does not match.
+	ErrCollateralReturnPlanMismatch = errors.New("collateral return plan does not match client")
 )
 
 // httpSentinel is a sentinel error that matches APIErrors by status code.

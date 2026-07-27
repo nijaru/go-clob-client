@@ -1,10 +1,12 @@
 package clob
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 const orderResolutionPrivateKey = "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c"
@@ -30,7 +32,7 @@ func TestPostOrderResolvesTradeIDs(t *testing.T) {
 				t.Errorf("trade lookup next_cursor = %q, want empty", got)
 			}
 			_, _ = w.Write([]byte(
-				`{"data":[{"id":"trade-1","status":"MINED","transaction_hash":"0xhash"}]}`,
+				`{"data":[{"id":"trade-1","status":"CONFIRMED","transaction_hash":"0xhash"}]}`,
 			))
 		default:
 			t.Errorf("unexpected path: %s", r.URL.Path)
@@ -102,7 +104,7 @@ func TestPostOrdersSharesTradeResolution(t *testing.T) {
 				t.Errorf("unexpected trade lookup id: %q", id)
 			}
 			_, _ = w.Write([]byte(
-				`{"data":[{"id":"` + id + `","status":"MINED","transaction_hash":"` + hash + `"}]}`,
+				`{"data":[{"id":"` + id + `","status":"CONFIRMED","transaction_hash":"` + hash + `"}]}`,
 			))
 		default:
 			t.Errorf("unexpected path: %s", r.URL.Path)
@@ -128,6 +130,157 @@ func TestPostOrdersSharesTradeResolution(t *testing.T) {
 	}
 	if got := tradeCalls.Load(); got != 2 {
 		t.Fatalf("trade lookup calls = %d, want 2", got)
+	}
+}
+
+func TestPostOrderWaitsForConfirmedTrade(t *testing.T) {
+	var tradeCalls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case postOrderEndpoint:
+			_, _ = w.Write([]byte(
+				`{"success":true,"status":"MATCHED","orderID":"order-1","tradeIDs":["trade-1"]}`,
+			))
+		case tradesEndpoint:
+			if got := r.URL.Query().Get("id"); got != "trade-1" {
+				t.Errorf("trade lookup id = %q, want trade-1", got)
+			}
+			if tradeCalls.Add(1) == 1 {
+				_, _ = w.Write([]byte(
+					`{"data":[{"id":"trade-1","status":"MINED","transaction_hash":"0xreplaceable"}]}`,
+				))
+				return
+			}
+			_, _ = w.Write([]byte(
+				`{"data":[{"id":"trade-1","status":"CONFIRMED","transaction_hash":"0xconfirmed"}]}`,
+			))
+		default:
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client := newOrderResolutionClient(t, server.URL)
+	response, err := client.PostOrder(t.Context(), orderResolutionRequest(false))
+	if err != nil {
+		t.Fatalf("PostOrder: %v", err)
+	}
+	if got, want := response.TransactionsHashes, []string{"0xconfirmed"}; !equalStrings(got, want) {
+		t.Fatalf("transaction hashes = %#v, want %#v", got, want)
+	}
+	if got := tradeCalls.Load(); got != 2 {
+		t.Fatalf("trade lookup calls = %d, want 2", got)
+	}
+}
+
+func TestPostOrderRecognizesPrefixedFailedTrade(t *testing.T) {
+	var tradeCalls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case postOrderEndpoint:
+			_, _ = w.Write([]byte(
+				`{"success":true,"status":"MATCHED","orderID":"order-1","tradeIDs":["trade-1"]}`,
+			))
+		case tradesEndpoint:
+			tradeCalls.Add(1)
+			_, _ = w.Write([]byte(
+				`{"data":[{"id":"trade-1","status":"TRADE_STATUS_FAILED","transaction_hash":""}]}`,
+			))
+		default:
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client := newOrderResolutionClient(t, server.URL)
+	response, err := client.PostOrder(t.Context(), orderResolutionRequest(false))
+	if err != nil {
+		t.Fatalf("PostOrder: %v", err)
+	}
+	if len(response.TransactionsHashes) != 0 {
+		t.Fatalf("transaction hashes = %#v, want none", response.TransactionsHashes)
+	}
+	if got := tradeCalls.Load(); got != 1 {
+		t.Fatalf("trade lookup calls = %d, want 1", got)
+	}
+}
+
+func TestWaitForOrderFillSettlement(t *testing.T) {
+	var tradeCalls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path != tradesEndpoint {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			return
+		}
+		if tradeCalls.Add(1) == 1 {
+			_, _ = w.Write([]byte(
+				`{"data":[{"id":"trade-1","status":"MINED","transaction_hash":"0xreplaceable"}]}`,
+			))
+			return
+		}
+		_, _ = w.Write([]byte(
+			`{"data":[{"id":"trade-1","status":"CONFIRMED","transaction_hash":"0xconfirmed"}]}`,
+		))
+	}))
+	defer server.Close()
+
+	client := newOrderResolutionClient(t, server.URL)
+	hashes, err := client.WaitForOrderFillSettlement(
+		t.Context(),
+		PostOrderResponse{OrderID: "order-1", TradeIDs: []string{"trade-1"}},
+		OrderSettlementOptions{Timeout: time.Second, PollInterval: time.Millisecond},
+	)
+	if err != nil {
+		t.Fatalf("WaitForOrderFillSettlement: %v", err)
+	}
+	if got, want := hashes, []string{"0xconfirmed"}; !equalStrings(got, want) {
+		t.Fatalf("transaction hashes = %#v, want %#v", got, want)
+	}
+	if got := tradeCalls.Load(); got != 2 {
+		t.Fatalf("trade lookup calls = %d, want 2", got)
+	}
+}
+
+func TestWaitForOrderFillSettlementReportsAllFailed(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(
+			`{"data":[{"id":"trade-1","status":"TRADE_STATUS_FAILED","transaction_hash":""}]}`,
+		))
+	}))
+	defer server.Close()
+
+	client := newOrderResolutionClient(t, server.URL)
+	_, err := client.WaitForOrderFillSettlement(
+		t.Context(),
+		PostOrderResponse{OrderID: "order-1", TradeIDs: []string{"trade-1"}},
+		OrderSettlementOptions{Timeout: time.Second, PollInterval: time.Millisecond},
+	)
+	if err == nil || !errors.Is(err, ErrSettlementFailed) {
+		t.Fatalf("error = %v, want ErrSettlementFailed", err)
+	}
+}
+
+func TestWaitForOrderFillSettlementTimesOut(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(
+			`{"data":[{"id":"trade-1","status":"MINED","transaction_hash":"0xpending"}]}`,
+		))
+	}))
+	defer server.Close()
+
+	client := newOrderResolutionClient(t, server.URL)
+	_, err := client.WaitForOrderFillSettlement(
+		t.Context(),
+		PostOrderResponse{TradeIDs: []string{"trade-1"}},
+		OrderSettlementOptions{Timeout: time.Millisecond, PollInterval: time.Millisecond},
+	)
+	if err == nil || !errors.Is(err, ErrSettlementTimeout) {
+		t.Fatalf("error = %v, want ErrSettlementTimeout", err)
 	}
 }
 

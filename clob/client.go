@@ -21,14 +21,15 @@ import (
 
 // Client is the base Polymarket CLOB client containing public, unauthenticated methods.
 type Client struct {
-	host          string
-	rtdsHost      string
-	relayerHost   string
-	chainID       int64
-	useServerTime bool
-	http          *polyhttp.Client
-	geoblockHTTP  *polyhttp.Client
-	rpcURL        string
+	host                 string
+	rtdsHost             string
+	relayerHost          string
+	collateralReturnHost string
+	chainID              int64
+	useServerTime        bool
+	http                 *polyhttp.Client
+	geoblockHTTP         *polyhttp.Client
+	rpcURL               string
 
 	tickSizeMu         *sync.RWMutex
 	tickSizeCache      map[string]TickSize
@@ -135,18 +136,19 @@ func (c *AuthenticatedClient) PromoteToBuilder(auth BuilderAuth) {
 
 func newBase(config Config) *Client {
 	base := &Client{
-		host:               config.Host,
-		rtdsHost:           config.RTDSHost,
-		relayerHost:        config.RelayerHost,
-		chainID:            config.ChainID,
-		useServerTime:      config.UseServerTime,
-		rpcURL:             config.RPCURL,
-		tickSizeMu:         &sync.RWMutex{},
-		tickSizeCache:      make(map[string]TickSize),
-		tickSizeTimestamps: make(map[string]time.Time),
-		negRiskMu:          &sync.RWMutex{},
-		negRiskCache:       make(map[string]bool),
-		negRiskTimestamps:  make(map[string]time.Time),
+		host:                 config.Host,
+		rtdsHost:             config.RTDSHost,
+		relayerHost:          config.RelayerHost,
+		collateralReturnHost: config.CollateralReturnHost,
+		chainID:              config.ChainID,
+		useServerTime:        config.UseServerTime,
+		rpcURL:               config.RPCURL,
+		tickSizeMu:           &sync.RWMutex{},
+		tickSizeCache:        make(map[string]TickSize),
+		tickSizeTimestamps:   make(map[string]time.Time),
+		negRiskMu:            &sync.RWMutex{},
+		negRiskCache:         make(map[string]bool),
+		negRiskTimestamps:    make(map[string]time.Time),
 
 		cacheTTL:     config.TickSizeCacheTTL,
 		retryMax:     config.RetryMax,

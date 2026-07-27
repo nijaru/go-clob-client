@@ -18,9 +18,9 @@ type ExecuteParams struct {
 // empty ("") when the relayer has not yet produced one; callers fall back to the
 // polled hash.
 type ExecuteResponse struct {
-	State           RelayerTransactionState
-	TransactionHash string
-	TransactionID   string
+	State           RelayerTransactionState `json:"state"`
+	TransactionHash string                  `json:"transactionHash"`
+	TransactionID   string                  `json:"transactionID"`
 }
 
 // GaslessTransaction is a polled transaction status from

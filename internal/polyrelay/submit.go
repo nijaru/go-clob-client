@@ -83,6 +83,18 @@ type Handle struct {
 	pollDelay       time.Duration
 }
 
+// NewHandle wraps an already-submitted relayer response so callers that use a
+// service-specific submit endpoint can reuse the standard relayer poller.
+func NewHandle(t *Transport, resp ExecuteResponse) *Handle {
+	return &Handle{
+		transport:       t,
+		TransactionID:   resp.TransactionID,
+		TransactionHash: resp.TransactionHash,
+		maxPolls:        DefaultPollMaxAttempts,
+		pollDelay:       DefaultPollInterval,
+	}
+}
+
 // Wait polls the relayer until the transaction reaches a terminal state.
 func (h *Handle) Wait(ctx context.Context) (*TransactionOutcome, error) {
 	return PollUntilTerminal(
@@ -120,13 +132,10 @@ func PrepareGasless(
 	for attempt := 0; attempt <= SubmitRetryAttempts; attempt++ {
 		resp, err := submitForWalletType(ctx, t, cfg, key, calls, metadata)
 		if err == nil {
-			return &Handle{
-				transport:       t,
-				TransactionID:   resp.TransactionID,
-				TransactionHash: resp.TransactionHash,
-				maxPolls:        maxPolls,
-				pollDelay:       pollDelay,
-			}, nil
+			handle := NewHandle(t, resp)
+			handle.maxPolls = maxPolls
+			handle.pollDelay = pollDelay
+			return handle, nil
 		}
 		if attempt == SubmitRetryAttempts || !isRetryableSubmitError(err) {
 			return nil, err
@@ -170,13 +179,7 @@ func DeployDepositWallet(
 			return nil, err
 		}
 	}
-	return &Handle{
-		transport:       t,
-		TransactionID:   resp.TransactionID,
-		TransactionHash: resp.TransactionHash,
-		maxPolls:        DefaultPollMaxAttempts,
-		pollDelay:       DefaultPollInterval,
-	}, nil
+	return NewHandle(t, resp), nil
 }
 
 // submitForWalletType dispatches to the per-scheme submit, which fetches the
@@ -189,29 +192,57 @@ func submitForWalletType(
 	calls []TransactionCall,
 	metadata string,
 ) (ExecuteResponse, error) {
-	switch cfg.WalletType {
-	case TransactionTypeWallet:
-		return submitDepositWallet(ctx, t, cfg, key, calls, metadata)
-	case TransactionTypeProxy:
-		return submitProxy(ctx, t, cfg, key, calls, metadata)
-	case TransactionTypeSafe:
-		return submitSafe(ctx, t, cfg, key, calls, metadata)
-	default:
-		return ExecuteResponse{}, fmt.Errorf("%w: %s", ErrUnknownType, cfg.WalletType)
+	payload, err := BuildGaslessSubmit(ctx, t, cfg, key, calls, metadata)
+	if err != nil {
+		return ExecuteResponse{}, err
 	}
+	return t.Submit(ctx, payload)
 }
 
-func submitDepositWallet(
+// BuildGaslessSubmit prepares the signed relayer envelope without submitting
+// it. This is used by services that validate or wrap a gasless transaction
+// before forwarding it to the relayer.
+func BuildGaslessSubmit(
 	ctx context.Context,
 	t *Transport,
 	cfg GaslessConfig,
 	key *ecdsa.PrivateKey,
 	calls []TransactionCall,
 	metadata string,
-) (ExecuteResponse, error) {
+) (*SubmitRequest, error) {
+	if key == nil {
+		return nil, ErrNilKey
+	}
+	if len(calls) == 0 {
+		return nil, ErrEmptyCalls
+	}
+	if len(metadata) > MetadataMaxLength {
+		return nil, fmt.Errorf("%w: %d > %d", ErrMetadataTooLong, len(metadata), MetadataMaxLength)
+	}
+
+	switch cfg.WalletType {
+	case TransactionTypeWallet:
+		return buildDepositSubmit(ctx, t, cfg, key, calls, metadata)
+	case TransactionTypeProxy:
+		return buildProxySubmit(ctx, t, cfg, key, calls, metadata)
+	case TransactionTypeSafe:
+		return buildSafeSubmit(ctx, t, cfg, key, calls, metadata)
+	default:
+		return nil, fmt.Errorf("%w: %s", ErrUnknownType, cfg.WalletType)
+	}
+}
+
+func buildDepositSubmit(
+	ctx context.Context,
+	t *Transport,
+	cfg GaslessConfig,
+	key *ecdsa.PrivateKey,
+	calls []TransactionCall,
+	metadata string,
+) (*SubmitRequest, error) {
 	params, err := t.FetchExecuteParams(ctx, addrHex(cfg.Signer), TransactionTypeWallet)
 	if err != nil {
-		return ExecuteResponse{}, err
+		return nil, err
 	}
 	deadline := big.NewInt(time.Now().Unix() + DepositWalletDeadlineS)
 	sig, err := Sign(TransactionTypeWallet, key, RelayRequest{
@@ -222,9 +253,9 @@ func submitDepositWallet(
 		ChainID:  cfg.ChainID,
 	})
 	if err != nil {
-		return ExecuteResponse{}, err
+		return nil, err
 	}
-	payload, err := BuildDepositSubmit(DepositSubmitInput{
+	return BuildDepositSubmit(DepositSubmitInput{
 		Signer:    cfg.Signer,
 		Factory:   cfg.DepositWalletFactory,
 		Wallet:    cfg.Wallet,
@@ -234,29 +265,25 @@ func submitDepositWallet(
 		Signature: sig,
 		Metadata:  metadata,
 	})
-	if err != nil {
-		return ExecuteResponse{}, err
-	}
-	return t.Submit(ctx, payload)
 }
 
-func submitProxy(
+func buildProxySubmit(
 	ctx context.Context,
 	t *Transport,
 	cfg GaslessConfig,
 	key *ecdsa.PrivateKey,
 	calls []TransactionCall,
 	metadata string,
-) (ExecuteResponse, error) {
+) (*SubmitRequest, error) {
 	// Proxy signs against the relay address, fetched via the unified params endpoint.
 	params, err := t.FetchExecuteParams(ctx, addrHex(cfg.Signer), TransactionTypeProxy)
 	if err != nil {
-		return ExecuteResponse{}, err
+		return nil, err
 	}
 	to := cfg.ProxyFactory
 	data, err := EncodeProxyCall(calls)
 	if err != nil {
-		return ExecuteResponse{}, err
+		return nil, err
 	}
 	relay := params.Address
 	gasLimit := estimateProxyGasLimit(ctx, cfg, cfg.Signer, to, data)
@@ -272,9 +299,9 @@ func submitProxy(
 		Relay:    relay,
 	})
 	if err != nil {
-		return ExecuteResponse{}, err
+		return nil, err
 	}
-	payload, err := BuildProxySubmit(ProxySubmitInput{
+	return BuildProxySubmit(ProxySubmitInput{
 		Signer:       cfg.Signer,
 		ProxyFactory: to,
 		Wallet:       cfg.Wallet,
@@ -286,27 +313,23 @@ func submitProxy(
 		RelayHub:     cfg.RelayHub,
 		Metadata:     metadata,
 	})
-	if err != nil {
-		return ExecuteResponse{}, err
-	}
-	return t.Submit(ctx, payload)
 }
 
-func submitSafe(
+func buildSafeSubmit(
 	ctx context.Context,
 	t *Transport,
 	cfg GaslessConfig,
 	key *ecdsa.PrivateKey,
 	calls []TransactionCall,
 	metadata string,
-) (ExecuteResponse, error) {
+) (*SubmitRequest, error) {
 	params, err := t.FetchExecuteParams(ctx, addrHex(cfg.Signer), TransactionTypeSafe)
 	if err != nil {
-		return ExecuteResponse{}, err
+		return nil, err
 	}
 	target, data, value, operation, err := resolveSafeCall(cfg.SafeMultisend, calls)
 	if err != nil {
-		return ExecuteResponse{}, err
+		return nil, err
 	}
 	sig, err := Sign(TransactionTypeSafe, key, RelayRequest{
 		Wallet:    cfg.Wallet,
@@ -318,9 +341,9 @@ func submitSafe(
 		ChainID:   cfg.ChainID,
 	})
 	if err != nil {
-		return ExecuteResponse{}, err
+		return nil, err
 	}
-	payload, err := BuildSafeSubmit(SafeSubmitInput{
+	return BuildSafeSubmit(SafeSubmitInput{
 		Signer:    cfg.Signer,
 		Wallet:    cfg.Wallet,
 		Target:    target,
@@ -331,10 +354,6 @@ func submitSafe(
 		Signature: sig,
 		Metadata:  metadata,
 	})
-	if err != nil {
-		return ExecuteResponse{}, err
-	}
-	return t.Submit(ctx, payload)
 }
 
 // resolveSafeCall aggregates calls for a Safe submission: a single call is
@@ -422,3 +441,7 @@ func isRetryableSubmitError(err error) bool {
 	}
 	return false
 }
+
+// IsRetryableSubmitError reports whether a gasless submission failure is
+// transient and safe for a caller to retry after rebuilding its envelope.
+func IsRetryableSubmitError(err error) bool { return isRetryableSubmitError(err) }

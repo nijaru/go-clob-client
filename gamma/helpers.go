@@ -5,6 +5,12 @@ import (
 	"strconv"
 )
 
+const (
+	maxSeriesPageSize         = 50
+	maxTagPageSize            = 100
+	maxCommentsByUserPageSize = 100
+)
+
 func gammaQuery(limit, offset int) url.Values {
 	q := url.Values{}
 	if limit > 0 {
@@ -39,4 +45,25 @@ func iteratorLimit(limit, defaultLimit, max int) int {
 		return min(defaultLimit, max)
 	}
 	return min(limit, max)
+}
+
+func seriesPageLimit(limit int) int {
+	if limit <= 0 {
+		return 0
+	}
+	return min(limit, maxSeriesPageSize)
+}
+
+func tagPageLimit(limit int) int {
+	if limit <= 0 {
+		return 0
+	}
+	return min(limit, maxTagPageSize)
+}
+
+func commentsByUserPageLimit(limit int) int {
+	if limit <= 0 {
+		return 0
+	}
+	return min(limit, maxCommentsByUserPageSize)
 }

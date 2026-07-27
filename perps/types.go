@@ -114,6 +114,7 @@ type PerpsInstrument struct {
 	MaxMarketNotional string          `json:"max_market_notional"`
 	MaxLimitNotional  string          `json:"max_limit_notional"`
 	MaxLeverage       int             `json:"max_leverage"`
+	IsolatedOnly      bool            `json:"isolated_only"`
 	RiskTiers         []PerpsRiskTier `json:"risk_tiers"`
 }
 
@@ -275,11 +276,19 @@ type PerpsFundingRate struct {
 	Timestamp   int64  `json:"timestamp"`
 }
 
-// PerpsFeeScheduleEntry is a taker/maker fee rate for a category.
+// PerpsFeeTier is a volume-based maker/taker fee tier for a category.
+type PerpsFeeTier struct {
+	MinVolume30D string `json:"min_volume_30d"`
+	TakerFeeRate string `json:"taker_fee_rate"`
+	MakerFeeRate string `json:"maker_fee_rate"`
+}
+
+// PerpsFeeScheduleEntry is a taker/maker fee schedule for a category.
 type PerpsFeeScheduleEntry struct {
-	Category     PerpsCategory `json:"category"`
-	TakerFeeRate string        `json:"taker_fee_rate"`
-	MakerFeeRate string        `json:"maker_fee_rate"`
+	Category     PerpsCategory  `json:"category"`
+	TakerFeeRate string         `json:"taker_fee_rate"`
+	MakerFeeRate string         `json:"maker_fee_rate"`
+	Tiers        []PerpsFeeTier `json:"tiers"`
 }
 
 // PerpsFeesInfo is the fee schedule response wrapper.
@@ -429,6 +438,7 @@ const (
 	PerpsWithdrawalPending   PerpsWithdrawalStatus = "pending"
 	PerpsWithdrawalConfirmed PerpsWithdrawalStatus = "confirmed"
 	PerpsWithdrawalRemoved   PerpsWithdrawalStatus = "removed"
+	PerpsWithdrawalFailed    PerpsWithdrawalStatus = "failed"
 )
 
 // PerpsWithdrawal is an authenticated collateral withdrawal entry.

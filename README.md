@@ -8,12 +8,13 @@
 > Unofficial, community-maintained SDK. Not extensively tested in production trading environments. Use at your own risk.
 
 > [!NOTE]
-> **Parity status (2026-07-20):** Core mechanics and the non-perps CLOB/Data/Gamma/Bridge/CTF/
+> **Parity status (2026-07-26):** Core mechanics and the non-perps CLOB/Data/Gamma/Bridge/CTF/
 > RTDS/RFQ surfaces are tracked against the current official Rust, TypeScript, and Python SDKs,
 > with current combo pagination, Gamma discovery endpoints, and full CLOB WebSocket event fields.
 > **Perps** remains a separate package: public market-data REST, authenticated account reads,
 > delegated account sessions (including heartbeat/reconnect), and signed entry-order placement/cancel/leverage commands are wire-compatible
-> with the current TS SDK. Owner-signed credential lifecycle, collateral mutations, TP/SL orchestration,
+> with the current TS SDK. Smart-wallet collateral return is available through the authenticated
+> CLOB client; owner-signed credential lifecycle, other collateral mutations, TP/SL orchestration,
 > and public BBO streams remain separate follow-ups. Parity here means contract-level capability with
 > idiomatic Go APIs, not a drop-in copy
 > of TypeScript or Python method names. See `ai/ROADMAP.md`.
@@ -33,7 +34,7 @@ go get github.com/nijaru/go-clob-client@latest
 
 The module exposes several focused packages:
 
-- **`clob`** — trading, orderbooks, prices, account management, websockets, heartbeats
+- **`clob`** — trading, orderbooks, prices, account management, websockets, heartbeats, wallet operations
 - **`data`** — read-only analytics: positions, trades, activity, combo portfolios, holders, leaderboards
 - **`gamma`** — markets, events, tags, sports, comments, profiles, and clarifications
 - **`bridge`** — deposit-address discovery
@@ -84,6 +85,10 @@ resp, err := client.CreateAndPostOrder(ctx, clob.OrderArgs{
 	Side:    clob.SideBuy,
 }, nil, clob.OrderTypeGTC, false)
 ```
+
+For explicit control over immediate fills, pass the accepted response to
+`client.WaitForOrderFillSettlement(ctx, *resp, clob.OrderSettlementOptions{})`.
+It waits for confirmed or failed fill outcomes and returns typed timeout or all-fills-failed errors.
 
 ### Market Orders
 
@@ -201,6 +206,30 @@ allowances already present. Use `SignerClient.SetupTradingApprovals` for sequent
 transactions or `AuthenticatedClient.SetupTradingApprovalsGasless` for one relayed batch. The
 resolver follows the current Polygon contract set; callers should treat a nil gasless handle as
 “already approved.”
+
+### Collateral return
+
+Proxy, Safe, and deposit wallets can plan and execute the official collateral-return workflow. The
+plan is an inspectable server response; review its `NetPUSDOut`, operations, and position summary
+before submitting the exact router call it carries. A truncated plan covers one chunk, so wait for
+that transaction and request a fresh plan for the remainder.
+
+```go
+plan, err := client.PlanCollateralReturn(ctx)
+if err != nil {
+	return err
+}
+
+handle, err := client.ExecuteCollateralReturnPlan(ctx, *plan)
+if err != nil {
+	return err
+}
+_, err = handle.Wait(ctx)
+```
+
+This workflow does not support EOA wallets or submit approvals implicitly. The service host defaults
+to `https://combos-rfq-collateral-return.polymarket.com` and can be overridden with
+`Config.CollateralReturnHost`.
 
 Perps account reads use an existing delegated credential, and `OpenSession` performs the official
 authenticated WebSocket handshake, account-channel subscription, application heartbeat, and

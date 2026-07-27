@@ -1,6 +1,7 @@
 package gamma
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -496,6 +497,20 @@ func TestClient_GetSeriesPage(t *testing.T) {
 	}
 }
 
+func TestClient_GetSeriesPageClampsOfficialLimit(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("limit"); got != "50" {
+			t.Errorf("limit = %q, want 50", got)
+		}
+		writeJSON(w, []Series{{ID: "1"}})
+	})
+
+	_, err := client.GetSeriesPage(t.Context(), SeriesFilterParams{Limit: 100})
+	if err != nil {
+		t.Fatalf("GetSeriesPage: %v", err)
+	}
+}
+
 func TestClient_IterSeries(t *testing.T) {
 	call := 0
 	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
@@ -520,6 +535,39 @@ func TestClient_IterSeries(t *testing.T) {
 	}
 	if len(ids) != 4 {
 		t.Errorf("ids = %v, want 4", ids)
+	}
+}
+
+func TestClient_IterSeriesClampsOfficialLimit(t *testing.T) {
+	call := 0
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		call++
+		if got := r.URL.Query().Get("limit"); got != "50" {
+			t.Errorf("limit = %q, want 50", got)
+		}
+		if call == 1 {
+			items := make([]Series, 50)
+			for i := range items {
+				items[i] = Series{ID: string(rune('a' + i))}
+			}
+			writeJSON(w, items)
+			return
+		}
+		if got := r.URL.Query().Get("offset"); got != "50" {
+			t.Errorf("offset = %q, want 50", got)
+		}
+		writeJSON(w, []Series{{ID: "tail"}})
+	})
+
+	var ids []string
+	for s, err := range client.IterSeries(t.Context(), SeriesFilterParams{Limit: 100}) {
+		if err != nil {
+			t.Fatalf("IterSeries: %v", err)
+		}
+		ids = append(ids, s.ID)
+	}
+	if len(ids) != 51 || ids[len(ids)-1] != "tail" {
+		t.Fatalf("ids = %v, want 50-page plus tail", ids)
 	}
 }
 
@@ -720,6 +768,83 @@ func TestClient_GetTags(t *testing.T) {
 	}
 	if len(tags) != 2 {
 		t.Errorf("got %d tags", len(tags))
+	}
+}
+
+func TestClient_GetTagsPageClampsAndFilters(t *testing.T) {
+	boolPtr := func(v bool) *bool { return &v }
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("limit"); got != "100" {
+			t.Errorf("limit = %q, want 100", got)
+		}
+		if got := r.URL.Query().Get("offset"); got != "7" {
+			t.Errorf("offset = %q, want 7", got)
+		}
+		checks := map[string]string{
+			"ascending":        "true",
+			"include_template": "true",
+			"is_carousel":      "false",
+			"locale":           "en",
+			"order":            "label",
+		}
+		for key, want := range checks {
+			if got := r.URL.Query().Get(key); got != want {
+				t.Errorf("%s = %q, want %q", key, got, want)
+			}
+		}
+		writeJSON(w, []Tag{{ID: "tag-1"}})
+	})
+
+	tags, err := client.GetTagsPage(t.Context(), TagFilterParams{
+		Ascending:       boolPtr(true),
+		IncludeTemplate: boolPtr(true),
+		IsCarousel:      boolPtr(false),
+		Locale:          "en",
+		Order:           "label",
+		Limit:           150,
+		Offset:          7,
+	})
+	if err != nil {
+		t.Fatalf("GetTagsPage: %v", err)
+	}
+	if len(tags) != 1 {
+		t.Fatalf("got %d tags, want 1", len(tags))
+	}
+}
+
+func TestClient_IterTagsClampsOfficialLimit(t *testing.T) {
+	call := 0
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		call++
+		if got := r.URL.Query().Get("limit"); got != "100" {
+			t.Errorf("call %d limit = %q, want 100", call, got)
+		}
+		switch call {
+		case 1:
+			tags := make([]Tag, 100)
+			for i := range tags {
+				tags[i] = Tag{ID: fmt.Sprintf("tag-%d", i)}
+			}
+			writeJSON(w, tags)
+		case 2:
+			if got := r.URL.Query().Get("offset"); got != "100" {
+				t.Errorf("second offset = %q, want 100", got)
+			}
+			writeJSON(w, []Tag{{ID: "tag-100"}})
+		default:
+			t.Errorf("iterator made unexpected call %d", call)
+		}
+	})
+
+	var ids []string
+	for tag, err := range client.IterTags(t.Context(), TagFilterParams{Limit: 150}) {
+		if err != nil {
+			t.Fatalf("IterTags: %v", err)
+		}
+		ids = append(ids, tag.ID)
+	}
+	if len(ids) != 101 || ids[100] != "tag-100" {
+		t.Fatalf("collected %d tags, last %q", len(ids), ids[len(ids)-1])
 	}
 }
 
@@ -937,6 +1062,77 @@ func TestClient_GetCommentsByUserAddress(t *testing.T) {
 	}
 	if len(comments) != 1 || comments[0].UserAddress != "0xabc" {
 		t.Errorf("comments = %+v", comments)
+	}
+}
+
+func TestClient_GetCommentsByUserAddressPageFilters(t *testing.T) {
+	boolPtr := func(v bool) *bool { return &v }
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("limit") != "10" || q.Get("offset") != "4" {
+			t.Errorf("pagination = limit %q offset %q", q.Get("limit"), q.Get("offset"))
+		}
+		if q.Get("ascending") != "false" || q.Get("order") != "created_at" {
+			t.Errorf("filters = ascending %q order %q", q.Get("ascending"), q.Get("order"))
+		}
+		writeJSON(w, []Comment{{ID: "c-1", UserAddress: "0xabc"}})
+	})
+
+	comments, err := client.GetCommentsByUserAddressPage(
+		t.Context(),
+		"0xabc",
+		CommentsByUserAddressParams{
+			Ascending: boolPtr(false),
+			Order:     "created_at",
+			Limit:     10,
+			Offset:    4,
+		},
+	)
+	if err != nil {
+		t.Fatalf("GetCommentsByUserAddressPage: %v", err)
+	}
+	if len(comments) != 1 {
+		t.Fatalf("got %d comments, want 1", len(comments))
+	}
+}
+
+func TestClient_IterCommentsByUserAddressClampsOfficialLimit(t *testing.T) {
+	call := 0
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		call++
+		if got := r.URL.Query().Get("limit"); got != "100" {
+			t.Errorf("call %d limit = %q, want 100", call, got)
+		}
+		switch call {
+		case 1:
+			comments := make([]Comment, 100)
+			for i := range comments {
+				comments[i] = Comment{ID: fmt.Sprintf("comment-%d", i)}
+			}
+			writeJSON(w, comments)
+		case 2:
+			if got := r.URL.Query().Get("offset"); got != "100" {
+				t.Errorf("second offset = %q, want 100", got)
+			}
+			writeJSON(w, []Comment{{ID: "comment-100"}})
+		default:
+			t.Errorf("iterator made unexpected call %d", call)
+		}
+	})
+
+	var ids []string
+	for comment, err := range client.IterCommentsByUserAddress(
+		t.Context(),
+		"0xabc",
+		CommentsByUserAddressParams{Limit: 150},
+	) {
+		if err != nil {
+			t.Fatalf("IterCommentsByUserAddress: %v", err)
+		}
+		ids = append(ids, comment.ID)
+	}
+	if len(ids) != 101 || ids[100] != "comment-100" {
+		t.Fatalf("collected %d comments, last %q", len(ids), ids[len(ids)-1])
 	}
 }
 

@@ -466,9 +466,66 @@ func (c *Client) GetRelatedTagResourcesBySlug(
 
 // GetTags returns all tags.
 func (c *Client) GetTags(ctx context.Context) ([]Tag, error) {
+	return c.GetTagsPage(ctx, TagFilterParams{})
+}
+
+// GetTagsPage returns a single page of tags.
+func (c *Client) GetTagsPage(ctx context.Context, p TagFilterParams) ([]Tag, error) {
+	query := gammaQuery(tagPageLimit(p.Limit), p.Offset)
+	setBool(query, "ascending", p.Ascending)
+	setBool(query, "include_template", p.IncludeTemplate)
+	setBool(query, "is_carousel", p.IsCarousel)
+	setString(query, "locale", p.Locale)
+	setString(query, "order", p.Order)
+
 	var out []Tag
-	err := c.http.GetJSON(ctx, tagsEndpoint, nil, polyhttp.AuthNone, &out)
+	err := c.http.GetJSON(ctx, tagsEndpoint, query, polyhttp.AuthNone, &out)
 	return out, err
+}
+
+// ListTags returns all tags matching the provided filters.
+func (c *Client) ListTags(ctx context.Context, p TagFilterParams) ([]Tag, error) {
+	var all []Tag
+	for tag, err := range c.IterTags(ctx, p) {
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, tag)
+	}
+	return all, nil
+}
+
+// IterTags returns an iterator over tags.
+func (c *Client) IterTags(
+	ctx context.Context,
+	p TagFilterParams,
+) iter.Seq2[Tag, error] {
+	return func(yield func(Tag, error) bool) {
+		offset := p.Offset
+		limit := iteratorLimit(p.Limit, 20, maxTagPageSize)
+		for {
+			pageParams := p
+			pageParams.Limit = limit
+			pageParams.Offset = offset
+			tags, err := c.GetTagsPage(ctx, pageParams)
+			if err != nil {
+				yield(Tag{}, err)
+				return
+			}
+			if len(tags) == 0 {
+				return
+			}
+			for _, tag := range tags {
+				if !yield(tag, nil) {
+					return
+				}
+			}
+			if len(tags) < limit {
+				return
+			}
+			offset += len(tags)
+		}
+	}
 }
 
 // GetEventTags returns all tags associated with an event.
@@ -652,15 +709,78 @@ func (c *Client) GetComment(ctx context.Context, id string) ([]Comment, error) {
 
 // GetCommentsByUserAddress returns comments posted by a wallet address.
 func (c *Client) GetCommentsByUserAddress(ctx context.Context, address string) ([]Comment, error) {
+	return c.GetCommentsByUserAddressPage(ctx, address, CommentsByUserAddressParams{})
+}
+
+// GetCommentsByUserAddressPage returns one page of comments posted by a wallet address.
+func (c *Client) GetCommentsByUserAddressPage(
+	ctx context.Context,
+	address string,
+	p CommentsByUserAddressParams,
+) ([]Comment, error) {
+	query := gammaQuery(commentsByUserPageLimit(p.Limit), p.Offset)
+	setBool(query, "ascending", p.Ascending)
+	setString(query, "order", p.Order)
+
 	var out []Comment
 	err := c.http.GetJSON(
 		ctx,
 		commentsEndpoint+"/user_address/"+address,
-		nil,
+		query,
 		polyhttp.AuthNone,
 		&out,
 	)
 	return out, err
+}
+
+// ListCommentsByUserAddress returns all comments posted by a wallet address.
+func (c *Client) ListCommentsByUserAddress(
+	ctx context.Context,
+	address string,
+	p CommentsByUserAddressParams,
+) ([]Comment, error) {
+	var all []Comment
+	for comment, err := range c.IterCommentsByUserAddress(ctx, address, p) {
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, comment)
+	}
+	return all, nil
+}
+
+// IterCommentsByUserAddress returns an iterator over comments posted by a wallet address.
+func (c *Client) IterCommentsByUserAddress(
+	ctx context.Context,
+	address string,
+	p CommentsByUserAddressParams,
+) iter.Seq2[Comment, error] {
+	return func(yield func(Comment, error) bool) {
+		offset := p.Offset
+		limit := iteratorLimit(p.Limit, 20, maxCommentsByUserPageSize)
+		for {
+			pageParams := p
+			pageParams.Limit = limit
+			pageParams.Offset = offset
+			comments, err := c.GetCommentsByUserAddressPage(ctx, address, pageParams)
+			if err != nil {
+				yield(Comment{}, err)
+				return
+			}
+			if len(comments) == 0 {
+				return
+			}
+			for _, comment := range comments {
+				if !yield(comment, nil) {
+					return
+				}
+			}
+			if len(comments) < limit {
+				return
+			}
+			offset += len(comments)
+		}
+	}
 }
 
 // GetPublicProfile returns the public profile for a wallet address.
@@ -678,7 +798,7 @@ func (c *Client) GetSeriesPage(
 	ctx context.Context,
 	p SeriesFilterParams,
 ) ([]Series, error) {
-	query := gammaQuery(p.Limit, p.Offset)
+	query := gammaQuery(seriesPageLimit(p.Limit), p.Offset)
 	setBool(query, "ascending", p.Ascending)
 	setBool(query, "closed", p.Closed)
 	setBool(query, "excludeEvents", p.ExcludeEvents)
@@ -711,7 +831,7 @@ func (c *Client) IterSeries(
 ) iter.Seq2[Series, error] {
 	return func(yield func(Series, error) bool) {
 		offset := p.Offset
-		limit := iteratorLimit(p.Limit, 20, 100)
+		limit := iteratorLimit(p.Limit, 20, maxSeriesPageSize)
 		for {
 			q := p
 			q.Limit = limit

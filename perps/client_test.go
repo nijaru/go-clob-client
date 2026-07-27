@@ -20,7 +20,13 @@ func newFakeServer(t *testing.T) (*fakeServer, *httptest.Server) {
 	t.Helper()
 	fs := &fakeServer{mux: http.NewServeMux(), counts: make(map[string]int)}
 	fs.mux.HandleFunc("/v1/info/instruments", fs.jsonHandler(t, []PerpsInstrument{
-		{ID: 1, Category: PerpsCategoryCrypto, Symbol: "BTC-USDC", MaxLeverage: 50},
+		{
+			ID:           1,
+			Category:     PerpsCategoryCrypto,
+			Symbol:       "BTC-USDC",
+			MaxLeverage:  50,
+			IsolatedOnly: true,
+		},
 	}))
 	fs.mux.HandleFunc("/v1/info/tickers", fs.jsonHandler(t, []PerpsTicker{
 		{InstrumentID: 1, Symbol: "BTC-USDC", LastPrice: "60000.0", MidPrice: "60000.5"},
@@ -36,7 +42,14 @@ func newFakeServer(t *testing.T) (*fakeServer, *httptest.Server) {
 	fs.mux.HandleFunc("/v1/info/funding", fs.fundingHandler)
 	fs.mux.HandleFunc("/v1/info/fees", fs.jsonHandler(t, PerpsFeesInfo{
 		FeeSchedule: []PerpsFeeScheduleEntry{
-			{Category: PerpsCategoryCrypto, TakerFeeRate: "0.0005", MakerFeeRate: "0.0001"},
+			{
+				Category:     PerpsCategoryCrypto,
+				TakerFeeRate: "0.0005",
+				MakerFeeRate: "0.0001",
+				Tiers: []PerpsFeeTier{
+					{MinVolume30D: "100000", TakerFeeRate: "0.0004", MakerFeeRate: "0.0000"},
+				},
+			},
 		},
 	}))
 	srv := httptest.NewServer(fs.mux)
@@ -172,7 +185,7 @@ func TestGetInstruments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetInstruments: %v", err)
 	}
-	if len(ins) != 1 || ins[0].ID != 1 || ins[0].MaxLeverage != 50 {
+	if len(ins) != 1 || ins[0].ID != 1 || ins[0].MaxLeverage != 50 || !ins[0].IsolatedOnly {
 		t.Fatalf("unexpected instruments: %+v", ins)
 	}
 }
@@ -211,8 +224,15 @@ func TestGetFees(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetFees: %v", err)
 	}
-	if len(fees) != 1 || fees[0].Category != PerpsCategoryCrypto {
+	if len(fees) != 1 || fees[0].Category != PerpsCategoryCrypto ||
+		len(fees[0].Tiers) != 1 || fees[0].Tiers[0].MinVolume30D != "100000" {
 		t.Fatalf("unexpected fees: %+v", fees)
+	}
+}
+
+func TestPerpsWithdrawalFailedStatus(t *testing.T) {
+	if PerpsWithdrawalFailed != "failed" {
+		t.Fatalf("PerpsWithdrawalFailed = %q, want failed", PerpsWithdrawalFailed)
 	}
 }
 

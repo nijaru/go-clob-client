@@ -199,6 +199,17 @@ type Tag struct {
 	IsCarousel  bool      `json:"isCarousel"`
 }
 
+// TagFilterParams controls paginated tag listing.
+type TagFilterParams struct {
+	Ascending       *bool  `url:"ascending,omitzero"`
+	IncludeTemplate *bool  `url:"include_template,omitzero"`
+	IsCarousel      *bool  `url:"is_carousel,omitzero"`
+	Locale          string `url:"locale,omitzero"`
+	Order           string `url:"order,omitzero"`
+	Limit           int    `url:"limit,omitzero"`
+	Offset          int    `url:"offset,omitzero"`
+}
+
 // RelatedTag represents a relationship between tags.
 type RelatedTag struct {
 	ID           string `json:"id"`
@@ -590,6 +601,14 @@ type CommentFilterParams struct {
 	ConditionID string `url:"condition_id,omitzero"`
 	Limit       int    `url:"limit,omitzero"`
 	Offset      int    `url:"offset,omitzero"`
+}
+
+// CommentsByUserAddressParams controls paginated comments-by-user listing.
+type CommentsByUserAddressParams struct {
+	Ascending *bool  `url:"ascending,omitzero"`
+	Order     string `url:"order,omitzero"`
+	Limit     int    `url:"limit,omitzero"`
+	Offset    int    `url:"offset,omitzero"`
 }
 
 // SeriesFilterParams defines filters for listing series.
