@@ -42,7 +42,7 @@ type WSAuth struct {
 
 // APIKeysResponse is the response payload for listing API keys.
 type APIKeysResponse struct {
-	APIKeys []Credentials `json:"apiKeys"`
+	APIKeys []string `json:"apiKeys"`
 }
 
 // BanStatus reports whether the account is currently restricted to closed-only mode.
@@ -53,6 +53,11 @@ type BanStatus struct {
 // ReadonlyAPIKeyResponse is the response from creating a readonly API key.
 type ReadonlyAPIKeyResponse struct {
 	APIKey string `json:"apiKey"`
+}
+
+// ReadonlyAPIKeysResponse is the response from listing readonly API keys.
+type ReadonlyAPIKeysResponse struct {
+	ReadonlyAPIKeys []string `json:"readonly_api_keys"`
 }
 
 // DeleteReadonlyAPIKeyRequest is the request payload for removing a readonly API key.

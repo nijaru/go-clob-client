@@ -33,6 +33,18 @@ func TestTypedMarketPricingSurfaces(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 
 		switch r.Method + " " + r.URL.Path {
+		case http.MethodGet + " " + orderBookEndpoint:
+			if got := r.URL.Query().Get("token_id"); got != "123" {
+				t.Fatalf("unexpected order book token id: %s", got)
+			}
+			if got := r.URL.Query().Get("side"); got != string(SideBuy) {
+				t.Fatalf("unexpected order book side: %s", got)
+			}
+			_, _ = w.Write(
+				[]byte(
+					`{"market":"cond-1","asset_id":"123","timestamp":"1","bids":[],"asks":[],"min_order_size":"1","tick_size":"0.01","neg_risk":false,"last_trade_price":"0.5","hash":"h"}`,
+				),
+			)
 		case http.MethodGet + " " + midpointEndpoint:
 			if got := r.URL.Query().Get("token_id"); got != "123" {
 				t.Fatalf("unexpected midpoint token id: %s", got)
@@ -73,6 +85,9 @@ func TestTypedMarketPricingSurfaces(t *testing.T) {
 			if got := r.URL.Query().Get("token_id"); got != "123" {
 				t.Fatalf("unexpected spread token id: %s", got)
 			}
+			if got := r.URL.Query().Get("side"); got != string(SideSell) {
+				t.Fatalf("unexpected spread side: %s", got)
+			}
 			_, _ = w.Write([]byte(`{"spread":"0.18"}`))
 		case http.MethodPost + " " + spreadsEndpoint:
 			body, _ := io.ReadAll(r.Body)
@@ -88,7 +103,7 @@ func TestTypedMarketPricingSurfaces(t *testing.T) {
 				t.Fatalf("unexpected last trade token id: %s", got)
 			}
 			_, _ = w.Write([]byte(`{"price":"0.55","side":"BUY"}`))
-		case http.MethodPost + " " + lastTradesPricesEndpoint:
+		case http.MethodGet + " " + lastTradesPricesEndpoint:
 			body, _ := io.ReadAll(r.Body)
 			if err := json.Unmarshal(body, &books); err != nil {
 				t.Fatalf("decode last trades request: %v", err)
@@ -117,6 +132,14 @@ func TestTypedMarketPricingSurfaces(t *testing.T) {
 	}
 	if geoblock.Blocked || geoblock.Country != "US" {
 		t.Fatalf("unexpected geoblock response: %+v", geoblock)
+	}
+
+	book, err := client.GetOrderBookWithSide(t.Context(), "123", SideBuy)
+	if err != nil {
+		t.Fatalf("get order book: %v", err)
+	}
+	if book.AssetID != "123" {
+		t.Fatalf("unexpected order book: %+v", book)
 	}
 
 	midpoint, err := client.GetMidpoint(t.Context(), "123")
@@ -165,7 +188,7 @@ func TestTypedMarketPricingSurfaces(t *testing.T) {
 		t.Fatalf("unexpected all prices: %+v", allPrices)
 	}
 
-	spread, err := client.GetSpread(t.Context(), "123")
+	spread, err := client.GetSpreadWithSide(t.Context(), "123", SideSell)
 	if err != nil {
 		t.Fatalf("get spread: %v", err)
 	}

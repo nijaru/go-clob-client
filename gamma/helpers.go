@@ -9,6 +9,9 @@ const (
 	maxSeriesPageSize         = 50
 	maxTagPageSize            = 100
 	maxCommentsByUserPageSize = 100
+	maxCommentsPageSize       = 100
+	maxTeamsPageSize          = 100
+	maxClarificationsPageSize = 100
 )
 
 func gammaQuery(limit, offset int) url.Values {
@@ -66,4 +69,25 @@ func commentsByUserPageLimit(limit int) int {
 		return 0
 	}
 	return min(limit, maxCommentsByUserPageSize)
+}
+
+func commentsPageLimit(limit int) int {
+	if limit <= 0 {
+		return 0
+	}
+	return min(limit, maxCommentsPageSize)
+}
+
+func teamPageLimit(limit int) int {
+	if limit <= 0 {
+		return 0
+	}
+	return min(limit, maxTeamsPageSize)
+}
+
+func clarificationPageLimit(limit int) int {
+	if limit <= 0 {
+		return 0
+	}
+	return min(limit, maxClarificationsPageSize)
 }

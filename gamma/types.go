@@ -1,8 +1,10 @@
 package gamma
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -114,6 +116,74 @@ type Market struct {
 	RfqEnabled              bool         `json:"rfqEnabled"`
 	HoldingRewardsEnabled   bool         `json:"holdingRewardsEnabled"`
 	ClobRewards             []ClobReward `json:"clobRewards,omitzero"`
+}
+
+// UnmarshalJSON accepts Gamma's JSON-encoded array fields. The official API
+// returns outcomes, outcomePrices, and clobTokenIds as strings containing JSON
+// arrays rather than as JSON arrays.
+func (m *Market) UnmarshalJSON(data []byte) error {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return fmt.Errorf("gamma market: decode object: %w", err)
+	}
+
+	for _, key := range []string{"outcomePrices", "outcomes", "clobTokenIds"} {
+		normalized, err := normalizeStringArray(fields[key])
+		if err != nil {
+			return fmt.Errorf("gamma market %s: %w", key, err)
+		}
+		if normalized != nil {
+			fields[key] = normalized
+		}
+	}
+
+	normalized, err := json.Marshal(fields)
+	if err != nil {
+		return fmt.Errorf("gamma market: encode normalized object: %w", err)
+	}
+	type marketAlias Market
+	if err := json.Unmarshal(normalized, (*marketAlias)(m)); err != nil {
+		return fmt.Errorf("gamma market: decode normalized object: %w", err)
+	}
+	return nil
+}
+
+func normalizeStringArray(raw json.RawMessage) (json.RawMessage, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return raw, nil
+	}
+
+	var encoded string
+	if err := json.Unmarshal(trimmed, &encoded); err == nil {
+		encoded = strings.TrimSpace(encoded)
+		if encoded == "" {
+			return json.RawMessage("[]"), nil
+		}
+		trimmed = []byte(encoded)
+	}
+
+	var items []json.RawMessage
+	if err := json.Unmarshal(trimmed, &items); err != nil {
+		return nil, fmt.Errorf("expected array or JSON-encoded array: %w", err)
+	}
+
+	values := make([]string, len(items))
+	for i, item := range items {
+		var value string
+		if err := json.Unmarshal(item, &value); err == nil {
+			values[i] = value
+			continue
+		}
+
+		var number json.Number
+		if err := json.Unmarshal(item, &number); err != nil {
+			return nil, fmt.Errorf("item %d is not a string or number: %w", i, err)
+		}
+		values[i] = number.String()
+	}
+
+	return json.Marshal(values)
 }
 
 // ClobReward represents CLOB rewards configuration for a market.
@@ -543,64 +613,97 @@ type SearchResults struct {
 
 // MarketFilterParams defines filters for market listing.
 type MarketFilterParams struct {
-	Active             *bool    `url:"active,omitzero"`
-	Closed             *bool    `url:"closed,omitzero"`
-	Archived           *bool    `url:"archived,omitzero"`
-	Resolved           *bool    `url:"resolved,omitzero"`
-	Limit              int      `url:"limit,omitzero"`
-	Offset             int      `url:"offset,omitzero"`
-	Order              string   `url:"order,omitzero"`
-	Ascending          *bool    `url:"ascending,omitzero"`
-	TagID              string   `url:"tag_id,omitzero"`
-	EventID            string   `url:"event_id,omitzero"`
-	Slug               string   `url:"slug,omitzero"`
-	NegativeRisk       *bool    `url:"negative_risk,omitzero"`
-	AcceptingOrders    *bool    `url:"accepting_orders,omitzero"`
-	ClobTokenIDs       []string `url:"clob_token_ids,omitzero"`
-	ConditionIDs       []string `url:"condition_ids,omitzero"`
-	MarketMakerAddress []string `url:"market_maker_address,omitzero"`
-	LiquidityNumMin    string   `url:"liquidity_num_min,omitzero"`
-	LiquidityNumMax    string   `url:"liquidity_num_max,omitzero"`
-	VolumeNumMin       string   `url:"volume_num_min,omitzero"`
-	VolumeNumMax       string   `url:"volume_num_max,omitzero"`
-	StartDateMin       string   `url:"start_date_min,omitzero"`
-	StartDateMax       string   `url:"start_date_max,omitzero"`
-	EndDateMin         string   `url:"end_date_min,omitzero"`
-	EndDateMax         string   `url:"end_date_max,omitzero"`
+	Active              *bool    `url:"active,omitzero"`
+	IDs                 []string `url:"id,omitzero"`
+	Closed              *bool    `url:"closed,omitzero"`
+	Archived            *bool    `url:"archived,omitzero"`
+	Resolved            *bool    `url:"resolved,omitzero"`
+	Limit               int      `url:"limit,omitzero"`
+	Offset              int      `url:"offset,omitzero"`
+	Order               string   `url:"order,omitzero"`
+	Ascending           *bool    `url:"ascending,omitzero"`
+	TagID               string   `url:"tag_id,omitzero"`
+	EventID             string   `url:"event_id,omitzero"`
+	Slugs               []string `url:"slug,omitzero"`
+	Slug                string   `url:"slug,omitzero"`
+	NegativeRisk        *bool    `url:"negative_risk,omitzero"`
+	AcceptingOrders     *bool    `url:"accepting_orders,omitzero"`
+	ClobTokenIDs        []string `url:"clob_token_ids,omitzero"`
+	ConditionIDs        []string `url:"condition_ids,omitzero"`
+	MarketMakerAddress  []string `url:"market_maker_address,omitzero"`
+	LiquidityNumMin     string   `url:"liquidity_num_min,omitzero"`
+	LiquidityNumMax     string   `url:"liquidity_num_max,omitzero"`
+	VolumeNumMin        string   `url:"volume_num_min,omitzero"`
+	VolumeNumMax        string   `url:"volume_num_max,omitzero"`
+	RelatedTags         *bool    `url:"related_tags,omitzero"`
+	CYOM                *bool    `url:"cyom,omitzero"`
+	UmaResolutionStatus string   `url:"uma_resolution_status,omitzero"`
+	GameID              string   `url:"game_id,omitzero"`
+	SportsMarketTypes   []string `url:"sports_market_types,omitzero"`
+	RewardsMinSize      string   `url:"rewards_min_size,omitzero"`
+	QuestionIDs         []string `url:"question_ids,omitzero"`
+	IncludeTag          *bool    `url:"include_tag,omitzero"`
+	StartDateMin        string   `url:"start_date_min,omitzero"`
+	StartDateMax        string   `url:"start_date_max,omitzero"`
+	EndDateMin          string   `url:"end_date_min,omitzero"`
+	EndDateMax          string   `url:"end_date_max,omitzero"`
 }
 
 // EventFilterParams defines filters for event listing.
 type EventFilterParams struct {
-	Active       *bool  `url:"active,omitzero"`
-	Closed       *bool  `url:"closed,omitzero"`
-	Archived     *bool  `url:"archived,omitzero"`
-	Resolved     *bool  `url:"resolved,omitzero"`
-	TagID        string `url:"tag_id,omitzero"`
-	Slug         string `url:"slug,omitzero"`
-	Limit        int    `url:"limit,omitzero"`
-	Offset       int    `url:"offset,omitzero"`
-	NegativeRisk *bool  `url:"negative_risk,omitzero"`
-	TagSlug      string `url:"tag_slug,omitzero"`
-	RelatedTags  *bool  `url:"related_tags,omitzero"`
-	Featured     *bool  `url:"featured,omitzero"`
-	CYOM         *bool  `url:"cyom,omitzero"`
-	IncludeChat  *bool  `url:"include_chat,omitzero"`
-	Recurrence   string `url:"recurrence,omitzero"`
-	LiquidityMin string `url:"liquidity_min,omitzero"`
-	LiquidityMax string `url:"liquidity_max,omitzero"`
-	VolumeMin    string `url:"volume_min,omitzero"`
-	VolumeMax    string `url:"volume_max,omitzero"`
-	StartDateMin string `url:"start_date_min,omitzero"`
-	StartDateMax string `url:"start_date_max,omitzero"`
-	EndDateMin   string `url:"end_date_min,omitzero"`
-	EndDateMax   string `url:"end_date_max,omitzero"`
+	Active          *bool    `url:"active,omitzero"`
+	Closed          *bool    `url:"closed,omitzero"`
+	Archived        *bool    `url:"archived,omitzero"`
+	Resolved        *bool    `url:"resolved,omitzero"`
+	IDs             []string `url:"id,omitzero"`
+	Orders          []string `url:"order,omitzero"`
+	Order           string   `url:"order,omitzero"`
+	TagID           string   `url:"tag_id,omitzero"`
+	ExcludeTagIDs   []string `url:"exclude_tag_id,omitzero"`
+	Slugs           []string `url:"slug,omitzero"`
+	Slug            string   `url:"slug,omitzero"`
+	Limit           int      `url:"limit,omitzero"`
+	Offset          int      `url:"offset,omitzero"`
+	NegativeRisk    *bool    `url:"negative_risk,omitzero"`
+	TagSlug         string   `url:"tag_slug,omitzero"`
+	RelatedTags     *bool    `url:"related_tags,omitzero"`
+	Featured        *bool    `url:"featured,omitzero"`
+	CYOM            *bool    `url:"cyom,omitzero"`
+	IncludeChat     *bool    `url:"include_chat,omitzero"`
+	IncludeTemplate *bool    `url:"include_template,omitzero"`
+	Recurrence      string   `url:"recurrence,omitzero"`
+	LiquidityMin    string   `url:"liquidity_min,omitzero"`
+	LiquidityMax    string   `url:"liquidity_max,omitzero"`
+	VolumeMin       string   `url:"volume_min,omitzero"`
+	VolumeMax       string   `url:"volume_max,omitzero"`
+	StartDateMin    string   `url:"start_date_min,omitzero"`
+	StartDateMax    string   `url:"start_date_max,omitzero"`
+	EndDateMin      string   `url:"end_date_min,omitzero"`
+	EndDateMax      string   `url:"end_date_max,omitzero"`
 }
 
-// CommentFilterParams defines filters for comments.
+// ParentEntityType identifies the Gamma entity whose comments are requested.
+type ParentEntityType string
+
+const (
+	ParentEntityTypeEvent  ParentEntityType = "Event"
+	ParentEntityTypeSeries ParentEntityType = "Series"
+	ParentEntityTypeMarket ParentEntityType = "market"
+)
+
+// CommentFilterParams defines filters for comments. ParentEntityType and
+// ParentEntityID match Rust's CommentsRequest. ConditionID remains accepted
+// as a compatibility input and is sent as a market parent entity.
 type CommentFilterParams struct {
-	ConditionID string `url:"condition_id,omitzero"`
-	Limit       int    `url:"limit,omitzero"`
-	Offset      int    `url:"offset,omitzero"`
+	ParentEntityType ParentEntityType
+	ParentEntityID   string
+	GetPositions     *bool
+	HoldersOnly      *bool
+	Order            string
+	Ascending        *bool
+	ConditionID      string
+	Limit            int
+	Offset           int
 }
 
 // CommentsByUserAddressParams controls paginated comments-by-user listing.
@@ -613,25 +716,32 @@ type CommentsByUserAddressParams struct {
 
 // SeriesFilterParams defines filters for listing series.
 type SeriesFilterParams struct {
-	Ascending     *bool  `url:"ascending,omitzero"`
-	Closed        *bool  `url:"closed,omitzero"`
-	ExcludeEvents *bool  `url:"excludeEvents,omitzero"`
-	Locale        string `url:"locale,omitzero"`
-	Order         string `url:"order,omitzero"`
-	Recurrence    string `url:"recurrence,omitzero"`
-	Slug          string `url:"slug,omitzero"`
-	Limit         int    `url:"limit,omitzero"`
-	Offset        int    `url:"offset,omitzero"`
+	Ascending        *bool    `url:"ascending,omitzero"`
+	Closed           *bool    `url:"closed,omitzero"`
+	ExcludeEvents    *bool    `url:"excludeEvents,omitzero"`
+	Locale           string   `url:"locale,omitzero"`
+	Order            string   `url:"order,omitzero"`
+	Recurrence       string   `url:"recurrence,omitzero"`
+	Slugs            []string `url:"slug,omitzero"`
+	Slug             string   `url:"slug,omitzero"`
+	CategoriesIDs    []string `url:"categories_ids,omitzero"`
+	CategoriesLabels []string `url:"categories_labels,omitzero"`
+	IncludeChat      *bool    `url:"include_chat,omitzero"`
+	Limit            int      `url:"limit,omitzero"`
+	Offset           int      `url:"offset,omitzero"`
 }
 
 // TeamFilterParams defines filters for listing teams.
 type TeamFilterParams struct {
-	Abbreviation string `url:"abbreviation,omitzero"`
-	Ascending    *bool  `url:"ascending,omitzero"`
-	League       string `url:"league,omitzero"`
-	Name         string `url:"name,omitzero"`
-	Order        string `url:"order,omitzero"`
-	ProviderID   int    `url:"providerId,omitzero"`
-	Limit        int    `url:"limit,omitzero"`
-	Offset       int    `url:"offset,omitzero"`
+	Abbreviations []string `url:"abbreviation,omitzero"`
+	Abbreviation  string   `url:"abbreviation,omitzero"`
+	Ascending     *bool    `url:"ascending,omitzero"`
+	Leagues       []string `url:"league,omitzero"`
+	League        string   `url:"league,omitzero"`
+	Names         []string `url:"name,omitzero"`
+	Name          string   `url:"name,omitzero"`
+	Order         string   `url:"order,omitzero"`
+	ProviderID    int      `url:"providerId,omitzero"`
+	Limit         int      `url:"limit,omitzero"`
+	Offset        int      `url:"offset,omitzero"`
 }

@@ -90,7 +90,7 @@ func TestTypedReadOnlySurfaces(t *testing.T) {
 			if got := r.URL.Query().Get("interval"); got != "1d" {
 				t.Fatalf("unexpected interval query: %s", got)
 			}
-			_, _ = w.Write([]byte(`[{"t":1710000000,"p":0.42}]`))
+			_, _ = w.Write([]byte(`{"history":[{"t":1710000000,"p":0.42}]}`))
 		case marketTradesEventsEndpoint + "cond-1":
 			_, _ = w.Write([]byte(`[
 				{
@@ -188,10 +188,12 @@ func TestTypedAuthenticatedSurfaces(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 
 		switch r.Method + " " + r.URL.Path {
+		case http.MethodGet + " " + getAPIKeysEndpoint:
+			_, _ = w.Write([]byte(`{"apiKeys":["api-key","other-key"]}`))
 		case http.MethodPost + " " + createReadonlyAPIKeyEndpoint:
 			_, _ = w.Write([]byte(`{"apiKey":"readonly-1"}`))
 		case http.MethodGet + " " + getReadonlyAPIKeysEndpoint:
-			_, _ = w.Write([]byte(`["readonly-1","readonly-2"]`))
+			_, _ = w.Write([]byte(`{"readonly_api_keys":["readonly-1","readonly-2"]}`))
 		case http.MethodDelete + " " + deleteReadonlyAPIKeyEndpoint:
 			var payload DeleteReadonlyAPIKeyRequest
 			body, _ := io.ReadAll(r.Body)
@@ -377,6 +379,11 @@ func TestTypedAuthenticatedSurfaces(t *testing.T) {
 		t.Fatalf("new client: %v", err)
 	}
 
+	apiKeys, err := client.GetAPIKeys(t.Context())
+	if err != nil || len(apiKeys.APIKeys) != 2 || apiKeys.APIKeys[0] != "api-key" {
+		t.Fatalf("get api keys: %+v %v", apiKeys, err)
+	}
+
 	readonly, err := client.CreateReadonlyAPIKey(t.Context())
 	if err != nil || readonly.APIKey != "readonly-1" {
 		t.Fatalf("create readonly api key: %+v %v", readonly, err)
@@ -397,7 +404,10 @@ func TestTypedAuthenticatedSurfaces(t *testing.T) {
 		t.Fatalf("get notifications: %+v %v", notifications, err)
 	}
 
-	if err := client.DeleteNotifications(t.Context(), DeleteNotificationsParams{IDs: []string{"n1", "n2"}}); err != nil {
+	if err := client.DeleteNotifications(
+		t.Context(),
+		DeleteNotificationsParams{IDs: []string{"n1", "n2"}},
+	); err != nil {
 		t.Fatalf("delete notifications: %v", err)
 	}
 

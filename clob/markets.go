@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"iter"
+	"net/http"
 	"net/url"
 	"strconv"
 
@@ -215,8 +216,21 @@ func (c *Client) CheckGeoblock(ctx context.Context) (*GeoblockResponse, error) {
 
 // GetOrderBook returns the typed order book for a token.
 func (c *Client) GetOrderBook(ctx context.Context, tokenID string) (*OrderBookSummary, error) {
+	return c.GetOrderBookWithSide(ctx, tokenID, "")
+}
+
+// GetOrderBookWithSide returns the typed order book for a token, optionally
+// filtered to one order side.
+func (c *Client) GetOrderBookWithSide(
+	ctx context.Context,
+	tokenID string,
+	side Side,
+) (*OrderBookSummary, error) {
 	query := url.Values{}
 	query.Set("token_id", tokenID)
+	if side != "" {
+		query.Set("side", string(side))
+	}
 
 	var out OrderBookSummary
 	err := c.getJSON(ctx, orderBookEndpoint, query, polyhttp.AuthNone, &out)
@@ -283,8 +297,21 @@ func (c *Client) GetAllPrices(ctx context.Context) (PricesResponse, error) {
 
 // GetSpread returns the current spread for a token.
 func (c *Client) GetSpread(ctx context.Context, tokenID string) (*SpreadResponse, error) {
+	return c.GetSpreadWithSide(ctx, tokenID, "")
+}
+
+// GetSpreadWithSide returns the current spread for a token, optionally
+// filtered to one order side.
+func (c *Client) GetSpreadWithSide(
+	ctx context.Context,
+	tokenID string,
+	side Side,
+) (*SpreadResponse, error) {
 	query := url.Values{}
 	query.Set("token_id", tokenID)
+	if side != "" {
+		query.Set("side", string(side))
+	}
 
 	var out SpreadResponse
 	err := c.getJSON(ctx, spreadEndpoint, query, polyhttp.AuthNone, &out)
@@ -317,7 +344,16 @@ func (c *Client) GetLastTradesPrices(
 	books []BookParams,
 ) ([]LastTradesPricesResponse, error) {
 	var out []LastTradesPricesResponse
-	err := c.postJSON(ctx, lastTradesPricesEndpoint, books, polyhttp.AuthNone, &out)
+	err := c.doJSON(
+		ctx,
+		http.MethodGet,
+		lastTradesPricesEndpoint,
+		nil,
+		books,
+		polyhttp.AuthNone,
+		&out,
+		nil,
+	)
 	return out, err
 }
 
@@ -363,9 +399,11 @@ func (c *Client) GetPricesHistory(
 		query.Set("interval", string(params.Interval))
 	}
 
-	var out []MarketPrice
+	var out struct {
+		History []MarketPrice `json:"history"`
+	}
 	err := c.getJSON(ctx, priceHistoryEndpoint, query, polyhttp.AuthNone, &out)
-	return out, err
+	return out.History, err
 }
 
 // GetMarketTradesEvents returns live market activity events for a condition ID.

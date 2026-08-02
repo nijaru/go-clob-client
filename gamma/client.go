@@ -109,15 +109,16 @@ func (c *Client) GetMarkets(ctx context.Context, params MarketFilterParams) ([]M
 	if params.Ascending != nil {
 		query.Set("ascending", strconv.FormatBool(*params.Ascending))
 	}
+	for _, id := range params.IDs {
+		query.Add("id", id)
+	}
 	if params.TagID != "" {
 		query.Set("tag_id", params.TagID)
 	}
 	if params.EventID != "" {
 		query.Set("event_id", params.EventID)
 	}
-	if params.Slug != "" {
-		query.Set("slug", params.Slug)
-	}
+	addGammaFilterValues(query, "slug", params.Slug, params.Slugs)
 	if params.NegativeRisk != nil {
 		query.Set("negative_risk", strconv.FormatBool(*params.NegativeRisk))
 	}
@@ -145,6 +146,18 @@ func (c *Client) GetMarkets(ctx context.Context, params MarketFilterParams) ([]M
 	if params.VolumeNumMax != "" {
 		query.Set("volume_num_max", params.VolumeNumMax)
 	}
+	setBool(query, "related_tags", params.RelatedTags)
+	setBool(query, "cyom", params.CYOM)
+	setString(query, "uma_resolution_status", params.UmaResolutionStatus)
+	setString(query, "game_id", params.GameID)
+	for _, marketType := range params.SportsMarketTypes {
+		query.Add("sports_market_types", marketType)
+	}
+	setString(query, "rewards_min_size", params.RewardsMinSize)
+	for _, id := range params.QuestionIDs {
+		query.Add("question_ids", id)
+	}
+	setBool(query, "include_tag", params.IncludeTag)
 	if params.StartDateMin != "" {
 		query.Set("start_date_min", params.StartDateMin)
 	}
@@ -226,12 +239,22 @@ func (c *Client) GetEvents(ctx context.Context, params EventFilterParams) ([]Eve
 	if params.Resolved != nil {
 		query.Set("resolved", strconv.FormatBool(*params.Resolved))
 	}
+	for _, id := range params.IDs {
+		query.Add("id", id)
+	}
+	for _, order := range params.Orders {
+		query.Add("order", order)
+	}
+	if len(params.Orders) == 0 {
+		setString(query, "order", params.Order)
+	}
 	if params.TagID != "" {
 		query.Set("tag_id", params.TagID)
 	}
-	if params.Slug != "" {
-		query.Set("slug", params.Slug)
+	for _, id := range params.ExcludeTagIDs {
+		query.Add("exclude_tag_id", id)
 	}
+	addGammaFilterValues(query, "slug", params.Slug, params.Slugs)
 	if params.Limit > 0 {
 		query.Set("limit", strconv.Itoa(params.Limit))
 	}
@@ -255,6 +278,9 @@ func (c *Client) GetEvents(ctx context.Context, params EventFilterParams) ([]Eve
 	}
 	if params.IncludeChat != nil {
 		query.Set("include_chat", strconv.FormatBool(*params.IncludeChat))
+	}
+	if params.IncludeTemplate != nil {
+		query.Set("include_template", strconv.FormatBool(*params.IncludeTemplate))
 	}
 	if params.Recurrence != "" {
 		query.Set("recurrence", params.Recurrence)
@@ -552,7 +578,13 @@ func (c *Client) GetSports(ctx context.Context) ([]SportsMetadata, error) {
 // GetTeams returns all sports teams.
 func (c *Client) GetTeams(ctx context.Context) ([]Team, error) {
 	var out []Team
-	err := c.http.GetJSON(ctx, teamsEndpoint, nil, polyhttp.AuthNone, &out)
+	err := c.http.GetJSON(
+		ctx,
+		teamsEndpoint,
+		gammaQuery(teamPageLimit(0), 0),
+		polyhttp.AuthNone,
+		&out,
+	)
 	return out, err
 }
 
@@ -605,7 +637,7 @@ func (c *Client) GetMarketClarifications(
 	setString(query, "tx_hash", p.TxHash)
 	setString(query, "order", p.Order)
 	setBool(query, "ascending", p.Ascending)
-	setInt(query, "limit", p.Limit)
+	setInt(query, "limit", clarificationPageLimit(p.Limit))
 	setInt(query, "offset", p.Offset)
 
 	var out []MarketClarification
@@ -624,17 +656,14 @@ func (c *Client) IterMarketClarifications(
 		offset := p.Offset
 		for {
 			q := p
-			q.Limit = limit + 1
+			q.Limit = limit
 			q.Offset = offset
 			items, err := c.GetMarketClarifications(ctx, q)
 			if err != nil {
 				yield(MarketClarification{}, err)
 				return
 			}
-			more := len(items) > limit
-			if more {
-				items = items[:limit]
-			}
+			more := len(items) == limit
 			for _, item := range items {
 				if !yield(item, nil) {
 					return
@@ -651,15 +680,20 @@ func (c *Client) IterMarketClarifications(
 // GetComments returns a list of comments based on the provided filters.
 func (c *Client) GetComments(ctx context.Context, params CommentFilterParams) ([]Comment, error) {
 	query := url.Values{}
-	if params.ConditionID != "" {
-		query.Set("condition_id", params.ConditionID)
+	entityType := params.ParentEntityType
+	entityID := params.ParentEntityID
+	if entityID == "" && params.ConditionID != "" {
+		entityType = ParentEntityTypeMarket
+		entityID = params.ConditionID
 	}
-	if params.Limit > 0 {
-		query.Set("limit", strconv.Itoa(params.Limit))
-	}
-	if params.Offset > 0 {
-		query.Set("offset", strconv.Itoa(params.Offset))
-	}
+	setString(query, "parent_entity_type", entityType)
+	setString(query, "parent_entity_id", entityID)
+	setBool(query, "get_positions", params.GetPositions)
+	setBool(query, "holders_only", params.HoldersOnly)
+	setString(query, "order", params.Order)
+	setBool(query, "ascending", params.Ascending)
+	setInt(query, "limit", commentsPageLimit(params.Limit))
+	setInt(query, "offset", params.Offset)
 
 	var out []Comment
 	err := c.http.GetJSON(ctx, commentsEndpoint, query, polyhttp.AuthNone, &out)
@@ -805,7 +839,14 @@ func (c *Client) GetSeriesPage(
 	setString(query, "locale", p.Locale)
 	setString(query, "order", p.Order)
 	setString(query, "recurrence", p.Recurrence)
-	setString(query, "slug", p.Slug)
+	addGammaFilterValues(query, "slug", p.Slug, p.Slugs)
+	for _, id := range p.CategoriesIDs {
+		query.Add("categories_ids", id)
+	}
+	for _, label := range p.CategoriesLabels {
+		query.Add("categories_labels", label)
+	}
+	setBool(query, "include_chat", p.IncludeChat)
 
 	var out []Series
 	err := c.http.GetJSON(ctx, seriesEndpoint, query, polyhttp.AuthNone, &out)
@@ -862,11 +903,11 @@ func (c *Client) GetTeamsPage(
 	ctx context.Context,
 	p TeamFilterParams,
 ) ([]Team, error) {
-	query := gammaQuery(p.Limit, p.Offset)
-	setString(query, "abbreviation", p.Abbreviation)
+	query := gammaQuery(teamPageLimit(p.Limit), p.Offset)
+	addGammaFilterValues(query, "abbreviation", p.Abbreviation, p.Abbreviations)
 	setBool(query, "ascending", p.Ascending)
-	setString(query, "league", p.League)
-	setString(query, "name", p.Name)
+	addGammaFilterValues(query, "league", p.League, p.Leagues)
+	addGammaFilterValues(query, "name", p.Name, p.Names)
 	setString(query, "order", p.Order)
 	setInt(query, "providerId", p.ProviderID)
 

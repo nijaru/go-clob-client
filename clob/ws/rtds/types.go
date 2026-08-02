@@ -1,6 +1,7 @@
 package rtds
 
 import (
+	stdjson "encoding/json" //nolint:depguard // numeric JSON normalization for RTDS payloads
 	"fmt"
 	"time"
 
@@ -104,18 +105,74 @@ func (m *RtdsMessage) AsComment() (*Comment, error) {
 	return &p, nil
 }
 
-// CryptoPrice represents a Binance crypto price update.
+// CryptoPrice represents a Binance crypto price update. Value preserves the
+// exact decimal spelling while accepting the numeric JSON emitted by RTDS.
 type CryptoPrice struct {
 	Symbol    string `json:"symbol"`
 	Timestamp int64  `json:"timestamp"`
 	Value     string `json:"value"`
 }
 
-// ChainlinkPrice represents a Chainlink price feed update.
+// UnmarshalJSON accepts both numeric and quoted decimal values from RTDS.
+func (p *CryptoPrice) UnmarshalJSON(data []byte) error {
+	var wire struct {
+		Symbol    string             `json:"symbol"`
+		Timestamp int64              `json:"timestamp"`
+		Value     stdjson.RawMessage `json:"value"`
+	}
+	if err := stdjson.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	value, err := decodeDecimalValue(wire.Value)
+	if err != nil {
+		return fmt.Errorf("crypto price value: %w", err)
+	}
+	*p = CryptoPrice{Symbol: wire.Symbol, Timestamp: wire.Timestamp, Value: value}
+	return nil
+}
+
+// ChainlinkPrice represents a Chainlink price feed update. Value preserves
+// the exact decimal spelling while accepting the numeric JSON emitted by RTDS.
 type ChainlinkPrice struct {
 	Symbol    string `json:"symbol"`
 	Timestamp int64  `json:"timestamp"`
 	Value     string `json:"value"`
+}
+
+// UnmarshalJSON accepts both numeric and quoted decimal values from RTDS.
+func (p *ChainlinkPrice) UnmarshalJSON(data []byte) error {
+	var wire struct {
+		Symbol    string             `json:"symbol"`
+		Timestamp int64              `json:"timestamp"`
+		Value     stdjson.RawMessage `json:"value"`
+	}
+	if err := stdjson.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	value, err := decodeDecimalValue(wire.Value)
+	if err != nil {
+		return fmt.Errorf("chainlink price value: %w", err)
+	}
+	*p = ChainlinkPrice{Symbol: wire.Symbol, Timestamp: wire.Timestamp, Value: value}
+	return nil
+}
+
+func decodeDecimalValue(raw stdjson.RawMessage) (string, error) {
+	if len(raw) == 0 {
+		return "", fmt.Errorf("missing value")
+	}
+	var value string
+	if err := stdjson.Unmarshal(raw, &value); err == nil {
+		return value, nil
+	}
+	var number stdjson.Number
+	if err := stdjson.Unmarshal(raw, &number); err != nil || number.String() == "" {
+		if err == nil {
+			err = fmt.Errorf("empty number")
+		}
+		return "", fmt.Errorf("expected decimal string or number: %w", err)
+	}
+	return number.String(), nil
 }
 
 // Comment represents a comment event payload.

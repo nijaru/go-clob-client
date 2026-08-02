@@ -4,9 +4,54 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	json "github.com/go-json-experiment/json"
 )
+
+func TestOpenOrderNormalizesRustTimestamps(t *testing.T) {
+	t.Parallel()
+
+	var order OpenOrder
+	if err := json.Unmarshal(
+		[]byte(`{"created_at":1710000000123,"expiration":0}`),
+		&order,
+	); err != nil {
+		t.Fatalf("decode numeric timestamps: %v", err)
+	}
+	if order.CreatedAt != 1710000000 {
+		t.Fatalf("created_at = %d, want 1710000000", order.CreatedAt)
+	}
+	if order.CreatedAtTime == nil || order.CreatedAtTime.UnixMilli() != 1710000000123 {
+		t.Fatalf("created_at_time = %v", order.CreatedAtTime)
+	}
+	if order.Expiration != "0" || order.ExpirationTime != nil {
+		t.Fatalf("expiration = %q, expiration_time = %v", order.Expiration, order.ExpirationTime)
+	}
+
+	if err := json.Unmarshal(
+		[]byte(`{"created_at":"2026-03-12T18:00:00Z","expiration":"2026-03-12T19:00:00Z"}`),
+		&order,
+	); err != nil {
+		t.Fatalf("decode ISO timestamps: %v", err)
+	}
+	if want := time.Date(
+		2026,
+		time.March,
+		12,
+		18,
+		0,
+		0,
+		0,
+		time.UTC,
+	); order.CreatedAtTime == nil ||
+		!order.CreatedAtTime.Equal(want) {
+		t.Fatalf("created_at_time = %v, want %v", order.CreatedAtTime, want)
+	}
+	if order.ExpirationTime == nil || order.ExpirationTime.Hour() != 19 {
+		t.Fatalf("expiration_time = %v", order.ExpirationTime)
+	}
+}
 
 func TestTypedAuthenticatedResponses(t *testing.T) {
 	t.Parallel()

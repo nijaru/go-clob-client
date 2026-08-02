@@ -58,7 +58,9 @@ func TestSetCredentialsRotatesDecodedSecret(t *testing.T) {
 	}
 
 	before := append([]byte(nil), client.decodedSecret...)
-	if err := client.SetCredentials(Credentials{Key: "k2", Secret: secret2, Passphrase: "p2"}); err != nil {
+	if err := client.SetCredentials(
+		Credentials{Key: "k2", Secret: secret2, Passphrase: "p2"},
+	); err != nil {
 		t.Fatalf("SetCredentials (valid): %v", err)
 	}
 	if got := client.credentials().Key; got != "k2" {
@@ -69,7 +71,9 @@ func TestSetCredentialsRotatesDecodedSecret(t *testing.T) {
 	}
 
 	// An invalid secret must error and leave the current credentials untouched.
-	if err := client.SetCredentials(Credentials{Key: "k3", Secret: invalid, Passphrase: "p3"}); err == nil {
+	if err := client.SetCredentials(
+		Credentials{Key: "k3", Secret: invalid, Passphrase: "p3"},
+	); err == nil {
 		t.Fatal("expected error for invalid base64 secret, got nil")
 	}
 	if got := client.credentials().Key; got != "k2" {
@@ -266,8 +270,8 @@ func TestDeleteNotifications(t *testing.T) {
 	if receivedIDs != "n1,n2" {
 		t.Errorf("received ids = %q, want %q", receivedIDs, "n1,n2")
 	}
-	if requestBody != `["n1","n2"]` {
-		t.Errorf("request body = %q, want %q", requestBody, `["n1","n2"]`)
+	if requestBody != "" {
+		t.Errorf("request body = %q, want empty", requestBody)
 	}
 }
 

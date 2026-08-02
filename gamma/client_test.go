@@ -46,6 +46,31 @@ func TestClient_GetMarket(t *testing.T) {
 	}
 }
 
+func TestClient_GetMarketDecodesRustStringifiedArrays(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]any{
+			"id":            "123",
+			"outcomePrices": `["0.55","0.45"]`,
+			"outcomes":      `["Yes","No"]`,
+			"clobTokenIds":  `["11","22"]`,
+		})
+	})
+
+	market, err := client.GetMarket(t.Context(), "123")
+	if err != nil {
+		t.Fatalf("GetMarket: %v", err)
+	}
+	if len(market.OutcomePrices) != 2 || market.OutcomePrices[0] != "0.55" {
+		t.Fatalf("outcome prices = %#v", market.OutcomePrices)
+	}
+	if len(market.Outcomes) != 2 || market.Outcomes[1] != "No" {
+		t.Fatalf("outcomes = %#v", market.Outcomes)
+	}
+	if len(market.CLOBTokenIDs) != 2 || market.CLOBTokenIDs[1] != "22" {
+		t.Fatalf("clob token ids = %#v", market.CLOBTokenIDs)
+	}
+}
+
 func TestClient_GetMarketBySlug(t *testing.T) {
 	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/markets/slug/will-it-rain" {
@@ -720,18 +745,23 @@ func TestClient_IterMarketClarifications(t *testing.T) {
 			t.Errorf("path = %s", r.URL.Path)
 		}
 		call++
-		if call == 1 {
+		if got := r.URL.Query().Get("limit"); got != "2" {
+			t.Errorf("limit = %q, want 2", got)
+		}
+		switch call {
+		case 1:
 			writeJSON(w, []MarketClarification{
 				{ID: 1, MarketID: FlexibleID("100")},
 				{ID: 2, MarketID: FlexibleID("101")},
-				{ID: 3, MarketID: FlexibleID("102")},
 			})
-			return
+		case 2:
+			writeJSON(w, []MarketClarification{
+				{ID: 3, MarketID: FlexibleID("102")},
+				{ID: 4, MarketID: FlexibleID("103")},
+			})
+		default:
+			writeJSON(w, []MarketClarification{})
 		}
-		writeJSON(w, []MarketClarification{
-			{ID: 3, MarketID: FlexibleID("102")},
-			{ID: 4, MarketID: FlexibleID("103")},
-		})
 	})
 
 	var ids []int
@@ -1016,8 +1046,12 @@ func TestClient_GetComments(t *testing.T) {
 		if r.URL.Path != "/comments" {
 			t.Errorf("path = %s", r.URL.Path)
 		}
-		if r.URL.Query().Get("condition_id") != "cid-1" {
-			t.Errorf("condition_id = %q", r.URL.Query().Get("condition_id"))
+		q := r.URL.Query()
+		if q.Get("parent_entity_type") != "market" {
+			t.Errorf("parent_entity_type = %q", q.Get("parent_entity_type"))
+		}
+		if q.Get("parent_entity_id") != "cid-1" {
+			t.Errorf("parent_entity_id = %q", q.Get("parent_entity_id"))
 		}
 		writeJSON(w, []Comment{{ID: "c-1", Body: "hello"}})
 	})

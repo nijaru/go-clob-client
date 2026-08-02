@@ -20,9 +20,9 @@ func (c *AuthenticatedClient) CreateReadonlyAPIKey(
 
 // GetReadonlyAPIKeys lists readonly API keys for the authenticated account.
 func (c *AuthenticatedClient) GetReadonlyAPIKeys(ctx context.Context) ([]string, error) {
-	var out []string
+	var out ReadonlyAPIKeysResponse
 	err := c.getJSON(ctx, getReadonlyAPIKeysEndpoint, nil, polyhttp.AuthL2, &out)
-	return out, err
+	return out.ReadonlyAPIKeys, err
 }
 
 // DeleteReadonlyAPIKey deletes a readonly API key by value.
@@ -58,7 +58,7 @@ func (c *AuthenticatedClient) DeleteNotifications(
 		query.Set("ids", strings.Join(params.IDs, ","))
 	}
 
-	return c.deleteJSONQuery(ctx, notificationsEndpoint, query, params.IDs, polyhttp.AuthL2, nil)
+	return c.deleteJSONQuery(ctx, notificationsEndpoint, query, nil, polyhttp.AuthL2, nil)
 }
 
 // GetBalanceAllowance returns the current balance and allowances for the requested asset.

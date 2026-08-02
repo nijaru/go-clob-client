@@ -1,8 +1,12 @@
 package clob
 
 import (
+	"bytes"
+	stdjson "encoding/json" //nolint:depguard // timestamp normalization accepts heterogeneous API values
 	"fmt"
 	"strconv"
+	"strings"
+	"time"
 
 	json "github.com/go-json-experiment/json"
 	"github.com/go-json-experiment/json/jsontext"
@@ -69,19 +73,32 @@ func (r *PostOrderResponse) UnmarshalJSON(data []byte) error {
 		r.ErrorMsg = val
 	}
 
-	if val, ok, err := decodeStringAlias(fields, "rebate_estimated", "rebateEstimated"); err != nil {
+	if val, ok, err := decodeStringAlias(
+		fields,
+		"rebate_estimated",
+		"rebateEstimated",
+	); err != nil {
 		return err
 	} else if ok {
 		r.RebateEstimated = val
 	}
 
-	if val, ok, err := decodeStringSliceAlias(fields, "transactionsHashes", "transaction_hashes"); err != nil {
+	if val, ok, err := decodeStringSliceAlias(
+		fields,
+		"transactionsHashes",
+		"transaction_hashes",
+	); err != nil {
 		return err
 	} else if ok {
 		r.TransactionsHashes = val
 	}
 
-	if val, ok, err := decodeStringSliceAlias(fields, "trade_ids", "tradeIds", "tradeIDs"); err != nil {
+	if val, ok, err := decodeStringSliceAlias(
+		fields,
+		"trade_ids",
+		"tradeIds",
+		"tradeIDs",
+	); err != nil {
 		return err
 	} else if ok {
 		r.TradeIDs = val
@@ -195,21 +212,138 @@ type CreateOrderOptions struct {
 
 // OpenOrder is an authenticated open-order record.
 type OpenOrder struct {
-	ID              string   `json:"id"`
-	Status          string   `json:"status"`
-	Owner           string   `json:"owner"`
-	MakerAddress    string   `json:"maker_address"`
-	Market          string   `json:"market"`
-	AssetID         string   `json:"asset_id"`
-	Side            string   `json:"side"`
-	OriginalSize    string   `json:"original_size"`
-	SizeMatched     string   `json:"size_matched"`
-	Price           string   `json:"price"`
-	AssociateTrades []string `json:"associate_trades"`
-	Outcome         string   `json:"outcome"`
-	CreatedAt       int64    `json:"created_at"`
-	Expiration      string   `json:"expiration"`
-	OrderType       string   `json:"order_type"`
+	ID              string     `json:"id"`
+	Status          string     `json:"status"`
+	Owner           string     `json:"owner"`
+	MakerAddress    string     `json:"maker_address"`
+	Market          string     `json:"market"`
+	AssetID         string     `json:"asset_id"`
+	Side            string     `json:"side"`
+	OriginalSize    string     `json:"original_size"`
+	SizeMatched     string     `json:"size_matched"`
+	Price           string     `json:"price"`
+	AssociateTrades []string   `json:"associate_trades"`
+	Outcome         string     `json:"outcome"`
+	CreatedAt       int64      `json:"created_at"`
+	Expiration      string     `json:"expiration"`
+	OrderType       string     `json:"order_type"`
+	CreatedAtTime   *time.Time `json:"-"`
+	ExpirationTime  *time.Time `json:"-"`
+}
+
+// UnmarshalJSON normalizes the timestamp representations used by the CLOB
+// API. Rust exposes these as DateTime values; live responses may contain
+// epoch seconds, epoch milliseconds, ISO-8601 strings, or numeric zero.
+func (o *OpenOrder) UnmarshalJSON(data []byte) error {
+	var fields map[string]stdjson.RawMessage
+	if err := stdjson.Unmarshal(data, &fields); err != nil {
+		return fmt.Errorf("open order: decode object: %w", err)
+	}
+
+	createdAt, createdRaw, err := normalizeOrderTimestamp(fields["created_at"], false, false)
+	if err != nil {
+		return fmt.Errorf("open order created_at: %w", err)
+	}
+	if createdRaw != nil {
+		fields["created_at"] = createdRaw
+	}
+
+	expiration, expirationRaw, err := normalizeOrderTimestamp(fields["expiration"], true, true)
+	if err != nil {
+		return fmt.Errorf("open order expiration: %w", err)
+	}
+	if expirationRaw != nil {
+		fields["expiration"] = expirationRaw
+	}
+
+	o.CreatedAtTime = nil
+	o.ExpirationTime = nil
+
+	normalized, err := stdjson.Marshal(fields)
+	if err != nil {
+		return fmt.Errorf("open order: encode normalized object: %w", err)
+	}
+	type openOrderAlias OpenOrder
+	if err := stdjson.Unmarshal(normalized, (*openOrderAlias)(o)); err != nil {
+		return fmt.Errorf("open order: decode normalized object: %w", err)
+	}
+	if createdAt != nil {
+		o.CreatedAtTime = createdAt
+	}
+	if expiration != nil {
+		o.ExpirationTime = expiration
+	}
+	return nil
+}
+
+func normalizeOrderTimestamp(
+	raw stdjson.RawMessage,
+	zeroMeansNone bool,
+	outputString bool,
+) (*time.Time, stdjson.RawMessage, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return nil, nil, nil
+	}
+
+	var text string
+	if err := stdjson.Unmarshal(trimmed, &text); err == nil {
+		text = strings.TrimSpace(text)
+		if text == "" {
+			if outputString {
+				return nil, mustJSONText(text), nil
+			}
+			return nil, stdjson.RawMessage("0"), nil
+		}
+		if moment, ok := parseUnixMoment(text); ok {
+			seconds := moment.Unix()
+			if zeroMeansNone && seconds == 0 {
+				return nil, mustJSONText("0"), nil
+			}
+			return &moment, normalizedTimestampJSON(seconds, text, outputString), nil
+		}
+		var moment time.Time
+		if err := stdjson.Unmarshal(trimmed, &moment); err != nil {
+			return nil, nil, fmt.Errorf("expected epoch timestamp or RFC3339 string: %w", err)
+		}
+		return &moment, normalizedTimestampJSON(moment.Unix(), text, outputString), nil
+	}
+
+	var number stdjson.Number
+	if err := stdjson.Unmarshal(trimmed, &number); err != nil {
+		return nil, nil, fmt.Errorf("expected epoch timestamp or string: %w", err)
+	}
+	moment, ok := parseUnixMoment(number.String())
+	if !ok {
+		return nil, nil, fmt.Errorf("invalid epoch timestamp %q", number)
+	}
+	seconds := moment.Unix()
+	if zeroMeansNone && seconds == 0 {
+		return nil, mustJSONText("0"), nil
+	}
+	return &moment, normalizedTimestampJSON(seconds, number.String(), outputString), nil
+}
+
+func normalizedTimestampJSON(seconds int64, original string, outputString bool) stdjson.RawMessage {
+	if outputString {
+		return mustJSONText(original)
+	}
+	return stdjson.RawMessage(strconv.FormatInt(seconds, 10))
+}
+
+func parseUnixMoment(value string) (time.Time, bool) {
+	number, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return time.Time{}, false
+	}
+	if number >= 1_000_000_000_000 || number <= -1_000_000_000_000 {
+		return time.UnixMilli(number).UTC(), true
+	}
+	return time.Unix(number, 0).UTC(), true
+}
+
+func mustJSONText(value string) stdjson.RawMessage {
+	return stdjson.RawMessage(strconv.Quote(value))
 }
 
 // MakerOrder is the maker-side component of a trade.

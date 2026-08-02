@@ -861,6 +861,27 @@ func TestPositionsQueryParams(t *testing.T) {
 	}
 }
 
+func TestActivityQueryIncludesAccountActivities(t *testing.T) {
+	srv, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("type"); got != "DEPOSIT,TAKER_REBATE" {
+			t.Errorf("type = %q", got)
+		}
+		if got := r.URL.Query().Get("excludeDepositsWithdrawals"); got != "false" {
+			t.Errorf("excludeDepositsWithdrawals = %q, want false", got)
+		}
+		writeTestJSON(t, w, []Activity{})
+	})
+	defer srv.Close()
+
+	_, err := client.GetActivity(t.Context(), ActivityParams{
+		User:          "0x123",
+		ActivityTypes: []ActivityType{ActivityTypeDeposit, ActivityTypeTakerRebate},
+	})
+	if err != nil {
+		t.Fatalf("GetActivity: %v", err)
+	}
+}
+
 func TestActivityQueryParams(t *testing.T) {
 	srv, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()

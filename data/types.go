@@ -27,6 +27,9 @@ const (
 	ActivityTypeYield          ActivityType = "YIELD"
 	ActivityTypeMakerRebate    ActivityType = "MAKER_REBATE"
 	ActivityTypeReferralReward ActivityType = "REFERRAL_REWARD"
+	ActivityTypeDeposit        ActivityType = "DEPOSIT"
+	ActivityTypeWithdrawal     ActivityType = "WITHDRAWAL"
+	ActivityTypeTakerRebate    ActivityType = "TAKER_REBATE"
 )
 
 type PositionSortBy string

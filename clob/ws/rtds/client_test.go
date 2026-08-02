@@ -13,6 +13,46 @@ import (
 	"github.com/coder/websocket"
 )
 
+func TestRTDSNumericPricePayloads(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		topic string
+		want  string
+	}{
+		{name: "crypto", topic: "crypto_prices", want: "3456.78"},
+		{name: "chainlink", topic: "crypto_prices_chainlink", want: "3456.78"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var message RtdsMessage
+			if err := json.Unmarshal(
+				[]byte(
+					`{"topic":"`+tc.topic+`","type":"update","timestamp":1,"payload":{"symbol":"eth/usd","timestamp":2,"value":3456.78}}`,
+				),
+				&message,
+			); err != nil {
+				t.Fatalf("decode RTDS message: %v", err)
+			}
+			if tc.topic == "crypto_prices" {
+				price, err := message.AsCryptoPrice()
+				if err != nil {
+					t.Fatalf("decode crypto price: %v", err)
+				}
+				if price.Value != tc.want {
+					t.Fatalf("value = %q, want %q", price.Value, tc.want)
+				}
+				return
+			}
+			price, err := message.AsChainlinkPrice()
+			if err != nil {
+				t.Fatalf("decode Chainlink price: %v", err)
+			}
+			if price.Value != tc.want {
+				t.Fatalf("value = %q, want %q", price.Value, tc.want)
+			}
+		})
+	}
+}
+
 func TestRTDSClient(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
