@@ -2,6 +2,7 @@ package clob
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -30,6 +31,71 @@ func TestAsAuthenticated(t *testing.T) {
 
 	if authClient == nil {
 		t.Fatal("expected client to be authenticated")
+	}
+}
+
+func TestHeartbeatLifecycle(t *testing.T) {
+	t.Parallel()
+
+	heartbeats := make(chan struct{}, 4)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != heartbeatsEndpoint || r.Method != http.MethodPost {
+			http.NotFound(w, r)
+			return
+		}
+		heartbeats <- struct{}{}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"heartbeat_id":"hb-1"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewAuthenticatedClient(Config{
+		Host:                 server.URL,
+		PrivateKey:           "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
+		Credentials:          &Credentials{Key: "key", Secret: "c2VjcmV0", Passphrase: "pass"},
+		HeartbeatInterval:    10 * time.Millisecond,
+		DisableAutoHeartbeat: true,
+	})
+	if err != nil {
+		t.Fatalf("new authenticated client: %v", err)
+	}
+	if client.HeartbeatsActive() {
+		t.Fatal("heartbeats unexpectedly active")
+	}
+
+	if err := client.StartHeartbeats(); err != nil {
+		t.Fatalf("start heartbeats: %v", err)
+	}
+	if !client.HeartbeatsActive() {
+		t.Fatal("heartbeats should be active")
+	}
+	if !errors.Is(client.StartHeartbeats(), ErrHeartbeatsActive) {
+		t.Fatal("second start should return ErrHeartbeatsActive")
+	}
+
+	select {
+	case <-heartbeats:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for automatic heartbeat")
+	}
+	if err := client.StopHeartbeats(t.Context()); err != nil {
+		t.Fatalf("stop heartbeats: %v", err)
+	}
+	if client.HeartbeatsActive() {
+		t.Fatal("heartbeats should be inactive after stop")
+	}
+
+	if err := client.StartHeartbeats(); err != nil {
+		t.Fatalf("restart heartbeats: %v", err)
+	}
+	if err := client.Close(); err != nil {
+		t.Fatalf("close client: %v", err)
+	}
+	if client.HeartbeatsActive() {
+		t.Fatal("heartbeats should be inactive after close")
+	}
+	if !errors.Is(client.StartHeartbeats(), ErrHeartbeatsClosed) {
+		t.Fatal("start after close should return ErrHeartbeatsClosed")
 	}
 }
 

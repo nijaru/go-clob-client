@@ -37,6 +37,39 @@ func TestGetOrderBookHash(t *testing.T) {
 	}
 }
 
+func TestGetOrderBookSHA256HashMatchesRust(t *testing.T) {
+	t.Parallel()
+
+	client, err := NewClient(Config{})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+
+	hash, err := client.GetOrderBookSHA256Hash(OrderBookSummary{
+		Market:    "0x00000000000000000000000000000000000000000000000000000000aabbcc00",
+		AssetID:   "15871154585880608648532107628464183779895785213830018178010423617714102767076",
+		Timestamp: "123456789",
+		Bids: []OrderSummary{
+			{Price: "0.3", Size: "100"},
+			{Price: "0.4", Size: "100"},
+		},
+		Asks: []OrderSummary{
+			{Price: "0.6", Size: "100"},
+			{Price: "0.7", Size: "100"},
+		},
+		MinOrderSize: "100",
+		TickSize:     "0.01",
+		NegRisk:      false,
+	})
+	if err != nil {
+		t.Fatalf("get SHA-256 orderbook hash: %v", err)
+	}
+	want := "03196cc4f520d81c0748b4f042f2096441d160e8ef5eac4f0378cb5bd80fd183"
+	if hash != want {
+		t.Fatalf("SHA-256 hash = %s, want %s", hash, want)
+	}
+}
+
 func TestGetOrderBookHashEmptyBook(t *testing.T) {
 	t.Parallel()
 

@@ -10,6 +10,26 @@ func BinaryPartition() []*big.Int {
 	return []*big.Int{big.NewInt(1), big.NewInt(2)}
 }
 
+// ConditionIDRequest contains the inputs for a provider-backed condition ID read.
+type ConditionIDRequest struct {
+	Oracle           common.Address
+	QuestionID       common.Hash
+	OutcomeSlotCount *big.Int
+}
+
+// CollectionIDRequest contains the inputs for a provider-backed collection ID read.
+type CollectionIDRequest struct {
+	ParentCollectionID common.Hash
+	ConditionID        common.Hash
+	IndexSet           *big.Int
+}
+
+// PositionIDRequest contains the inputs for a provider-backed position ID read.
+type PositionIDRequest struct {
+	CollateralToken common.Address
+	CollectionID    common.Hash
+}
+
 type SplitPositionRequest struct {
 	CollateralToken    common.Address
 	ParentCollectionID common.Hash

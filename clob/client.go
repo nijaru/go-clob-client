@@ -64,7 +64,8 @@ type AuthenticatedClient struct {
 	heartbeatInterval time.Duration
 	heartbeatCancel   context.CancelFunc
 	heartbeatDone     chan struct{}
-	shutdownOnce      sync.Once
+	heartbeatMu       sync.Mutex
+	heartbeatClosed   bool
 }
 
 // NewClient creates a read-only CLOB client. No private key or credentials are required.
@@ -110,7 +111,9 @@ func NewAuthenticatedClient(config Config) (*AuthenticatedClient, error) {
 	}
 	base.http.Headers = authClient.addAuthHeaders
 	if !config.DisableAutoHeartbeat {
-		authClient.startHeartbeatLoop()
+		if err := authClient.StartHeartbeats(); err != nil {
+			return nil, err
+		}
 	}
 	return authClient, nil
 }
@@ -297,68 +300,147 @@ func (c *AuthenticatedClient) NewAuthenticatedRTDSClient() *rtds.Client {
 }
 
 // Close stops any background tasks (like heartbeats) and cleans up resources.
-// It blocks until the heartbeat goroutine exits. To stop with a deadline, use Shutdown.
+// It blocks until the heartbeat loop exits.
 func (c *AuthenticatedClient) Close() error {
-	c.shutdownOnce.Do(func() {
-		if c.heartbeatCancel != nil {
-			c.heartbeatCancel()
-		}
-	})
-	if c.heartbeatDone != nil {
-		<-c.heartbeatDone
+	return c.closeHeartbeats(context.Background())
+}
+
+// Shutdown gracefully stops background tasks with a context deadline. It
+// returns ctx.Err() if the heartbeat loop does not stop before the deadline.
+func (c *AuthenticatedClient) Shutdown(ctx context.Context) error {
+	return c.closeHeartbeats(ctx)
+}
+
+var (
+	// ErrHeartbeatsActive indicates that an automatic heartbeat loop is already running.
+	ErrHeartbeatsActive = errors.New("heartbeats already active")
+	// ErrHeartbeatsClosed indicates that the client has been closed and cannot restart heartbeats.
+	ErrHeartbeatsClosed = errors.New("authenticated client is closed")
+)
+
+// HeartbeatsActive reports whether the automatic heartbeat loop is running.
+func (c *AuthenticatedClient) HeartbeatsActive() bool {
+	c.heartbeatMu.Lock()
+	defer c.heartbeatMu.Unlock()
+	return c.heartbeatCancel != nil
+}
+
+// StartHeartbeats starts automatic heartbeat posting at the configured interval.
+// It returns ErrHeartbeatsActive when a loop is already running.
+func (c *AuthenticatedClient) StartHeartbeats() error {
+	c.heartbeatMu.Lock()
+	if c.heartbeatClosed {
+		c.heartbeatMu.Unlock()
+		return ErrHeartbeatsClosed
 	}
+	if c.heartbeatCancel != nil {
+		c.heartbeatMu.Unlock()
+		return ErrHeartbeatsActive
+	}
+	if c.heartbeatInterval <= 0 {
+		c.heartbeatInterval = 5 * time.Second
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	interval := c.heartbeatInterval
+	c.heartbeatCancel = cancel
+	c.heartbeatDone = done
+	c.heartbeatMu.Unlock()
+
+	go c.runHeartbeatLoop(ctx, done, interval)
 	return nil
 }
 
-// Shutdown gracefully stops background tasks with a context deadline.
-// It signals the heartbeat goroutine to stop and waits for it to exit.
-// Returns ctx.Err() if the deadline passes before the goroutine stops.
-// Safe to call multiple times; only the first call sends the stop signal.
-func (c *AuthenticatedClient) Shutdown(ctx context.Context) error {
-	c.shutdownOnce.Do(func() {
-		if c.heartbeatCancel != nil {
-			c.heartbeatCancel()
-		}
-	})
-	if c.heartbeatDone == nil {
+// StopHeartbeats stops automatic heartbeat posting and waits for the loop to
+// exit. An optional context supplies a deadline; without one it waits without
+// a deadline. Stopping is reversible until Close or Shutdown is called.
+func (c *AuthenticatedClient) StopHeartbeats(contexts ...context.Context) error {
+	ctx := context.Background()
+	if len(contexts) > 0 && contexts[0] != nil {
+		ctx = contexts[0]
+	}
+	if len(contexts) > 1 {
+		return fmt.Errorf("stop heartbeats: at most one context is allowed")
+	}
+
+	c.heartbeatMu.Lock()
+	cancel := c.heartbeatCancel
+	done := c.heartbeatDone
+	c.heartbeatMu.Unlock()
+	if cancel == nil || done == nil {
 		return nil
 	}
+	cancel()
+
 	select {
-	case <-c.heartbeatDone:
+	case <-done:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
 	}
 }
 
-func (c *AuthenticatedClient) startHeartbeatLoop() {
-	if c.heartbeatInterval == 0 {
-		c.heartbeatInterval = 5 * time.Second
+// closeHeartbeats permanently closes the heartbeat lifecycle and waits for any
+// active loop to terminate.
+func (c *AuthenticatedClient) closeHeartbeats(ctx context.Context) error {
+	c.heartbeatMu.Lock()
+	c.heartbeatClosed = true
+	cancel := c.heartbeatCancel
+	done := c.heartbeatDone
+	c.heartbeatMu.Unlock()
+	if cancel == nil || done == nil {
+		return nil
 	}
+	cancel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	c.heartbeatCancel = cancel
-	c.heartbeatDone = make(chan struct{})
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
 
-	go func() {
-		defer close(c.heartbeatDone)
-		ticker := time.NewTicker(c.heartbeatInterval)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				resp, err := c.PostHeartbeat(ctx, c.heartbeatID)
-				if err != nil {
-					slog.Warn("heartbeat failed", "err", err)
-				} else {
-					c.heartbeatID = resp.HeartbeatID
-				}
-			}
+func (c *AuthenticatedClient) runHeartbeatLoop(
+	ctx context.Context,
+	done chan struct{},
+	interval time.Duration,
+) {
+	defer func() {
+		c.heartbeatMu.Lock()
+		if c.heartbeatDone == done {
+			c.heartbeatCancel = nil
+			c.heartbeatDone = nil
 		}
+		c.heartbeatMu.Unlock()
+		close(done)
 	}()
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			c.heartbeatMu.Lock()
+			heartbeatID := c.heartbeatID
+			c.heartbeatMu.Unlock()
+
+			resp, err := c.PostHeartbeat(ctx, heartbeatID)
+			if err != nil {
+				slog.Warn("heartbeat failed", "err", err)
+				continue
+			}
+
+			c.heartbeatMu.Lock()
+			if c.heartbeatDone == done {
+				c.heartbeatID = resp.HeartbeatID
+			}
+			c.heartbeatMu.Unlock()
+		}
+	}
 }
 
 // ClearTickSizeCache removes the cached tick size, negative risk flag, and fee rate for a specific token.
