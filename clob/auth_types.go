@@ -32,12 +32,15 @@ func (r builderAPIKeyRaw) credentials() Credentials {
 	}
 }
 
-// WSAuth contains the derived credentials for authenticated websocket subscriptions.
+// WSAuth contains the raw credentials for authenticated CLOB websocket
+// subscriptions. Unlike HTTP L2 auth, the websocket user channel does not
+// use an HMAC timestamp/signature envelope.
 type WSAuth struct {
 	Key        string `json:"apiKey"`
+	Secret     string `json:"secret"`
 	Passphrase string `json:"passphrase"`
-	Timestamp  string `json:"timestamp"`
-	Signature  string `json:"signature"`
+	Timestamp  string `json:"timestamp,omitempty"`
+	Signature  string `json:"signature,omitempty"`
 }
 
 // APIKeysResponse is the response payload for listing API keys.

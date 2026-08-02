@@ -4,7 +4,40 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	json "github.com/go-json-experiment/json"
 )
+
+func TestRewardsDecodeRustNumericFields(t *testing.T) {
+	t.Parallel()
+
+	var reward MarketReward
+	if err := json.Unmarshal([]byte(`{
+		"condition_id":"cond-1",
+		"market_competitiveness":0.05,
+		"rewards_config":[{"id":"1","total_days":10,"rate_per_day":"1.25","total_rewards":"400.0"}]
+	}`), &reward); err != nil {
+		t.Fatalf("decode reward: %v", err)
+	}
+	if reward.MarketCompetitiveness != "0.05" {
+		t.Fatalf("market competitiveness = %q", reward.MarketCompetitiveness)
+	}
+	if len(reward.RewardsConfig) != 1 || reward.RewardsConfig[0].TotalDays != "10" {
+		t.Fatalf("rewards config = %#v", reward.RewardsConfig)
+	}
+}
+
+func TestRewardsPercentagesDecodeRustNumbers(t *testing.T) {
+	t.Parallel()
+
+	var percentages RewardsPercentages
+	if err := json.Unmarshal([]byte(`{"cond-1":0.25,"cond-2":"0.5"}`), &percentages); err != nil {
+		t.Fatalf("decode reward percentages: %v", err)
+	}
+	if percentages["cond-1"] != "0.25" || percentages["cond-2"] != "0.5" {
+		t.Fatalf("percentages = %#v", percentages)
+	}
+}
 
 func TestRewardsPaginationHelpers(t *testing.T) {
 	t.Parallel()

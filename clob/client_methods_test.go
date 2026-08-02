@@ -299,14 +299,14 @@ func TestDeriveWSAuth(t *testing.T) {
 	if auth.Key != "my-key" {
 		t.Errorf("key = %q, want %q", auth.Key, "my-key")
 	}
+	if auth.Secret != "c2VjcmV0" {
+		t.Errorf("secret = %q, want %q", auth.Secret, "c2VjcmV0")
+	}
 	if auth.Passphrase != "my-pass" {
 		t.Errorf("passphrase = %q, want %q", auth.Passphrase, "my-pass")
 	}
-	if auth.Timestamp == "" {
-		t.Error("timestamp should not be empty")
-	}
-	if auth.Signature == "" {
-		t.Error("signature should not be empty")
+	if auth.Timestamp != "" || auth.Signature != "" {
+		t.Errorf("unexpected HTTP auth fields: timestamp=%q signature=%q", auth.Timestamp, auth.Signature)
 	}
 }
 

@@ -12,6 +12,24 @@ import (
 	json "github.com/go-json-experiment/json"
 )
 
+func TestBuilderTradeErrorAliases(t *testing.T) {
+	t.Parallel()
+
+	for _, fixture := range []string{
+		`{"id":"trade-1","errMsg":"builder failed"}`,
+		`{"id":"trade-1","err_msg":"builder failed"}`,
+		`{"id":"trade-1","error":"builder failed"}`,
+	} {
+		var trade BuilderTrade
+		if err := json.Unmarshal([]byte(fixture), &trade); err != nil {
+			t.Fatalf("decode builder trade %s: %v", fixture, err)
+		}
+		if trade.Error != "builder failed" {
+			t.Fatalf("fixture %s decoded error %q", fixture, trade.Error)
+		}
+	}
+}
+
 func TestLocalBuilderAuthHeaders(t *testing.T) {
 	t.Parallel()
 
@@ -275,11 +293,14 @@ func TestBuilderAndHeartbeatEndpoints(t *testing.T) {
 			}
 			w.WriteHeader(http.StatusOK)
 		case http.MethodGet + " " + builderTradesEndpoint:
-			if r.Header.Get("POLY_BUILDER_API_KEY") != "builder-key" {
-				t.Fatalf("missing builder api key header on builder trades")
+			if r.URL.Query().Get("builder_code") != "0xbuilder-code" {
+				t.Fatalf("missing builder code query: %q", r.URL.Query().Get("builder_code"))
 			}
-			if r.Header.Get("POLY_API_KEY") != "" {
-				t.Fatalf("expected builder trades to omit L2 headers")
+			if r.Header.Get("POLY_API_KEY") != "api-key" {
+				t.Fatalf("missing L2 api key header on builder trades")
+			}
+			if r.Header.Get("POLY_BUILDER_API_KEY") != "" {
+				t.Fatalf("expected builder trades to omit builder-only headers")
 			}
 			switch r.URL.Query().Get("next_cursor") {
 			case initialCursor:
@@ -401,7 +422,8 @@ func TestBuilderAndHeartbeatEndpoints(t *testing.T) {
 		t.Fatalf("revoke builder api key: %v", err)
 	}
 
-	builderTradesPage, err := client.GetBuilderTradesPage(t.Context(), TradeParams{}, "")
+	builderTradeParams := TradeParams{BuilderCode: "0xbuilder-code"}
+	builderTradesPage, err := client.GetBuilderTradesPage(t.Context(), builderTradeParams, "")
 	if err != nil {
 		t.Fatalf("get builder trades page: %v", err)
 	}
@@ -409,7 +431,7 @@ func TestBuilderAndHeartbeatEndpoints(t *testing.T) {
 		t.Fatalf("unexpected builder trades page: %+v", builderTradesPage)
 	}
 
-	builderTrades, err := client.GetBuilderTrades(t.Context(), TradeParams{})
+	builderTrades, err := client.GetBuilderTrades(t.Context(), builderTradeParams)
 	if err != nil {
 		t.Fatalf("get builder trades: %v", err)
 	}

@@ -23,6 +23,7 @@ const (
 	EventTypeBook           EventType = "book"
 	EventTypePriceChange    EventType = "price_change"
 	EventTypeTickSizeChange EventType = "tick_size_change"
+	EventTypeMidpoint       EventType = "midpoint"
 	EventTypeLastTradePrice EventType = "last_trade_price"
 	EventTypeOrder          EventType = "order"
 	EventTypeTrade          EventType = "trade"
@@ -38,6 +39,7 @@ const (
 //	case *BookEvent:           ...
 //	case *PriceChangeEvent:    ...
 //	case *TickSizeChangeEvent: ...
+//	case *MidpointEvent:       ...
 //	case *LastTradePriceEvent: ...
 //	case *OrderEvent:          ...
 //	case *TradeEvent:          ...
@@ -52,6 +54,7 @@ type Event interface {
 func (*BookEvent) isEvent()           {}
 func (*PriceChangeEvent) isEvent()    {}
 func (*TickSizeChangeEvent) isEvent() {}
+func (*MidpointEvent) isEvent()       {}
 func (*LastTradePriceEvent) isEvent() {}
 func (*OrderEvent) isEvent()          {}
 func (*TradeEvent) isEvent()          {}
@@ -61,10 +64,11 @@ func (*MarketResolvedEvent) isEvent() {}
 
 // UserSubscription is the message sent to subscribe to user updates.
 type UserSubscription struct {
-	Type      Channel     `json:"type"`
-	Auth      clob.WSAuth `json:"auth"`
-	Markets   []string    `json:"markets,omitzero"`
-	Operation string      `json:"operation,omitzero"`
+	Type        Channel     `json:"type"`
+	Auth        clob.WSAuth `json:"auth"`
+	Markets     []string    `json:"markets,omitzero"`
+	Operation   string      `json:"operation,omitzero"`
+	InitialDump bool        `json:"initial_dump,omitzero"`
 }
 
 // MarketSubscription is the message sent to subscribe to market updates.
@@ -132,6 +136,17 @@ type TickSizeChangeEvent struct {
 	OldTickSize clob.TickSize `json:"old_tick_size"`
 	NewTickSize clob.TickSize `json:"new_tick_size"`
 	Timestamp   string        `json:"timestamp"`
+}
+
+// MidpointEvent is derived from the best bid and ask in a book snapshot.
+// It is emitted for assets subscribed with SubscribeMidpoints; the server does
+// not send a separate midpoint event on the market WebSocket.
+type MidpointEvent struct {
+	BaseEvent
+	AssetID   string `json:"asset_id"`
+	Market    string `json:"market"`
+	Midpoint  string `json:"midpoint"`
+	Timestamp string `json:"timestamp"`
 }
 
 // LastTradePriceEvent is emitted for every trade execution.

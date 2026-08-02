@@ -449,12 +449,12 @@ func (c *Client) GetClobMarket(
 
 // GetFeeInfo returns V2 fee parameters (rate + exponent) for a token.
 func (c *Client) GetFeeInfo(ctx context.Context, tokenID string) (*FeeInfo, error) {
-	resp, err := c.GetClobMarket(ctx, tokenID)
+	resp, err := c.getClobMarketForToken(ctx, tokenID)
 	if err != nil {
 		return nil, err
 	}
 	if resp.FeeDetails == nil {
-		return nil, fmt.Errorf("no fee details for token %s", tokenID)
+		return &FeeInfo{}, nil
 	}
 	return &FeeInfo{
 		Rate:     resp.FeeDetails.Rate,
@@ -466,7 +466,7 @@ func (c *Client) GetFeeInfo(ctx context.Context, tokenID string) (*FeeInfo, erro
 // It mirrors the Rust SDK's fee_exponent(): on legacy or fee-free markets it
 // returns 0 rather than an error.
 func (c *Client) GetFeeExponent(ctx context.Context, tokenID string) (uint32, error) {
-	market, err := c.GetClobMarket(ctx, tokenID)
+	market, err := c.getClobMarketForToken(ctx, tokenID)
 	if err != nil {
 		return 0, err
 	}
@@ -474,6 +474,17 @@ func (c *Client) GetFeeExponent(ctx context.Context, tokenID string) (uint32, er
 		return 0, nil
 	}
 	return market.FeeDetails.Exponent, nil
+}
+
+func (c *Client) getClobMarketForToken(
+	ctx context.Context,
+	tokenID string,
+) (*ClobMarketInfoResponse, error) {
+	market, err := c.GetMarketByToken(ctx, tokenID)
+	if err != nil {
+		return nil, fmt.Errorf("resolve token %s to market: %w", tokenID, err)
+	}
+	return c.GetClobMarket(ctx, market.ConditionID)
 }
 
 // GetBuilderFeeRate returns the maker and taker fee rates for a builder code.

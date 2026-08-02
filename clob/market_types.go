@@ -1,6 +1,11 @@
 package clob
 
-import "github.com/quagmt/udecimal"
+import (
+	stdjson "encoding/json" //nolint:depguard // compact CLOB market wire decoding
+	"fmt"
+
+	"github.com/quagmt/udecimal"
+)
 
 // Market is the typed response for a full market record.
 type Market struct {
@@ -127,9 +132,88 @@ type ClobMarketInfoResponse struct {
 	Tokens       []ClobMarketToken `json:"t"`
 }
 
+// UnmarshalJSON accepts the compact Rust/server wire shape, including numeric
+// tick and minimum-size values.
+func (r *ClobMarketInfoResponse) UnmarshalJSON(data []byte) error {
+	var wire struct {
+		ConditionID  string             `json:"c"`
+		MinTickSize  stdjson.RawMessage `json:"mts"`
+		MinOrderSize stdjson.RawMessage `json:"mos"`
+		NegRisk      bool               `json:"nr"`
+		FeeDetails   *FeeDetails        `json:"fd"`
+		Tokens       []ClobMarketToken  `json:"t"`
+	}
+	if err := stdjson.Unmarshal(data, &wire); err != nil {
+		return fmt.Errorf("clob market: decode object: %w", err)
+	}
+	minTickSize, err := decodeStringOrNumber(wire.MinTickSize)
+	if err != nil {
+		return fmt.Errorf("clob market mts: %w", err)
+	}
+	minOrderSize, err := decodeStringOrNumber(wire.MinOrderSize)
+	if err != nil {
+		return fmt.Errorf("clob market mos: %w", err)
+	}
+	*r = ClobMarketInfoResponse{
+		ConditionID:  wire.ConditionID,
+		MinTickSize:  minTickSize,
+		MinOrderSize: minOrderSize,
+		NegRisk:      wire.NegRisk,
+		FeeDetails:   wire.FeeDetails,
+		Tokens:       wire.Tokens,
+	}
+	return nil
+}
+
 // ClobMarketToken is a token entry in the /clob-markets response.
 type ClobMarketToken struct {
-	TokenID string `json:"token_id"`
+	TokenID string `json:"t"`
+	Outcome string `json:"o"`
+}
+
+// UnmarshalJSON accepts both compact server keys and the older long token key.
+func (t *ClobMarketToken) UnmarshalJSON(data []byte) error {
+	var fields map[string]stdjson.RawMessage
+	if err := stdjson.Unmarshal(data, &fields); err != nil {
+		return fmt.Errorf("clob market token: decode object: %w", err)
+	}
+	tokenID, err := decodeStringOrNumber(firstRaw(fields, "t", "token_id"))
+	if err != nil {
+		return fmt.Errorf("clob market token id: %w", err)
+	}
+	outcome, err := decodeStringOrNumber(firstRaw(fields, "o", "outcome"))
+	if err != nil {
+		return fmt.Errorf("clob market token outcome: %w", err)
+	}
+	*t = ClobMarketToken{TokenID: tokenID, Outcome: outcome}
+	return nil
+}
+
+func firstRaw(fields map[string]stdjson.RawMessage, keys ...string) stdjson.RawMessage {
+	for _, key := range keys {
+		if value, ok := fields[key]; ok {
+			return value
+		}
+	}
+	return nil
+}
+
+func decodeStringOrNumber(raw stdjson.RawMessage) (string, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return "", nil
+	}
+	var text string
+	if err := stdjson.Unmarshal(raw, &text); err == nil {
+		return text, nil
+	}
+	var number stdjson.Number
+	if err := stdjson.Unmarshal(raw, &number); err != nil {
+		return "", err
+	}
+	if number.String() == "" {
+		return "", fmt.Errorf("empty number")
+	}
+	return number.String(), nil
 }
 
 // BuilderFeeRateResponse reports the maker and taker fee rates for a builder code.

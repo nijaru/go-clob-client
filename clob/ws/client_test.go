@@ -12,7 +12,6 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/nijaru/go-clob-client/clob"
-	"github.com/nijaru/go-clob-client/internal/polyauth"
 )
 
 func TestHandleMessageBookEvent(t *testing.T) {
@@ -55,6 +54,40 @@ func TestHandleMessageBookEvent(t *testing.T) {
 	}
 }
 
+func TestMidpointDerivedFromBookEvent(t *testing.T) {
+	t.Parallel()
+
+	c := NewClient("")
+	c.recordSubscription(newMarketSubscription(channelTypeMidpoints, []string{"asset-mid"}, true, false))
+
+	c.handleMessage(t.Context(), []byte(`{"event_type":"book","market":"market-mid","asset_id":"asset-mid","bids":[{"price":"0.45","size":"10"}],"asks":[{"price":"0.55","size":"12"}],"timestamp":"1710000000000"}`))
+
+	select {
+	case event := <-c.Events():
+		if _, ok := event.(*BookEvent); !ok {
+			t.Fatalf("first event = %T, want *BookEvent", event)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for book event")
+	}
+
+	select {
+	case event := <-c.Events():
+		midpoint, ok := event.(*MidpointEvent)
+		if !ok {
+			t.Fatalf("second event = %T, want *MidpointEvent", event)
+		}
+		if midpoint.AssetID != "asset-mid" || midpoint.Market != "market-mid" || midpoint.Midpoint != "0.5" {
+			t.Fatalf("midpoint = %+v", midpoint)
+		}
+		if midpoint.Timestamp != "1710000000000" {
+			t.Fatalf("timestamp = %q", midpoint.Timestamp)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for midpoint event")
+	}
+}
+
 func TestHandleMessageBookEventSingleObjectCompatibility(t *testing.T) {
 	t.Parallel()
 
@@ -75,6 +108,29 @@ func TestHandleMessageBookEventSingleObjectCompatibility(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for event")
+	}
+}
+
+func TestMidpointSkipsIncompleteBook(t *testing.T) {
+	t.Parallel()
+
+	c := NewClient("")
+	c.recordSubscription(newMarketSubscription(channelTypeMidpoints, []string{"asset-empty"}, true, false))
+	c.handleMessage(t.Context(), []byte(`{"event_type":"book","asset_id":"asset-empty","bids":[],"asks":[],"timestamp":"1"}`))
+
+	select {
+	case event := <-c.Events():
+		if _, ok := event.(*BookEvent); !ok {
+			t.Fatalf("event = %T, want *BookEvent", event)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for book event")
+	}
+
+	select {
+	case event := <-c.Events():
+		t.Fatalf("unexpected derived event: %#v", event)
+	case <-time.After(50 * time.Millisecond):
 	}
 }
 
@@ -603,24 +659,18 @@ func TestUserSubscriptionsRefcountAndScopedUnsubscribe(t *testing.T) {
 	if got := messageStrings(msg["markets"]); len(got) != 1 || got[0] != "market-1" {
 		t.Fatalf("markets = %#v, want [market-1]", got)
 	}
+	if got := msg["operation"]; got != "subscribe" {
+		t.Fatalf("operation = %v, want subscribe", got)
+	}
+	if got := msg["initial_dump"]; got != true {
+		t.Fatalf("initial_dump = %v, want true", got)
+	}
 	auth, ok := msg["auth"].(map[string]any)
 	if !ok {
 		t.Fatalf("auth = %#v, want object", msg["auth"])
 	}
-	timestampText, ok := auth["timestamp"].(string)
-	if !ok {
-		t.Fatalf("auth timestamp = %#v, want string", auth["timestamp"])
-	}
-	timestamp, err := strconv.ParseInt(timestampText, 10, 64)
-	if err != nil {
-		t.Fatalf("parse auth timestamp %q: %v", timestampText, err)
-	}
-	expectedSignature, err := polyauth.HMACSignature("secret", timestamp, "GET", "/ws/user", nil)
-	if err != nil {
-		t.Fatalf("derive expected signature: %v", err)
-	}
-	if got := auth["signature"]; got != expectedSignature {
-		t.Fatalf("auth signature = %v, want %v", got, expectedSignature)
+	if auth["apiKey"] != "key" || auth["secret"] != "secret" || auth["passphrase"] != "pass" {
+		t.Fatalf("auth = %#v, want raw credentials", auth)
 	}
 
 	if err := client.SubscribeTrades(t.Context(), []string{"market-1"}); err != nil {
@@ -654,7 +704,7 @@ func TestUserSubscriptionsRefcountAndScopedUnsubscribe(t *testing.T) {
 	}
 }
 
-func TestWithCredentialsDecodesSecret(t *testing.T) {
+func TestWithCredentialsKeepsRawSecret(t *testing.T) {
 	t.Parallel()
 
 	client := NewClient("").WithCredentials(clob.Credentials{
@@ -666,30 +716,8 @@ func TestWithCredentialsDecodesSecret(t *testing.T) {
 	if err != nil {
 		t.Fatalf("derive WS auth: %v", err)
 	}
-	timestamp, err := strconv.ParseInt(auth.Timestamp, 10, 64)
-	if err != nil {
-		t.Fatalf("parse auth timestamp %q: %v", auth.Timestamp, err)
-	}
-	expectedSignature, err := polyauth.HMACSignature("secret", timestamp, "GET", "/ws/user", nil)
-	if err != nil {
-		t.Fatalf("derive expected signature: %v", err)
-	}
-	if auth.Signature != expectedSignature {
-		t.Fatalf("auth signature = %q, want %q", auth.Signature, expectedSignature)
-	}
-}
-
-func TestInvalidWebSocketSecretReturnsError(t *testing.T) {
-	t.Parallel()
-
-	client := NewAuthenticatedClient("", clob.Credentials{
-		Key:        "key",
-		Secret:     "%%%",
-		Passphrase: "pass",
-	})
-	if _, err := client.deriveWSAuth(t.Context()); err == nil ||
-		!strings.Contains(err.Error(), "invalid API secret") {
-		t.Fatalf("derive WS auth error = %v, want invalid API secret error", err)
+	if auth.Key != "key" || auth.Secret != "secret" || auth.Passphrase != "pass" {
+		t.Fatalf("auth = %+v, want raw credentials", auth)
 	}
 }
 
@@ -716,11 +744,14 @@ func TestMarketSubscriptionsRefcountAndCustomFeatureFlag(t *testing.T) {
 	if got := messageStrings(msg["assets_ids"]); len(got) != 1 || got[0] != "asset-1" {
 		t.Fatalf("assets_ids = %#v, want [asset-1]", got)
 	}
+	if got := msg["operation"]; got != "subscribe" {
+		t.Fatalf("operation = %v, want subscribe", got)
+	}
 	if got := msg["initial_dump"]; got != true {
 		t.Fatalf("initial_dump = %v, want true", got)
 	}
-	if got := msg["custom_feature_enabled"]; got != true {
-		t.Fatalf("custom_feature_enabled = %v, want true", got)
+	if _, ok := msg["custom_feature_enabled"]; ok {
+		t.Fatalf("ordinary order-book subscription unexpectedly enabled custom features: %#v", msg)
 	}
 
 	if err := client.SubscribePrices(t.Context(), []string{"asset-1"}); err != nil {

@@ -82,3 +82,24 @@ type BuilderTrade struct {
 	CreatedAt       string `json:"createdAt,omitzero"`
 	UpdatedAt       string `json:"updatedAt,omitzero"`
 }
+
+// UnmarshalJSON accepts the official errMsg/err_msg failure fields as well
+// as the older error field.
+func (t *BuilderTrade) UnmarshalJSON(data []byte) error {
+	type alias BuilderTrade
+	var wire struct {
+		*alias
+		ErrMsg      string `json:"errMsg"`
+		ErrMsgSnake string `json:"err_msg"`
+	}
+	wire.alias = (*alias)(t)
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	if wire.ErrMsg != "" {
+		t.Error = wire.ErrMsg
+	} else if wire.ErrMsgSnake != "" {
+		t.Error = wire.ErrMsgSnake
+	}
+	return nil
+}

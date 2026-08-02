@@ -424,29 +424,29 @@ func (c *SignerClient) buildSignedMarketOrder(
 		adjustedAmount := amount
 		if userOrder.MaxSpend != nil && !userOrder.MaxSpend.IsZero() {
 			feeInfo, err := c.GetFeeInfo(ctx, userOrder.TokenID)
-			if err == nil {
-				builderTakerFeeRate := 0.0
-				if userOrder.BuilderCode != "" {
-					builderFee, err := c.GetBuilderFeeRate(ctx, userOrder.BuilderCode)
-					if err == nil {
-						builderTakerFeeRate = float64(
-							builderFee.BuilderTakerFeeRateBps,
-						) / 10000.0
-					}
-				}
-				adj, err := adjustMarketBuyAmount(
-					amount,
-					*userOrder.MaxSpend,
-					price,
-					feeInfo.Rate,
-					feeInfo.Exponent,
-					builderTakerFeeRate,
-				)
-				if err != nil {
-					return nil, err
-				}
-				adjustedAmount = adj
+			if err != nil {
+				return nil, fmt.Errorf("resolve V2 fee info: %w", err)
 			}
+			builderTakerFeeRate := 0.0
+			if userOrder.BuilderCode != "" {
+				builderFee, err := c.GetBuilderFeeRate(ctx, userOrder.BuilderCode)
+				if err != nil {
+					return nil, fmt.Errorf("resolve builder fee rate: %w", err)
+				}
+				builderTakerFeeRate = float64(builderFee.BuilderTakerFeeRateBps) / 10000.0
+			}
+			adj, err := adjustMarketBuyAmount(
+				amount,
+				*userOrder.MaxSpend,
+				price,
+				feeInfo.Rate,
+				feeInfo.Exponent,
+				builderTakerFeeRate,
+			)
+			if err != nil {
+				return nil, err
+			}
+			adjustedAmount = adj
 		}
 		// Preserve the full USDC amount; only the derived share quantity is quantized.
 		rawMakerAmount = adjustedAmount

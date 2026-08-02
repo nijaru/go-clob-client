@@ -436,27 +436,15 @@ func (c *AuthenticatedClient) GetBuilderTradesPage(
 	params TradeParams,
 	nextCursor string,
 ) (*Page[BuilderTrade], error) {
-	if c.builderAuth == nil {
-		return nil, fmt.Errorf("builder auth not configured")
-	}
-	headers, err := c.builderOnlyHeaders(ctx, http.MethodGet, builderTradesEndpoint, nil)
-	if err != nil {
-		return nil, err
+	if params.BuilderCode == "" {
+		return nil, fmt.Errorf("builder trades require TradeParams.BuilderCode")
 	}
 
 	query := tradesQuery(params, normalizedCursor(nextCursor))
+	query.Set("builder_code", params.BuilderCode)
 
 	var out Page[BuilderTrade]
-	err = c.doJSON(
-		ctx,
-		http.MethodGet,
-		builderTradesEndpoint,
-		query,
-		nil,
-		polyhttp.AuthNone,
-		&out,
-		headers,
-	)
+	err := c.getJSON(ctx, builderTradesEndpoint, query, polyhttp.AuthL2, &out)
 	return &out, err
 }
 

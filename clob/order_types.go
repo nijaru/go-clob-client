@@ -569,6 +569,8 @@ type TradeParams struct {
 	AssetID      string
 	Before       string
 	After        string
+	// BuilderCode scopes builder-trade queries to a builder identifier.
+	BuilderCode string
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface to handle

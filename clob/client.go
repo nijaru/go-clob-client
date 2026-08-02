@@ -8,7 +8,6 @@ import (
 	"maps"
 	"net/http"
 	"net/url"
-	"strconv"
 	"sync"
 	"time"
 
@@ -765,29 +764,18 @@ func (c *AuthenticatedClient) builderOnlyHeaders(
 	return c.builderHeaders(ctx, method, path, body, timestamp)
 }
 
-// DeriveWSAuth generates credentials for authenticated websocket subscriptions.
-func (c *AuthenticatedClient) DeriveWSAuth(ctx context.Context) (WSAuth, error) {
+// DeriveWSAuth returns the raw credentials required by the authenticated
+// CLOB websocket user channel.
+func (c *AuthenticatedClient) DeriveWSAuth(_ context.Context) (WSAuth, error) {
 	creds := c.credentials()
 	if creds == nil {
 		return WSAuth{}, fmt.Errorf("derive ws auth requires API credentials")
 	}
 
-	timestamp, err := c.timestamp(ctx)
-	if err != nil {
-		return WSAuth{}, err
-	}
-
-	// For the WS user channel, we use GET /ws/user as the signing path
-	signature, err := polyauth.HMACSignature(creds.Secret, timestamp, "GET", "/ws/user", nil)
-	if err != nil {
-		return WSAuth{}, err
-	}
-
 	return WSAuth{
 		Key:        creds.Key,
+		Secret:     creds.Secret,
 		Passphrase: creds.Passphrase,
-		Timestamp:  strconv.FormatInt(timestamp, 10),
-		Signature:  signature,
 	}, nil
 }
 
