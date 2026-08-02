@@ -59,10 +59,56 @@ type OutcomeToken struct {
 	Winner  bool   `json:"winner"`
 }
 
+// UnmarshalJSON accepts numeric or string token IDs and prices from reward and
+// market responses.
+func (t *OutcomeToken) UnmarshalJSON(data []byte) error {
+	var wire struct {
+		TokenID stdjson.RawMessage `json:"token_id"`
+		Outcome string             `json:"outcome"`
+		Price   stdjson.RawMessage `json:"price"`
+		Winner  bool               `json:"winner"`
+	}
+	if err := stdjson.Unmarshal(data, &wire); err != nil {
+		return fmt.Errorf("outcome token: decode object: %w", err)
+	}
+	tokenID, err := decodeStringOrNumber(wire.TokenID)
+	if err != nil {
+		return fmt.Errorf("outcome token id: %w", err)
+	}
+	price, err := decodeStringOrNumber(wire.Price)
+	if err != nil {
+		return fmt.Errorf("outcome token price: %w", err)
+	}
+	*t = OutcomeToken{
+		TokenID: tokenID,
+		Outcome: wire.Outcome,
+		Price:   price,
+		Winner:  wire.Winner,
+	}
+	return nil
+}
+
 // RewardRate is a reward rate entry embedded in market responses.
 type RewardRate struct {
 	AssetAddress     string `json:"asset_address"`
 	RewardsDailyRate string `json:"rewards_daily_rate"`
+}
+
+// UnmarshalJSON accepts numeric or string reward rates.
+func (r *RewardRate) UnmarshalJSON(data []byte) error {
+	var wire struct {
+		AssetAddress     string             `json:"asset_address"`
+		RewardsDailyRate stdjson.RawMessage `json:"rewards_daily_rate"`
+	}
+	if err := stdjson.Unmarshal(data, &wire); err != nil {
+		return fmt.Errorf("reward rate: decode object: %w", err)
+	}
+	rate, err := decodeStringOrNumber(wire.RewardsDailyRate)
+	if err != nil {
+		return fmt.Errorf("reward rate: %w", err)
+	}
+	*r = RewardRate{AssetAddress: wire.AssetAddress, RewardsDailyRate: rate}
+	return nil
 }
 
 // Rewards is the rewards summary embedded in market responses.
@@ -70,6 +116,28 @@ type Rewards struct {
 	Rates     []RewardRate `json:"rates"`
 	MinSize   string       `json:"min_size"`
 	MaxSpread string       `json:"max_spread"`
+}
+
+// UnmarshalJSON accepts numeric or string reward summary fields.
+func (r *Rewards) UnmarshalJSON(data []byte) error {
+	var wire struct {
+		Rates     []RewardRate       `json:"rates"`
+		MinSize   stdjson.RawMessage `json:"min_size"`
+		MaxSpread stdjson.RawMessage `json:"max_spread"`
+	}
+	if err := stdjson.Unmarshal(data, &wire); err != nil {
+		return fmt.Errorf("rewards: decode object: %w", err)
+	}
+	minSize, err := decodeStringOrNumber(wire.MinSize)
+	if err != nil {
+		return fmt.Errorf("rewards min size: %w", err)
+	}
+	maxSpread, err := decodeStringOrNumber(wire.MaxSpread)
+	if err != nil {
+		return fmt.Errorf("rewards max spread: %w", err)
+	}
+	*r = Rewards{Rates: wire.Rates, MinSize: minSize, MaxSpread: maxSpread}
+	return nil
 }
 
 // BookParams identifies a token whose order-book-derived values should be fetched.

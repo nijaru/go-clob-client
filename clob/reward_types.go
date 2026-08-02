@@ -71,25 +71,12 @@ type MarketRewardsConfig struct {
 	TotalDays    string `json:"total_days"`
 }
 
-// UnmarshalJSON accepts numeric or string total_days values from the rewards API.
+// UnmarshalJSON accepts numeric or string decimal fields from the rewards API.
 func (r *MarketRewardsConfig) UnmarshalJSON(data []byte) error {
-	var fields map[string]stdjson.RawMessage
-	if err := stdjson.Unmarshal(data, &fields); err != nil {
-		return fmt.Errorf("market rewards config: decode object: %w", err)
-	}
-	if raw, ok := fields["total_days"]; ok {
-		value, err := decodeStringOrNumber(raw)
-		if err != nil {
-			return fmt.Errorf("market rewards config total_days: %w", err)
-		}
-		fields["total_days"] = stdjson.RawMessage(strconv.Quote(value))
-	}
-	normalized, err := stdjson.Marshal(fields)
-	if err != nil {
-		return fmt.Errorf("market rewards config: encode object: %w", err)
-	}
 	type alias MarketRewardsConfig
-	return stdjson.Unmarshal(normalized, (*alias)(r))
+	return unmarshalNormalizedReward(data, (*alias)(r),
+		"id", "rate_per_day", "total_rewards", "total_days",
+	)
 }
 
 // Earning is an asset-specific earnings breakdown.
@@ -124,16 +111,20 @@ type MarketReward struct {
 // UnmarshalJSON accepts numeric Decimal fields emitted by the Rust-compatible
 // rewards endpoint while retaining Go's string representation.
 func (r *MarketReward) UnmarshalJSON(data []byte) error {
-	normalized, err := normalizeRewardStrings(data,
+	type alias MarketReward
+	return unmarshalNormalizedReward(data, (*alias)(r),
 		"rewards_max_spread",
 		"rewards_min_size",
 		"market_competitiveness",
 	)
+}
+
+func unmarshalNormalizedReward(data []byte, target any, keys ...string) error {
+	normalized, err := normalizeRewardStrings(data, keys...)
 	if err != nil {
 		return err
 	}
-	type alias MarketReward
-	return stdjson.Unmarshal(normalized, (*alias)(r))
+	return stdjson.Unmarshal(normalized, target)
 }
 
 func normalizeRewardStrings(data []byte, keys ...string) ([]byte, error) {
@@ -151,6 +142,47 @@ func normalizeRewardStrings(data []byte, keys ...string) ([]byte, error) {
 		}
 	}
 	return stdjson.Marshal(fields)
+}
+
+// UnmarshalJSON accepts numeric or string decimal fields from the rewards API.
+func (e *UserEarning) UnmarshalJSON(data []byte) error {
+	type alias UserEarning
+	return unmarshalNormalizedReward(data, (*alias)(e), "earnings", "asset_rate")
+}
+
+// UnmarshalJSON accepts numeric or string decimal fields from the rewards API.
+func (e *TotalUserEarning) UnmarshalJSON(data []byte) error {
+	type alias TotalUserEarning
+	return unmarshalNormalizedReward(data, (*alias)(e), "earnings", "asset_rate")
+}
+
+// UnmarshalJSON accepts numeric or string decimal fields from the rewards API.
+func (c *RewardsConfig) UnmarshalJSON(data []byte) error {
+	type alias RewardsConfig
+	return unmarshalNormalizedReward(data, (*alias)(c), "rate_per_day", "total_rewards")
+}
+
+// UnmarshalJSON accepts numeric or string decimal fields from the rewards API.
+func (e *Earning) UnmarshalJSON(data []byte) error {
+	type alias Earning
+	return unmarshalNormalizedReward(data, (*alias)(e), "earnings", "asset_rate")
+}
+
+// UnmarshalJSON accepts numeric or string decimal fields from the rewards API.
+func (r *CurrentReward) UnmarshalJSON(data []byte) error {
+	type alias CurrentReward
+	return unmarshalNormalizedReward(data, (*alias)(r),
+		"rewards_max_spread", "rewards_min_size",
+	)
+}
+
+// UnmarshalJSON accepts numeric or string decimal fields from the rewards API.
+func (r *UserRewardsEarning) UnmarshalJSON(data []byte) error {
+	type alias UserRewardsEarning
+	return unmarshalNormalizedReward(data, (*alias)(r),
+		"rewards_max_spread", "rewards_min_size", "market_competitiveness",
+		"earning_percentage",
+	)
 }
 
 // UserRewardsEarning is the user-facing reward-and-market earnings entry.
