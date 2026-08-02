@@ -261,7 +261,10 @@ func (c *Client) UnsubscribeOrderBook(ctx context.Context, assetIDs []string) er
 
 // SubscribeLastTradePrice subscribes to last trade price events for the given asset IDs.
 func (c *Client) SubscribeLastTradePrice(ctx context.Context, assetIDs []string) error {
-	return c.addAndSend(ctx, newMarketSubscription(channelTypeLastTradePrice, assetIDs, false, false))
+	return c.addAndSend(
+		ctx,
+		newMarketSubscription(channelTypeLastTradePrice, assetIDs, false, false),
+	)
 }
 
 // SubscribePrices subscribes to price change (incremental order book) events for the given asset IDs.
@@ -276,7 +279,10 @@ func (c *Client) UnsubscribePrices(ctx context.Context, assetIDs []string) error
 
 // SubscribeTickSizeChange subscribes to tick size change events for the given asset IDs.
 func (c *Client) SubscribeTickSizeChange(ctx context.Context, assetIDs []string) error {
-	return c.addAndSend(ctx, newMarketSubscription(channelTypeTickSizeChange, assetIDs, false, false))
+	return c.addAndSend(
+		ctx,
+		newMarketSubscription(channelTypeTickSizeChange, assetIDs, false, false),
+	)
 }
 
 // UnsubscribeTickSizeChange unsubscribes from tick size change events for the given asset IDs.
@@ -666,7 +672,8 @@ func (c *Client) rollbackRemovedSubscription(sub subscription) {
 
 func (c *Client) removeOneSubscriptionLocked(sub subscription) {
 	for idx, existing := range c.subs {
-		if existing.target != sub.target || existing.channelType != sub.channelType || existing.key != sub.key {
+		if existing.target != sub.target || existing.channelType != sub.channelType ||
+			existing.key != sub.key {
 			continue
 		}
 		c.subs = append(c.subs[:idx], c.subs[idx+1:]...)

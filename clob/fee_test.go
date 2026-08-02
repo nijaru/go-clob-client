@@ -39,7 +39,11 @@ func TestGetFeeExponent(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
 			case marketsByTokenEndpoint + "123":
-				_, _ = w.Write([]byte(`{"condition_id":"cid","primary_token_id":"123","secondary_token_id":"456"}`))
+				_, _ = w.Write(
+					[]byte(
+						`{"condition_id":"cid","primary_token_id":"123","secondary_token_id":"456"}`,
+					),
+				)
 			case clobMarketEndpoint + "/cid":
 				data, _ := json.Marshal(ClobMarketInfoResponse{
 					ConditionID: "cid",
@@ -69,7 +73,11 @@ func TestGetFeeExponent(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
 			case marketsByTokenEndpoint + "123":
-				_, _ = w.Write([]byte(`{"condition_id":"cid","primary_token_id":"123","secondary_token_id":"456"}`))
+				_, _ = w.Write(
+					[]byte(
+						`{"condition_id":"cid","primary_token_id":"123","secondary_token_id":"456"}`,
+					),
+				)
 			case clobMarketEndpoint + "/cid":
 				data, _ := json.Marshal(ClobMarketInfoResponse{ConditionID: "cid", FeeDetails: nil})
 				_, _ = w.Write(data)

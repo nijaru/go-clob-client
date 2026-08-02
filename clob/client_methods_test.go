@@ -306,7 +306,11 @@ func TestDeriveWSAuth(t *testing.T) {
 		t.Errorf("passphrase = %q, want %q", auth.Passphrase, "my-pass")
 	}
 	if auth.Timestamp != "" || auth.Signature != "" {
-		t.Errorf("unexpected HTTP auth fields: timestamp=%q signature=%q", auth.Timestamp, auth.Signature)
+		t.Errorf(
+			"unexpected HTTP auth fields: timestamp=%q signature=%q",
+			auth.Timestamp,
+			auth.Signature,
+		)
 	}
 }
 

@@ -39,7 +39,12 @@ func TestRewardsDecodeAllRustDecimalShapes(t *testing.T) {
 	}
 
 	var current CurrentReward
-	if err := json.Unmarshal([]byte(`{"rewards_max_spread":0.05,"rewards_min_size":10,"rewards_config":[{"rate_per_day":2,"total_rewards":5}]}`), &current); err != nil {
+	if err := json.Unmarshal(
+		[]byte(
+			`{"rewards_max_spread":0.05,"rewards_min_size":10,"rewards_config":[{"rate_per_day":2,"total_rewards":5}]}`,
+		),
+		&current,
+	); err != nil {
 		t.Fatalf("decode current reward: %v", err)
 	}
 	if current.RewardsMaxSpread != "0.05" || current.RewardsMinSize != "10" ||
@@ -48,7 +53,12 @@ func TestRewardsDecodeAllRustDecimalShapes(t *testing.T) {
 	}
 
 	var userReward UserRewardsEarning
-	if err := json.Unmarshal([]byte(`{"market_competitiveness":0.2,"earning_percentage":0.3,"earnings":[{"earnings":1,"asset_rate":0.4}],"tokens":[{"token_id":123,"price":0.5}]}`), &userReward); err != nil {
+	if err := json.Unmarshal(
+		[]byte(
+			`{"market_competitiveness":0.2,"earning_percentage":0.3,"earnings":[{"earnings":1,"asset_rate":0.4}],"tokens":[{"token_id":123,"price":0.5}]}`,
+		),
+		&userReward,
+	); err != nil {
 		t.Fatalf("decode user reward: %v", err)
 	}
 	if userReward.MarketCompetitiveness != "0.2" || userReward.EarningPercentage != "0.3" ||

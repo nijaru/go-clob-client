@@ -58,9 +58,16 @@ func TestMidpointDerivedFromBookEvent(t *testing.T) {
 	t.Parallel()
 
 	c := NewClient("")
-	c.recordSubscription(newMarketSubscription(channelTypeMidpoints, []string{"asset-mid"}, true, false))
+	c.recordSubscription(
+		newMarketSubscription(channelTypeMidpoints, []string{"asset-mid"}, true, false),
+	)
 
-	c.handleMessage(t.Context(), []byte(`{"event_type":"book","market":"market-mid","asset_id":"asset-mid","bids":[{"price":"0.45","size":"10"}],"asks":[{"price":"0.55","size":"12"}],"timestamp":"1710000000000"}`))
+	c.handleMessage(
+		t.Context(),
+		[]byte(
+			`{"event_type":"book","market":"market-mid","asset_id":"asset-mid","bids":[{"price":"0.45","size":"10"}],"asks":[{"price":"0.55","size":"12"}],"timestamp":"1710000000000"}`,
+		),
+	)
 
 	select {
 	case event := <-c.Events():
@@ -77,7 +84,8 @@ func TestMidpointDerivedFromBookEvent(t *testing.T) {
 		if !ok {
 			t.Fatalf("second event = %T, want *MidpointEvent", event)
 		}
-		if midpoint.AssetID != "asset-mid" || midpoint.Market != "market-mid" || midpoint.Midpoint != "0.5" {
+		if midpoint.AssetID != "asset-mid" || midpoint.Market != "market-mid" ||
+			midpoint.Midpoint != "0.5" {
 			t.Fatalf("midpoint = %+v", midpoint)
 		}
 		if midpoint.Timestamp != "1710000000000" {
@@ -115,8 +123,15 @@ func TestMidpointSkipsIncompleteBook(t *testing.T) {
 	t.Parallel()
 
 	c := NewClient("")
-	c.recordSubscription(newMarketSubscription(channelTypeMidpoints, []string{"asset-empty"}, true, false))
-	c.handleMessage(t.Context(), []byte(`{"event_type":"book","asset_id":"asset-empty","bids":[],"asks":[],"timestamp":"1"}`))
+	c.recordSubscription(
+		newMarketSubscription(channelTypeMidpoints, []string{"asset-empty"}, true, false),
+	)
+	c.handleMessage(
+		t.Context(),
+		[]byte(
+			`{"event_type":"book","asset_id":"asset-empty","bids":[],"asks":[],"timestamp":"1"}`,
+		),
+	)
 
 	select {
 	case event := <-c.Events():
@@ -344,7 +359,10 @@ func TestHandleMessageFullUserEventFields(t *testing.T) {
 
 func TestMarketEventAssetIDAlias(t *testing.T) {
 	var event NewMarketEvent
-	if err := json.Unmarshal([]byte(`{"event_type":"new_market","asset_ids":["a1"]}`), &event); err != nil {
+	if err := json.Unmarshal(
+		[]byte(`{"event_type":"new_market","asset_ids":["a1"]}`),
+		&event,
+	); err != nil {
 		t.Fatalf("unmarshal new market event: %v", err)
 	}
 	if len(event.AssetIDs) != 1 || event.AssetIDs[0] != "a1" {
