@@ -2,6 +2,7 @@ package data
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -245,6 +246,61 @@ func newTestServer(t *testing.T, handler http.HandlerFunc) (*httptest.Server, *C
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 	return srv, New(Config{Host: srv.URL})
+}
+
+func TestDataEndpointBounds(t *testing.T) {
+	t.Parallel()
+
+	client := New(Config{})
+	tests := []struct {
+		name string
+		call func() error
+	}{
+		{"positions offset", func() error {
+			_, err := client.GetPositions(t.Context(), PositionParams{Offset: 10_001})
+			return err
+		}},
+		{"closed positions offset", func() error {
+			_, err := client.GetClosedPositions(t.Context(), ClosedPositionParams{Offset: 100_001})
+			return err
+		}},
+		{"trades limit", func() error {
+			_, err := client.GetTrades(t.Context(), TradeParams{Limit: 10_001})
+			return err
+		}},
+		{"activity limit", func() error {
+			_, err := client.GetActivity(t.Context(), ActivityParams{Limit: 501})
+			return err
+		}},
+		{"holders min balance", func() error {
+			_, err := client.GetHolders(t.Context(), HoldersParams{MinBalance: 1_000_000})
+			return err
+		}},
+		{"leaderboard offset", func() error {
+			_, err := client.GetLeaderboard(t.Context(), LeaderboardParams{Offset: 1_001})
+			return err
+		}},
+		{"builder leaderboard limit", func() error {
+			_, err := client.GetBuilderLeaderboard(t.Context(), BuilderLeaderboardParams{Limit: 51})
+			return err
+		}},
+		{"market positions offset", func() error {
+			_, err := client.GetMarketPositions(t.Context(), MarketPositionParams{Offset: 10_001})
+			return err
+		}},
+		{"combo positions limit", func() error {
+			_, err := client.GetComboPositions(t.Context(), ComboPositionParams{Limit: 501})
+			return err
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var boundsErr *ParameterBoundsError
+			if err := tt.call(); !errors.As(err, &boundsErr) {
+				t.Fatalf("error = %v, want ParameterBoundsError", err)
+			}
+		})
+	}
 }
 
 func TestDataClient(t *testing.T) {
@@ -649,31 +705,18 @@ func TestDataClient(t *testing.T) {
 			}
 		})
 
-		t.Run("leaderboard direct limit clamp", func(t *testing.T) {
-			errCh := make(chan error, 1)
-			server := httptest.NewServer(
-				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if got := r.URL.Query().Get("limit"); got != "50" {
-						errCh <- fmt.Errorf("limit query = %q, want %q", got, "50")
-						return
-					}
-					w.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(w).Encode([]TraderLeaderboardEntry{})
-					errCh <- nil
-				}),
-			)
-			defer server.Close()
-
-			client := New(Config{Host: server.URL})
+		t.Run("leaderboard direct limit validation", func(t *testing.T) {
+			client := New(Config{})
 			_, err := client.GetLeaderboard(t.Context(), LeaderboardParams{
 				Category: LeaderboardCategoryOverall,
 				Limit:    100,
 			})
-			if err != nil {
-				t.Fatalf("GetLeaderboard: %v", err)
+			var boundsErr *ParameterBoundsError
+			if !errors.As(err, &boundsErr) {
+				t.Fatalf("expected ParameterBoundsError, got %v", err)
 			}
-			if err := <-errCh; err != nil {
-				t.Fatal(err)
+			if boundsErr.Parameter != "leaderboard.limit" {
+				t.Fatalf("parameter = %q, want leaderboard.limit", boundsErr.Parameter)
 			}
 		})
 	})

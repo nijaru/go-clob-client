@@ -12,6 +12,27 @@ import (
 	"github.com/quagmt/udecimal"
 )
 
+func TestRFQResponsePricesPreserveDecimalPrecision(t *testing.T) {
+	t.Parallel()
+
+	var response struct {
+		Requests []RFQRequest `json:"requests"`
+		Quotes   []RFQQuote   `json:"quotes"`
+	}
+	if err := json.Unmarshal([]byte(`{
+		"requests":[{"price":"0.123456789012345678901234567890"}],
+		"quotes":[{"price":0.987654321098765432109876543210}]
+	}`), &response); err != nil {
+		t.Fatalf("decode RFQ prices: %v", err)
+	}
+	if got := response.Requests[0].Price.String(); got != "0.123456789012345678901234567890" {
+		t.Fatalf("request price = %q", got)
+	}
+	if got := response.Quotes[0].Price.String(); got != "0.987654321098765432109876543210" {
+		t.Fatalf("quote price = %q", got)
+	}
+}
+
 func TestAcceptRFQQuoteMarshalJSON(t *testing.T) {
 	t.Parallel()
 
@@ -557,7 +578,7 @@ func TestGetRFQQuotes(t *testing.T) {
 				{
 					ID:        "quote-1",
 					RequestID: "req-1",
-					Price:     0.65,
+					Price:     "0.65",
 					State:     "OPEN",
 				},
 			},

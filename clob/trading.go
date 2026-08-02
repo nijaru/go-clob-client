@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
-	"math"
 	"math/big"
 	"strconv"
 	"time"
@@ -427,13 +426,16 @@ func (c *SignerClient) buildSignedMarketOrder(
 			if err != nil {
 				return nil, fmt.Errorf("resolve V2 fee info: %w", err)
 			}
-			builderTakerFeeRate := 0.0
+			builderTakerFeeRate := udecimal.Zero
 			if userOrder.BuilderCode != "" {
 				builderFee, err := c.GetBuilderFeeRate(ctx, userOrder.BuilderCode)
 				if err != nil {
 					return nil, fmt.Errorf("resolve builder fee rate: %w", err)
 				}
-				builderTakerFeeRate = float64(builderFee.BuilderTakerFeeRateBps) / 10000.0
+				builderTakerFeeRate = udecimal.MustFromInt64(
+					int64(builderFee.BuilderTakerFeeRateBps),
+					4,
+				)
 			}
 			adj, err := adjustMarketBuyAmount(
 				amount,
@@ -938,18 +940,16 @@ func adjustMarketBuyAmount(
 	amount udecimal.Decimal,
 	userBalance udecimal.Decimal,
 	price udecimal.Decimal,
-	feeRate float64,
+	feeRate udecimal.Decimal,
 	feeExponent uint32,
-	builderTakerFeeRate float64,
+	builderTakerFeeRate udecimal.Decimal,
 ) (udecimal.Decimal, error) {
 	one := udecimal.MustFromInt64(1, 0)
 	base := price.Mul(one.Sub(price))
 
-	// platform_fee_rate = rate * base^exponent
-	baseF64 := base.InexactFloat64()
-	expF64 := float64(feeExponent)
-	platformFeeRateVal := feeRate * math.Pow(baseF64, expF64)
-	platformFeeRate := udecimal.MustFromFloat64(platformFeeRateVal)
+	// platform_fee_rate = rate * base^exponent. Both inputs are exact
+	// decimals, so keep the computation in decimal arithmetic as well.
+	platformFeeRate := feeRate.Mul(base.PowInt(int(feeExponent)))
 
 	// platform_fee = amount / price * platform_fee_rate
 	amountDivPrice, err := amount.Div(price)
@@ -959,7 +959,7 @@ func adjustMarketBuyAmount(
 	platformFee := amountDivPrice.Mul(platformFeeRate)
 
 	// total_cost = amount + platform_fee + amount * builder_taker_fee_rate
-	builderFee := amount.Mul(udecimal.MustFromFloat64(builderTakerFeeRate))
+	builderFee := amount.Mul(builderTakerFeeRate)
 	totalCost := amount.Add(platformFee).Add(builderFee)
 
 	var raw udecimal.Decimal
@@ -970,7 +970,7 @@ func adjustMarketBuyAmount(
 		if err != nil {
 			return udecimal.Zero, err
 		}
-		divisor := one.Add(feeRateDivPrice).Add(udecimal.MustFromFloat64(builderTakerFeeRate))
+		divisor := one.Add(feeRateDivPrice).Add(builderTakerFeeRate)
 		val, err := userBalance.Div(divisor)
 		if err != nil {
 			return udecimal.Zero, err

@@ -350,6 +350,10 @@ func (c *Client) UnsubscribeTrades(ctx context.Context, markets []string) error 
 
 // addAndSend records the subscription and sends the subscribe message.
 func (c *Client) addAndSend(ctx context.Context, sub subscription) error {
+	if err := validateSubscriptionInput(sub.target, sub.assetIDsOrMarkets()); err != nil {
+		return err
+	}
+
 	sendSub, shouldSend := c.recordSubscription(sub)
 	if !shouldSend {
 		return nil
@@ -366,6 +370,9 @@ func (c *Client) removeAndSend(ctx context.Context, channelType string, ids []st
 	target := subscriptionTargetMarket
 	if isUserChannel(channelType) {
 		target = subscriptionTargetUser
+	}
+	if err := validateSubscriptionInput(target, ids); err != nil {
+		return err
 	}
 
 	removedSub, toUnsubscribe, ok := c.removeRecordedSubscription(target, channelType, ids)
@@ -495,6 +502,22 @@ func newUserSubscription(channelType string, markets []string) subscription {
 		key:         subscriptionKey(subscriptionTargetUser, markets),
 		markets:     markets,
 	}
+}
+
+func (s subscription) assetIDsOrMarkets() []string {
+	if s.target.isUser() {
+		return s.markets
+	}
+	return s.assetIDs
+}
+
+func validateSubscriptionInput(target subscriptionTarget, ids []string) error {
+	// Rust's market subscription manager rejects empty asset lists. Empty user
+	// market lists are meaningful: they subscribe to all user markets.
+	if !target.isUser() && len(ids) == 0 {
+		return errors.New("market websocket subscription requires at least one asset ID")
+	}
+	return nil
 }
 
 func subscriptionKey(target subscriptionTarget, ids []string) string {
@@ -891,14 +914,16 @@ func (c *Client) handleMessage(ctx context.Context, data []byte) {
 			return
 		}
 		for _, message := range messages {
-			c.handleEventMessage(ctx, message)
+			// Rust tolerates malformed/unknown elements inside a transport batch;
+			// report only malformed singleton frames to the asynchronous error path.
+			c.handleEventMessage(ctx, message, false)
 		}
 		return
 	}
-	c.handleEventMessage(ctx, trimmed)
+	c.handleEventMessage(ctx, trimmed, true)
 }
 
-func (c *Client) handleEventMessage(ctx context.Context, data []byte) {
+func (c *Client) handleEventMessage(ctx context.Context, data []byte, reportDecodeError bool) {
 	eventType, ok := extractEventType(data)
 	if !ok {
 		return
@@ -933,6 +958,9 @@ func (c *Client) handleEventMessage(ctx context.Context, data []byte) {
 	}
 
 	if err := json.Unmarshal(data, event); err != nil {
+		if reportDecodeError {
+			c.emitError(fmt.Errorf("decode %s event: %w", eventType, err))
+		}
 		return
 	}
 	c.emitEvent(ctx, event)
@@ -1006,6 +1034,13 @@ func (c *Client) emitEvent(ctx context.Context, event Event) {
 	select {
 	case c.events <- event:
 	case <-ctx.Done():
+	}
+}
+
+func (c *Client) emitError(err error) {
+	select {
+	case c.errs <- err:
+	default:
 	}
 }
 

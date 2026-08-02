@@ -68,17 +68,76 @@ func (c Config) normalized() Config {
 	return c
 }
 
-// GetMarket returns a single market by its ID.
-func (c *Client) GetMarket(ctx context.Context, id string) (*Market, error) {
+func marketOptionsQuery(options []MarketOptions) url.Values {
+	if len(options) == 0 {
+		return nil
+	}
+	query := url.Values{}
+	setBool(query, "include_tag", options[0].IncludeTag)
+	return query
+}
+
+func eventOptionsQuery(options []EventOptions) url.Values {
+	if len(options) == 0 {
+		return nil
+	}
+	query := url.Values{}
+	setBool(query, "include_chat", options[0].IncludeChat)
+	setBool(query, "include_template", options[0].IncludeTemplate)
+	return query
+}
+
+func seriesOptionsQuery(options []SeriesOptions) url.Values {
+	if len(options) == 0 {
+		return nil
+	}
+	query := url.Values{}
+	setBool(query, "include_chat", options[0].IncludeChat)
+	return query
+}
+
+func tagOptionsQuery(options []TagOptions) url.Values {
+	if len(options) == 0 {
+		return nil
+	}
+	query := url.Values{}
+	setBool(query, "include_template", options[0].IncludeTemplate)
+	return query
+}
+
+func relatedTagsOptionsQuery(options []RelatedTagsOptions) url.Values {
+	if len(options) == 0 {
+		return nil
+	}
+	query := url.Values{}
+	setBool(query, "omit_empty", options[0].OmitEmpty)
+	setString(query, "status", options[0].Status)
+	return query
+}
+
+// GetMarket returns a single market by its ID. Optional Rust-compatible
+// include_tag behavior can be supplied as the third argument.
+func (c *Client) GetMarket(
+	ctx context.Context,
+	id string,
+	options ...MarketOptions,
+) (*Market, error) {
 	var out Market
-	err := c.http.GetJSON(ctx, marketsEndpoint+"/"+id, nil, polyhttp.AuthNone, &out)
+	query := marketOptionsQuery(options)
+	err := c.http.GetJSON(ctx, marketsEndpoint+"/"+id, query, polyhttp.AuthNone, &out)
 	return &out, err
 }
 
-// GetMarketBySlug returns a single market by its slug.
-func (c *Client) GetMarketBySlug(ctx context.Context, slug string) (*Market, error) {
+// GetMarketBySlug returns a single market by its slug. Optional Rust-compatible
+// include_tag behavior can be supplied as the third argument.
+func (c *Client) GetMarketBySlug(
+	ctx context.Context,
+	slug string,
+	options ...MarketOptions,
+) (*Market, error) {
 	var out Market
-	err := c.http.GetJSON(ctx, marketsEndpoint+"/slug/"+slug, nil, polyhttp.AuthNone, &out)
+	query := marketOptionsQuery(options)
+	err := c.http.GetJSON(ctx, marketsEndpoint+"/slug/"+slug, query, polyhttp.AuthNone, &out)
 	return &out, err
 }
 
@@ -210,17 +269,29 @@ func (c *Client) IterMarkets(
 	}
 }
 
-// GetEvent returns a single event by its ID.
-func (c *Client) GetEvent(ctx context.Context, id string) (*Event, error) {
+// GetEvent returns a single event by its ID. Optional Rust-compatible
+// include_chat and include_template behavior can be supplied as the third argument.
+func (c *Client) GetEvent(
+	ctx context.Context,
+	id string,
+	options ...EventOptions,
+) (*Event, error) {
 	var out Event
-	err := c.http.GetJSON(ctx, eventsEndpoint+"/"+id, nil, polyhttp.AuthNone, &out)
+	query := eventOptionsQuery(options)
+	err := c.http.GetJSON(ctx, eventsEndpoint+"/"+id, query, polyhttp.AuthNone, &out)
 	return &out, err
 }
 
-// GetEventBySlug returns a single event by its slug.
-func (c *Client) GetEventBySlug(ctx context.Context, slug string) (*Event, error) {
+// GetEventBySlug returns a single event by its slug. Optional Rust-compatible
+// include_chat and include_template behavior can be supplied as the third argument.
+func (c *Client) GetEventBySlug(
+	ctx context.Context,
+	slug string,
+	options ...EventOptions,
+) (*Event, error) {
 	var out Event
-	err := c.http.GetJSON(ctx, eventsEndpoint+"/slug/"+slug, nil, polyhttp.AuthNone, &out)
+	query := eventOptionsQuery(options)
+	err := c.http.GetJSON(ctx, eventsEndpoint+"/slug/"+slug, query, polyhttp.AuthNone, &out)
 	return &out, err
 }
 
@@ -360,6 +431,8 @@ func (c *Client) Search(ctx context.Context, p SearchParams) (*SearchResults, er
 	setBool(query, "ascending", p.Ascending)
 	setBool(query, "cache", p.Cache)
 	setString(query, "events_status", p.EventsStatus)
+	setInt(query, "limit_per_type", p.LimitPerType)
+	setInt(query, "page", p.Page)
 	for _, tag := range p.EventsTag {
 		query.Add("events_tag", tag)
 	}
@@ -381,41 +454,74 @@ func (c *Client) Search(ctx context.Context, p SearchParams) (*SearchResults, er
 	return &out, err
 }
 
-// GetSeries returns a single series by its ID.
-func (c *Client) GetSeries(ctx context.Context, id string) (*Series, error) {
+// GetSeries returns a single series by its ID. Optional Rust-compatible
+// include_chat behavior can be supplied as the third argument.
+func (c *Client) GetSeries(
+	ctx context.Context,
+	id string,
+	options ...SeriesOptions,
+) (*Series, error) {
 	var out Series
-	err := c.http.GetJSON(ctx, seriesEndpoint+"/"+id, nil, polyhttp.AuthNone, &out)
+	query := seriesOptionsQuery(options)
+	err := c.http.GetJSON(ctx, seriesEndpoint+"/"+id, query, polyhttp.AuthNone, &out)
 	return &out, err
 }
 
-// GetTag returns a single tag by its ID.
-func (c *Client) GetTag(ctx context.Context, id string) (*Tag, error) {
+// GetTag returns a single tag by its ID. Optional Rust-compatible
+// include_template behavior can be supplied as the third argument.
+func (c *Client) GetTag(
+	ctx context.Context,
+	id string,
+	options ...TagOptions,
+) (*Tag, error) {
 	var out Tag
-	err := c.http.GetJSON(ctx, tagsEndpoint+"/"+id, nil, polyhttp.AuthNone, &out)
+	query := tagOptionsQuery(options)
+	err := c.http.GetJSON(ctx, tagsEndpoint+"/"+id, query, polyhttp.AuthNone, &out)
 	return &out, err
 }
 
-// GetTagBySlug returns a single tag by its slug.
-func (c *Client) GetTagBySlug(ctx context.Context, slug string) (*Tag, error) {
+// GetTagBySlug returns a single tag by its slug. Optional Rust-compatible
+// include_template behavior can be supplied as the third argument.
+func (c *Client) GetTagBySlug(
+	ctx context.Context,
+	slug string,
+	options ...TagOptions,
+) (*Tag, error) {
 	var out Tag
-	err := c.http.GetJSON(ctx, tagsEndpoint+"/slug/"+slug, nil, polyhttp.AuthNone, &out)
+	query := tagOptionsQuery(options)
+	err := c.http.GetJSON(ctx, tagsEndpoint+"/slug/"+slug, query, polyhttp.AuthNone, &out)
 	return &out, err
 }
 
-// GetRelatedTags returns tags related to a specific tag.
-func (c *Client) GetRelatedTags(ctx context.Context, tagID string) ([]RelatedTag, error) {
+// GetRelatedTags returns tags related to a specific tag. Optional Rust-compatible
+// omit_empty and status filters can be supplied as the third argument.
+func (c *Client) GetRelatedTags(
+	ctx context.Context,
+	tagID string,
+	options ...RelatedTagsOptions,
+) ([]RelatedTag, error) {
 	var out []RelatedTag
-	err := c.http.GetJSON(ctx, tagsEndpoint+"/"+tagID+"/related-tags", nil, polyhttp.AuthNone, &out)
+	err := c.http.GetJSON(
+		ctx,
+		tagsEndpoint+"/"+tagID+"/related-tags",
+		relatedTagsOptionsQuery(options),
+		polyhttp.AuthNone,
+		&out,
+	)
 	return out, err
 }
 
 // GetRelatedTagsBySlug returns tags related to a specific tag by slug.
-func (c *Client) GetRelatedTagsBySlug(ctx context.Context, slug string) ([]RelatedTag, error) {
+func (c *Client) GetRelatedTagsBySlug(
+	ctx context.Context,
+	slug string,
+	options ...RelatedTagsOptions,
+) ([]RelatedTag, error) {
 	var out []RelatedTag
 	err := c.http.GetJSON(
 		ctx,
 		tagsEndpoint+"/slug/"+slug+"/related-tags",
-		nil,
+		relatedTagsOptionsQuery(options),
 		polyhttp.AuthNone,
 		&out,
 	)
@@ -423,12 +529,16 @@ func (c *Client) GetRelatedTagsBySlug(ctx context.Context, slug string) ([]Relat
 }
 
 // GetTagsRelatedToTag returns tags related to a specific tag.
-func (c *Client) GetTagsRelatedToTag(ctx context.Context, tagID string) ([]Tag, error) {
+func (c *Client) GetTagsRelatedToTag(
+	ctx context.Context,
+	tagID string,
+	options ...RelatedTagsOptions,
+) ([]Tag, error) {
 	var out []Tag
 	err := c.http.GetJSON(
 		ctx,
 		tagsEndpoint+"/"+tagID+"/related-tags/tags",
-		nil,
+		relatedTagsOptionsQuery(options),
 		polyhttp.AuthNone,
 		&out,
 	)
@@ -436,12 +546,16 @@ func (c *Client) GetTagsRelatedToTag(ctx context.Context, tagID string) ([]Tag, 
 }
 
 // GetTagsRelatedToTagBySlug returns tags related to a specific tag by slug.
-func (c *Client) GetTagsRelatedToTagBySlug(ctx context.Context, slug string) ([]Tag, error) {
+func (c *Client) GetTagsRelatedToTagBySlug(
+	ctx context.Context,
+	slug string,
+	options ...RelatedTagsOptions,
+) ([]Tag, error) {
 	var out []Tag
 	err := c.http.GetJSON(
 		ctx,
 		tagsEndpoint+"/slug/"+slug+"/related-tags/tags",
-		nil,
+		relatedTagsOptionsQuery(options),
 		polyhttp.AuthNone,
 		&out,
 	)

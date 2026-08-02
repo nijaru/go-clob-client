@@ -30,13 +30,16 @@ func (c *Client) GetHealth(ctx context.Context) (*Health, error) {
 }
 
 func (c *Client) GetPositions(ctx context.Context, p PositionParams) ([]Position, error) {
+	if err := validatePagination("positions", p.Limit, p.Offset, 0, 500, 10_000); err != nil {
+		return nil, err
+	}
 	q := url.Values{}
 	q.Set("user", p.User)
 	p.Filter.appendQuery(q)
 	setString(q, "sizeThreshold", p.SizeThreshold)
 	setBool(q, "redeemable", p.Redeemable)
 	setBool(q, "mergeable", p.Mergeable)
-	setInt(q, "limit", boundedLimit(p.Limit, 500))
+	setInt(q, "limit", p.Limit)
 	setInt(q, "offset", p.Offset)
 	setString(q, "sortBy", p.SortBy)
 	setString(q, "sortDirection", p.SortDirection)
@@ -80,11 +83,14 @@ func (c *Client) GetClosedPositions(
 	ctx context.Context,
 	p ClosedPositionParams,
 ) ([]ClosedPosition, error) {
+	if err := validatePagination("closed_positions", p.Limit, p.Offset, 0, 50, 100_000); err != nil {
+		return nil, err
+	}
 	q := url.Values{}
 	q.Set("user", p.User)
 	p.Filter.appendQuery(q)
 	setString(q, "title", p.Title)
-	setInt(q, "limit", boundedLimit(p.Limit, 50))
+	setInt(q, "limit", p.Limit)
 	setInt(q, "offset", p.Offset)
 	setString(q, "sortBy", p.SortBy)
 	setString(q, "sortDirection", p.SortDirection)
@@ -137,10 +143,13 @@ func (c *Client) GetValue(ctx context.Context, user string, markets []string) ([
 }
 
 func (c *Client) GetTrades(ctx context.Context, p TradeParams) ([]Trade, error) {
+	if err := validatePagination("trades", p.Limit, p.Offset, 0, 10_000, 10_000); err != nil {
+		return nil, err
+	}
 	q := url.Values{}
 	setString(q, "user", p.User)
 	p.Filter.appendQuery(q)
-	setInt(q, "limit", boundedLimit(p.Limit, 10000))
+	setInt(q, "limit", p.Limit)
 	setInt(q, "offset", p.Offset)
 	setBool(q, "takerOnly", p.TakerOnly)
 	if p.TradeFilter != nil {
@@ -184,6 +193,15 @@ func (c *Client) IterTrades(ctx context.Context, p TradeParams) iter.Seq2[Trade,
 }
 
 func (c *Client) GetActivity(ctx context.Context, p ActivityParams) ([]Activity, error) {
+	if err := validatePagination("activity", p.Limit, p.Offset, 0, 500, 10_000); err != nil {
+		return nil, err
+	}
+	if p.Start < 0 {
+		return nil, &ParameterBoundsError{Parameter: "activity.start", Value: int(p.Start), Minimum: 0}
+	}
+	if p.End < 0 {
+		return nil, &ParameterBoundsError{Parameter: "activity.end", Value: int(p.End), Minimum: 0}
+	}
 	q := url.Values{}
 	q.Set("user", p.User)
 	p.Filter.appendQuery(q)
@@ -194,7 +212,7 @@ func (c *Client) GetActivity(ctx context.Context, p ActivityParams) ([]Activity,
 		// when the caller requests either account-level activity type.
 		q.Set("excludeDepositsWithdrawals", "false")
 	}
-	setInt(q, "limit", boundedLimit(p.Limit, 500))
+	setInt(q, "limit", p.Limit)
 	setInt(q, "offset", p.Offset)
 	setInt64(q, "start", p.Start)
 	setInt64(q, "end", p.End)
@@ -237,9 +255,15 @@ func (c *Client) IterActivity(ctx context.Context, p ActivityParams) iter.Seq2[A
 }
 
 func (c *Client) GetHolders(ctx context.Context, p HoldersParams) ([]MetaHolder, error) {
+	if err := validateBound("holders.limit", p.Limit, 0, 20); err != nil {
+		return nil, err
+	}
+	if err := validateBound("holders.min_balance", p.MinBalance, 0, 999_999); err != nil {
+		return nil, err
+	}
 	q := url.Values{}
 	setCommaList(q, "market", p.Markets)
-	setInt(q, "limit", boundedLimit(p.Limit, 20))
+	setInt(q, "limit", p.Limit)
 	setInt(q, "minBalance", p.MinBalance)
 
 	var out []MetaHolder
@@ -281,11 +305,14 @@ func (c *Client) GetLeaderboard(
 	ctx context.Context,
 	p LeaderboardParams,
 ) ([]TraderLeaderboardEntry, error) {
+	if err := validatePagination("leaderboard", p.Limit, p.Offset, 0, 50, 1_000); err != nil {
+		return nil, err
+	}
 	q := url.Values{}
 	setString(q, "category", p.Category)
 	setString(q, "timePeriod", p.TimePeriod)
 	setString(q, "orderBy", p.SortBy)
-	setInt(q, "limit", boundedLimit(p.Limit, 50))
+	setInt(q, "limit", p.Limit)
 	setInt(q, "offset", p.Offset)
 	setString(q, "user", p.User)
 	setString(q, "userName", p.UserName)
@@ -331,9 +358,12 @@ func (c *Client) GetBuilderLeaderboard(
 	ctx context.Context,
 	p BuilderLeaderboardParams,
 ) ([]BuilderLeaderboardEntry, error) {
+	if err := validatePagination("builder_leaderboard", p.Limit, p.Offset, 0, 50, 1_000); err != nil {
+		return nil, err
+	}
 	q := url.Values{}
 	setString(q, "timePeriod", p.TimePeriod)
-	setInt(q, "limit", boundedLimit(p.Limit, 50))
+	setInt(q, "limit", p.Limit)
 	setInt(q, "offset", p.Offset)
 
 	var out []BuilderLeaderboardEntry
@@ -395,13 +425,16 @@ func (c *Client) GetMarketPositions(
 	ctx context.Context,
 	p MarketPositionParams,
 ) ([]MetaMarketPosition, error) {
+	if err := validatePagination("market_positions", p.Limit, p.Offset, 0, 500, 10_000); err != nil {
+		return nil, err
+	}
 	q := url.Values{}
 	q.Set("market", p.Market)
 	setString(q, "user", p.User)
 	setString(q, "status", p.Status)
 	setString(q, "sortBy", p.SortBy)
 	setString(q, "sortDirection", p.SortDirection)
-	setInt(q, "limit", boundedLimit(p.Limit, 500))
+	setInt(q, "limit", p.Limit)
 	setInt(q, "offset", p.Offset)
 
 	var out []MetaMarketPosition
@@ -486,7 +519,7 @@ func comboPositionQuery(p ComboPositionParams) url.Values {
 	}
 	setInt64(q, "updated_after", p.UpdatedAfter)
 	setInt64(q, "updated_before", p.UpdatedBefore)
-	setInt(q, "limit", boundedLimit(p.Limit, 500))
+	setInt(q, "limit", p.Limit)
 	setString(q, "cursor", p.Cursor)
 	// Keep the pre-keyset filters usable for callers migrating from the
 	// previous unofficial implementation. Current official clients use the
@@ -501,6 +534,23 @@ func (c *Client) GetComboPositionsPage(
 	ctx context.Context,
 	p ComboPositionParams,
 ) (ComboPositionPage, error) {
+	if err := validatePagination("combo_positions", p.Limit, p.Offset, 0, 500, 10_000); err != nil {
+		return ComboPositionPage{}, err
+	}
+	if p.UpdatedAfter < 0 {
+		return ComboPositionPage{}, &ParameterBoundsError{
+			Parameter: "combo_positions.updated_after",
+			Value:     int(p.UpdatedAfter),
+			Minimum:   0,
+		}
+	}
+	if p.UpdatedBefore < 0 {
+		return ComboPositionPage{}, &ParameterBoundsError{
+			Parameter: "combo_positions.updated_before",
+			Value:     int(p.UpdatedBefore),
+			Minimum:   0,
+		}
+	}
 	var out comboPositionsResponse
 	if err := c.getJSON(ctx, comboPositionsEndpoint, comboPositionQuery(p), &out); err != nil {
 		return ComboPositionPage{}, err
@@ -562,7 +612,7 @@ func comboActivityQuery(p ComboActivityParams) url.Values {
 	} else {
 		setString(q, "market_id", p.ConditionID)
 	}
-	setInt(q, "limit", boundedLimit(p.Limit, 500))
+	setInt(q, "limit", p.Limit)
 	setString(q, "cursor", p.Cursor)
 	return q
 }
@@ -572,6 +622,9 @@ func (c *Client) GetComboActivityPage(
 	ctx context.Context,
 	p ComboActivityParams,
 ) (ComboActivityPage, error) {
+	if err := validateBound("combo_activity.limit", p.Limit, 0, 500); err != nil {
+		return ComboActivityPage{}, err
+	}
 	var out comboActivityResponse
 	if err := c.getJSON(ctx, comboActivityEndpoint, comboActivityQuery(p), &out); err != nil {
 		return ComboActivityPage{}, err

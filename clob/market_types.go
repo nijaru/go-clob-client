@@ -179,25 +179,34 @@ type NegRiskResponse struct {
 
 // FeeInfo holds V2 fee parameters for a market.
 // Fee is applied as: Rate * (price * (1 - price))^Exponent.
+//
+// Rate is kept as a decimal so fee calculations do not lose precision while
+// decoding the compact CLOB market response.
 type FeeInfo struct {
-	Rate     float64 `json:"rate"`
-	Exponent uint32  `json:"exponent"`
+	Rate     udecimal.Decimal `json:"rate"`
+	Exponent uint32           `json:"exponent"`
 }
 
 // FeeDetails is the wire format for fee info from /clob-markets.
 type FeeDetails struct {
-	Rate     float64 `json:"r"`
-	Exponent uint32  `json:"e"`
+	Rate      udecimal.Decimal `json:"r"`
+	Exponent  uint32           `json:"e"`
+	TakerOnly bool             `json:"to"`
 }
 
 // ClobMarketInfoResponse is the wire format for /clob-markets/{condition_id}.
 type ClobMarketInfoResponse struct {
-	ConditionID  string            `json:"c"`
-	MinTickSize  string            `json:"mts"`
-	MinOrderSize string            `json:"mos"`
-	NegRisk      bool              `json:"nr"`
-	FeeDetails   *FeeDetails       `json:"fd"`
-	Tokens       []ClobMarketToken `json:"t"`
+	ConditionID  string             `json:"c"`
+	MinTickSize  string             `json:"mts"`
+	MinOrderSize string             `json:"mos"`
+	NegRisk      bool               `json:"nr"`
+	FeeDetails   *FeeDetails        `json:"fd"`
+	Tokens       []*ClobMarketToken `json:"t"`
+	// MakerBaseFee and TakerBaseFee are legacy V1 fields retained by the
+	// endpoint for older markets. They are optional and unused by V2 settlement.
+	MakerBaseFee *udecimal.Decimal `json:"mbf"`
+	TakerBaseFee *udecimal.Decimal `json:"tbf"`
+	RFQEnabled   bool              `json:"rfqe"`
 }
 
 // UnmarshalJSON accepts the compact Rust/server wire shape, including numeric
@@ -209,7 +218,10 @@ func (r *ClobMarketInfoResponse) UnmarshalJSON(data []byte) error {
 		MinOrderSize stdjson.RawMessage `json:"mos"`
 		NegRisk      bool               `json:"nr"`
 		FeeDetails   *FeeDetails        `json:"fd"`
-		Tokens       []ClobMarketToken  `json:"t"`
+		Tokens       []*ClobMarketToken `json:"t"`
+		MakerBaseFee stdjson.RawMessage `json:"mbf"`
+		TakerBaseFee stdjson.RawMessage `json:"tbf"`
+		RFQEnabled   bool               `json:"rfqe"`
 	}
 	if err := stdjson.Unmarshal(data, &wire); err != nil {
 		return fmt.Errorf("clob market: decode object: %w", err)
@@ -222,6 +234,14 @@ func (r *ClobMarketInfoResponse) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("clob market mos: %w", err)
 	}
+	makerBaseFee, err := decodeOptionalDecimal(wire.MakerBaseFee)
+	if err != nil {
+		return fmt.Errorf("clob market mbf: %w", err)
+	}
+	takerBaseFee, err := decodeOptionalDecimal(wire.TakerBaseFee)
+	if err != nil {
+		return fmt.Errorf("clob market tbf: %w", err)
+	}
 	*r = ClobMarketInfoResponse{
 		ConditionID:  wire.ConditionID,
 		MinTickSize:  minTickSize,
@@ -229,8 +249,50 @@ func (r *ClobMarketInfoResponse) UnmarshalJSON(data []byte) error {
 		NegRisk:      wire.NegRisk,
 		FeeDetails:   wire.FeeDetails,
 		Tokens:       wire.Tokens,
+		MakerBaseFee: makerBaseFee,
+		TakerBaseFee: takerBaseFee,
+		RFQEnabled:   wire.RFQEnabled,
 	}
 	return nil
+}
+
+func (f *FeeDetails) UnmarshalJSON(data []byte) error {
+	var wire struct {
+		Rate      stdjson.RawMessage `json:"r"`
+		Exponent  uint32             `json:"e"`
+		TakerOnly bool               `json:"to"`
+	}
+	if err := stdjson.Unmarshal(data, &wire); err != nil {
+		return fmt.Errorf("fee details: decode object: %w", err)
+	}
+	rate, err := decodeDecimal(wire.Rate)
+	if err != nil {
+		return fmt.Errorf("fee details rate: %w", err)
+	}
+	*f = FeeDetails{Rate: rate, Exponent: wire.Exponent, TakerOnly: wire.TakerOnly}
+	return nil
+}
+
+func decodeDecimal(raw stdjson.RawMessage) (udecimal.Decimal, error) {
+	value, err := decodeStringOrNumber(raw)
+	if err != nil {
+		return udecimal.Zero, err
+	}
+	if value == "" {
+		return udecimal.Zero, nil
+	}
+	return udecimal.Parse(value)
+}
+
+func decodeOptionalDecimal(raw stdjson.RawMessage) (*udecimal.Decimal, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+	value, err := decodeDecimal(raw)
+	if err != nil {
+		return nil, err
+	}
+	return &value, nil
 }
 
 // ClobMarketToken is a token entry in the /clob-markets response.

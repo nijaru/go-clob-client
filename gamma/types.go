@@ -269,6 +269,44 @@ type Tag struct {
 	IsCarousel  bool      `json:"isCarousel"`
 }
 
+// MarketOptions controls optional fields on a single-market lookup.
+type MarketOptions struct {
+	IncludeTag *bool
+}
+
+// EventOptions controls optional fields on a single-event lookup.
+type EventOptions struct {
+	IncludeChat     *bool
+	IncludeTemplate *bool
+}
+
+// SeriesOptions controls optional fields on a single-series lookup.
+type SeriesOptions struct {
+	IncludeChat *bool
+}
+
+// TagOptions controls optional fields on a single-tag lookup.
+type TagOptions struct {
+	IncludeTemplate *bool
+}
+
+// RelatedTagsOptions controls optional filtering for related-tag lookups.
+type RelatedTagsOptions struct {
+	OmitEmpty *bool
+	Status    string
+}
+
+// RelatedTagsStatus identifies the status filter accepted by Gamma related-tag
+// endpoints. It is intentionally string-backed so new server values remain
+// forward-compatible.
+type RelatedTagsStatus string
+
+const (
+	RelatedTagsStatusActive   RelatedTagsStatus = "active"
+	RelatedTagsStatusArchived RelatedTagsStatus = "archived"
+	RelatedTagsStatusAll      RelatedTagsStatus = "all"
+)
+
 // TagFilterParams controls paginated tag listing.
 type TagFilterParams struct {
 	Ascending       *bool  `url:"ascending,omitzero"`
@@ -589,6 +627,8 @@ func (s SearchSort) IsValid() bool {
 // SearchParams defines parameters for Gamma public search.
 type SearchParams struct {
 	Query             string     `url:"q"`
+	LimitPerType      int        `url:"limit_per_type,omitzero"`
+	Page              int        `url:"page,omitzero"`
 	Ascending         *bool      `url:"ascending,omitzero"`
 	Cache             *bool      `url:"cache,omitzero"`
 	EventsStatus      string     `url:"events_status,omitzero"`

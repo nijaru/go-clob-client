@@ -14,7 +14,7 @@ func TestAdjustMarketBuyAmountBalanceSufficient(t *testing.T) {
 	balance := udecimal.MustParse("200")
 	price := udecimal.MustParse("0.5")
 
-	adjusted, err := adjustMarketBuyAmount(amount, balance, price, 0, 0, 0)
+	adjusted, err := adjustMarketBuyAmount(amount, balance, price, udecimal.Zero, 0, udecimal.Zero)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -31,7 +31,7 @@ func TestAdjustMarketBuyAmountBalanceInsufficient(t *testing.T) {
 	balance := udecimal.MustParse("50")
 	price := udecimal.MustParse("0.5")
 
-	adjusted, err := adjustMarketBuyAmount(amount, balance, price, 0, 0, 0)
+	adjusted, err := adjustMarketBuyAmount(amount, balance, price, udecimal.Zero, 0, udecimal.Zero)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -54,8 +54,9 @@ func TestAdjustMarketBuyAmountWithPlatformFee(t *testing.T) {
 	amount := udecimal.MustParse("100")
 	balance := udecimal.MustParse("101")
 	price := udecimal.MustParse("0.5")
+	feeRate := udecimal.MustParse("0.02")
 
-	adjusted, err := adjustMarketBuyAmount(amount, balance, price, 0.02, 1, 0)
+	adjusted, err := adjustMarketBuyAmount(amount, balance, price, feeRate, 1, udecimal.Zero)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -66,7 +67,7 @@ func TestAdjustMarketBuyAmountWithPlatformFee(t *testing.T) {
 
 	// Balance=100 < 101 → should shrink
 	balance2 := udecimal.MustParse("100")
-	adjusted2, err := adjustMarketBuyAmount(amount, balance2, price, 0.02, 1, 0)
+	adjusted2, err := adjustMarketBuyAmount(amount, balance2, price, feeRate, 1, udecimal.Zero)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -83,8 +84,9 @@ func TestAdjustMarketBuyAmountWithBuilderFee(t *testing.T) {
 	amount := udecimal.MustParse("100")
 	balance := udecimal.MustParse("101")
 	price := udecimal.MustParse("0.5")
+	builderFee := udecimal.MustParse("0.01")
 
-	adjusted, err := adjustMarketBuyAmount(amount, balance, price, 0, 0, 0.01)
+	adjusted, err := adjustMarketBuyAmount(amount, balance, price, udecimal.Zero, 0, builderFee)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -94,7 +96,7 @@ func TestAdjustMarketBuyAmountWithBuilderFee(t *testing.T) {
 
 	// Balance=100 < 101 → should shrink
 	balance2 := udecimal.MustParse("100")
-	adjusted2, err := adjustMarketBuyAmount(amount, balance2, price, 0, 0, 0.01)
+	adjusted2, err := adjustMarketBuyAmount(amount, balance2, price, udecimal.Zero, 0, builderFee)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -113,8 +115,10 @@ func TestAdjustMarketBuyAmountWithBothFees(t *testing.T) {
 	amount := udecimal.MustParse("100")
 	balance := udecimal.MustParse("102")
 	price := udecimal.MustParse("0.5")
+	feeRate := udecimal.MustParse("0.02")
+	builderFee := udecimal.MustParse("0.01")
 
-	adjusted, err := adjustMarketBuyAmount(amount, balance, price, 0.02, 1, 0.01)
+	adjusted, err := adjustMarketBuyAmount(amount, balance, price, feeRate, 1, builderFee)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -124,7 +128,7 @@ func TestAdjustMarketBuyAmountWithBothFees(t *testing.T) {
 
 	// Balance=101 < 102 → should shrink
 	balance2 := udecimal.MustParse("101")
-	adjusted2, err := adjustMarketBuyAmount(amount, balance2, price, 0.02, 1, 0.01)
+	adjusted2, err := adjustMarketBuyAmount(amount, balance2, price, feeRate, 1, builderFee)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -141,7 +145,7 @@ func TestAdjustMarketBuyAmountTruncatesTo6Decimals(t *testing.T) {
 	balance := udecimal.MustParse("200")
 	price := udecimal.MustParse("0.5")
 
-	adjusted, err := adjustMarketBuyAmount(amount, balance, price, 0, 0, 0)
+	adjusted, err := adjustMarketBuyAmount(amount, balance, price, udecimal.Zero, 0, udecimal.Zero)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -158,7 +162,7 @@ func TestAdjustMarketBuyAmountZeroBalanceErrors(t *testing.T) {
 	balance := udecimal.Zero
 	price := udecimal.MustParse("0.5")
 
-	_, err := adjustMarketBuyAmount(amount, balance, price, 0, 0, 0)
+	_, err := adjustMarketBuyAmount(amount, balance, price, udecimal.Zero, 0, udecimal.Zero)
 	if err == nil {
 		t.Fatal("expected error for zero balance")
 	}
@@ -173,7 +177,7 @@ func TestAdjustMarketBuyAmountMaxSpendSemantics(t *testing.T) {
 	maxSpend := udecimal.MustParse("10")
 	price := udecimal.MustParse("0.5")
 
-	adjusted, err := adjustMarketBuyAmount(amount, maxSpend, price, 0, 0, 0)
+	adjusted, err := adjustMarketBuyAmount(amount, maxSpend, price, udecimal.Zero, 0, udecimal.Zero)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -182,7 +186,14 @@ func TestAdjustMarketBuyAmountMaxSpendSemantics(t *testing.T) {
 	}
 
 	// With 1% builder fee: adjusted = 10 / (1 + 0.01) = 9.900990...
-	adjusted2, err := adjustMarketBuyAmount(amount, maxSpend, price, 0, 0, 0.01)
+	adjusted2, err := adjustMarketBuyAmount(
+		amount,
+		maxSpend,
+		price,
+		udecimal.Zero,
+		0,
+		udecimal.MustParse("0.01"),
+	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -14,7 +14,7 @@ import (
 
 const (
 	// DefaultRTDSHost is the production Polymarket RTDS WebSocket URL.
-	DefaultRTDSHost          = "wss://rtds.polymarket.com"
+	DefaultRTDSHost          = "wss://ws-live-data.polymarket.com"
 	defaultHeartbeatInterval = 5 * time.Second
 	defaultHeartbeatTimeout  = 15 * time.Second
 )

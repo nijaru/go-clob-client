@@ -11,41 +11,41 @@ import (
 
 // RFQRequest identifies a single Request for Quote.
 type RFQRequest struct {
-	ID              string  `json:"requestId"`
-	UserAddress     string  `json:"userAddress"`
-	ProxyAddress    string  `json:"proxyAddress"`
-	Token           string  `json:"token"`
-	Complement      string  `json:"complement"`
-	Condition       string  `json:"condition"`
-	Side            string  `json:"side"`
-	SizeIn          string  `json:"sizeIn"`
-	SizeOut         string  `json:"sizeOut"`
-	Price           float64 `json:"price"`
-	AcceptedQuoteID string  `json:"acceptedQuoteId"`
-	State           string  `json:"state"`
-	Expiry          string  `json:"expiry"`
-	CreatedAt       string  `json:"createdAt"`
-	UpdatedAt       string  `json:"updatedAt"`
+	ID              string        `json:"requestId"`
+	UserAddress     string        `json:"userAddress"`
+	ProxyAddress    string        `json:"proxyAddress"`
+	Token           string        `json:"token"`
+	Complement      string        `json:"complement"`
+	Condition       string        `json:"condition"`
+	Side            string        `json:"side"`
+	SizeIn          string        `json:"sizeIn"`
+	SizeOut         string        `json:"sizeOut"`
+	Price           DecimalString `json:"price"`
+	AcceptedQuoteID string        `json:"acceptedQuoteId"`
+	State           string        `json:"state"`
+	Expiry          string        `json:"expiry"`
+	CreatedAt       string        `json:"createdAt"`
+	UpdatedAt       string        `json:"updatedAt"`
 }
 
 // RFQQuote identifies a single quote responded to an RFQ request.
 type RFQQuote struct {
-	ID           string  `json:"quoteId"`
-	RequestID    string  `json:"requestId"`
-	UserAddress  string  `json:"userAddress"`
-	ProxyAddress string  `json:"proxyAddress"`
-	Token        string  `json:"token"`
-	Complement   string  `json:"complement"`
-	Condition    string  `json:"condition"`
-	Side         string  `json:"side"`
-	SizeIn       string  `json:"sizeIn"`
-	SizeOut      string  `json:"sizeOut"`
-	Price        float64 `json:"price"`
-	State        string  `json:"state"`
-	Expiry       string  `json:"expiry"`
-	MatchType    string  `json:"matchType"`
-	CreatedAt    string  `json:"createdAt"`
-	UpdatedAt    string  `json:"updatedAt"`
+	ID           string        `json:"quoteId"`
+	RequestID    string        `json:"requestId"`
+	UserAddress  string        `json:"userAddress"`
+	ProxyAddress string        `json:"proxyAddress"`
+	Token        string        `json:"token"`
+	Complement   string        `json:"complement"`
+	Condition    string        `json:"condition"`
+	Side         string        `json:"side"`
+	SizeIn       string        `json:"sizeIn"`
+	SizeOut      string        `json:"sizeOut"`
+	Price        DecimalString `json:"price"`
+	State        string        `json:"state"`
+	Expiry       string        `json:"expiry"`
+	MatchType    string        `json:"matchType"`
+	CreatedAt    string        `json:"createdAt"`
+	UpdatedAt    string        `json:"updatedAt"`
 }
 
 // RFQErrorCode is a typed error code returned by the RFQ service.

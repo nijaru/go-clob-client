@@ -456,16 +456,37 @@ func TestHandleMessageMalformedEventJSON(t *testing.T) {
 	t.Parallel()
 
 	c := NewClient("")
-	// Valid event_type but invalid inner fields
+	// Valid event_type but invalid inner fields. Singleton frames are reported
+	// so callers can distinguish a malformed known event from an idle socket.
 	c.handleMessage(t.Context(), []byte(`{"event_type":"book","bids":"not-an-array"}`))
 
 	select {
 	case err := <-c.Errors():
-		t.Fatalf("unexpected error: %v", err)
+		if !strings.Contains(err.Error(), "decode book event") {
+			t.Fatalf("unexpected decode error: %v", err)
+		}
 	case <-c.Events():
 		t.Fatal("should not receive event for malformed data")
 	case <-time.After(50 * time.Millisecond):
-		// Expected: malformed frames are silently dropped.
+		t.Fatal("timed out waiting for malformed-frame error")
+	}
+}
+
+func TestHandleMessageMalformedBatchElementIsDropped(t *testing.T) {
+	t.Parallel()
+
+	c := NewClient("")
+	c.handleMessage(t.Context(), []byte(`[{"event_type":"book","bids":"not-an-array"},{"event_type":"book","asset_id":"a1"}]`))
+
+	select {
+	case err := <-c.Errors():
+		t.Fatalf("unexpected batch decode error: %v", err)
+	case event := <-c.Events():
+		if _, ok := event.(*BookEvent); !ok {
+			t.Fatalf("event = %T, want *BookEvent", event)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for valid batch event")
 	}
 }
 
@@ -542,6 +563,31 @@ func TestSendJSONNotConnected(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "not connected") {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestMarketSubscriptionRejectsEmptyAssets(t *testing.T) {
+	t.Parallel()
+
+	client := NewClient("")
+	for name, subscribe := range map[string]func() error{
+		"subscribe": func() error { return client.SubscribeOrderBook(t.Context(), nil) },
+		"unsubscribe": func() error {
+			return client.UnsubscribeOrderBook(t.Context(), nil)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := subscribe()
+			if err == nil {
+				t.Fatal("expected empty market input error")
+			}
+			if !strings.Contains(err.Error(), "at least one asset ID") {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if client.SubscriptionCount() != 0 {
+				t.Fatalf("empty request recorded a subscription")
+			}
+		})
 	}
 }
 

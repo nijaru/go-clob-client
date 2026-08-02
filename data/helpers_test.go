@@ -22,6 +22,19 @@ func TestBoundedLimit(t *testing.T) {
 	}
 }
 
+func TestParameterBoundsError(t *testing.T) {
+	t.Parallel()
+
+	err := validateBound("positions.offset", 10_001, 0, 10_000)
+	boundsErr, ok := err.(*ParameterBoundsError)
+	if !ok {
+		t.Fatalf("error = %T, want *ParameterBoundsError", err)
+	}
+	if boundsErr.Parameter != "positions.offset" || boundsErr.Value != 10_001 {
+		t.Fatalf("bounds error = %+v", boundsErr)
+	}
+}
+
 func TestIteratorLimit(t *testing.T) {
 	tests := []struct {
 		limit, defaultLimit, max, want int
