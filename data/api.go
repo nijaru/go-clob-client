@@ -52,6 +52,10 @@ func (c *Client) GetPositions(ctx context.Context, p PositionParams) ([]Position
 
 func (c *Client) IterPositions(ctx context.Context, p PositionParams) iter.Seq2[Position, error] {
 	return func(yield func(Position, error) bool) {
+		if err := validatePagination("positions", p.Limit, p.Offset, 0, 500, 10_000); err != nil {
+			yield(Position{}, err)
+			return
+		}
 		offset := p.Offset
 		limit := iteratorLimit(p.Limit, 100, 500)
 		for {
@@ -105,6 +109,10 @@ func (c *Client) IterClosedPositions(
 	p ClosedPositionParams,
 ) iter.Seq2[ClosedPosition, error] {
 	return func(yield func(ClosedPosition, error) bool) {
+		if err := validatePagination("closed_positions", p.Limit, p.Offset, 0, 50, 100_000); err != nil {
+			yield(ClosedPosition{}, err)
+			return
+		}
 		offset := p.Offset
 		limit := iteratorLimit(p.Limit, 50, 50)
 		for {
@@ -165,6 +173,10 @@ func (c *Client) GetTrades(ctx context.Context, p TradeParams) ([]Trade, error) 
 
 func (c *Client) IterTrades(ctx context.Context, p TradeParams) iter.Seq2[Trade, error] {
 	return func(yield func(Trade, error) bool) {
+		if err := validatePagination("trades", p.Limit, p.Offset, 0, 10_000, 10_000); err != nil {
+			yield(Trade{}, err)
+			return
+		}
 		offset := p.Offset
 		limit := iteratorLimit(p.Limit, 100, 10000)
 		for {
@@ -196,11 +208,8 @@ func (c *Client) GetActivity(ctx context.Context, p ActivityParams) ([]Activity,
 	if err := validatePagination("activity", p.Limit, p.Offset, 0, 500, 10_000); err != nil {
 		return nil, err
 	}
-	if p.Start < 0 {
-		return nil, &ParameterBoundsError{Parameter: "activity.start", Value: int(p.Start), Minimum: 0}
-	}
-	if p.End < 0 {
-		return nil, &ParameterBoundsError{Parameter: "activity.end", Value: int(p.End), Minimum: 0}
+	if err := activityTimeBoundsError(p); err != nil {
+		return nil, err
 	}
 	q := url.Values{}
 	q.Set("user", p.User)
@@ -227,6 +236,14 @@ func (c *Client) GetActivity(ctx context.Context, p ActivityParams) ([]Activity,
 
 func (c *Client) IterActivity(ctx context.Context, p ActivityParams) iter.Seq2[Activity, error] {
 	return func(yield func(Activity, error) bool) {
+		if err := validatePagination("activity", p.Limit, p.Offset, 0, 500, 10_000); err != nil {
+			yield(Activity{}, err)
+			return
+		}
+		if p.Start < 0 || p.End < 0 {
+			yield(Activity{}, activityTimeBoundsError(p))
+			return
+		}
 		offset := p.Offset
 		limit := iteratorLimit(p.Limit, 100, 500)
 		for {
@@ -327,6 +344,10 @@ func (c *Client) IterLeaderboard(
 	p LeaderboardParams,
 ) iter.Seq2[TraderLeaderboardEntry, error] {
 	return func(yield func(TraderLeaderboardEntry, error) bool) {
+		if err := validatePagination("leaderboard", p.Limit, p.Offset, 0, 50, 1_000); err != nil {
+			yield(TraderLeaderboardEntry{}, err)
+			return
+		}
 		offset := p.Offset
 		limit := iteratorLimit(p.Limit, 50, 50)
 		for {
@@ -376,6 +397,10 @@ func (c *Client) IterBuilderLeaderboard(
 	p BuilderLeaderboardParams,
 ) iter.Seq2[BuilderLeaderboardEntry, error] {
 	return func(yield func(BuilderLeaderboardEntry, error) bool) {
+		if err := validatePagination("builder_leaderboard", p.Limit, p.Offset, 0, 50, 1_000); err != nil {
+			yield(BuilderLeaderboardEntry{}, err)
+			return
+		}
 		offset := p.Offset
 		limit := iteratorLimit(p.Limit, 50, 50)
 		for {
@@ -448,6 +473,10 @@ func (c *Client) IterMarketPositions(
 	p MarketPositionParams,
 ) iter.Seq2[MetaMarketPosition, error] {
 	return func(yield func(MetaMarketPosition, error) bool) {
+		if err := validatePagination("market_positions", p.Limit, p.Offset, 0, 500, 10_000); err != nil {
+			yield(MetaMarketPosition{}, err)
+			return
+		}
 		offset := p.Offset
 		limit := iteratorLimit(p.Limit, 100, 500)
 		for {

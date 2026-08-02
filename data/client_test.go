@@ -248,6 +248,22 @@ func newTestServer(t *testing.T, handler http.HandlerFunc) (*httptest.Server, *C
 	return srv, New(Config{Host: srv.URL})
 }
 
+func TestDataIteratorBounds(t *testing.T) {
+	t.Parallel()
+
+	for _, err := range New(Config{}).IterPositions(
+		t.Context(),
+		PositionParams{Limit: 501},
+	) {
+		var boundsErr *ParameterBoundsError
+		if !errors.As(err, &boundsErr) {
+			t.Fatalf("error = %v, want ParameterBoundsError", err)
+		}
+		return
+	}
+	t.Fatal("iterator did not report invalid limit")
+}
+
 func TestDataEndpointBounds(t *testing.T) {
 	t.Parallel()
 

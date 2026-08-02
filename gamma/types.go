@@ -302,9 +302,9 @@ type RelatedTagsOptions struct {
 type RelatedTagsStatus string
 
 const (
-	RelatedTagsStatusActive   RelatedTagsStatus = "active"
-	RelatedTagsStatusArchived RelatedTagsStatus = "archived"
-	RelatedTagsStatusAll      RelatedTagsStatus = "all"
+	RelatedTagsStatusActive RelatedTagsStatus = "active"
+	RelatedTagsStatusClosed RelatedTagsStatus = "closed"
+	RelatedTagsStatusAll    RelatedTagsStatus = "all"
 )
 
 // TagFilterParams controls paginated tag listing.

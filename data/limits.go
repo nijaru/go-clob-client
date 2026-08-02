@@ -47,6 +47,16 @@ func validatePagination(
 	return validateBound(endpoint+".offset", offset, 0, maximumOffset)
 }
 
+func activityTimeBoundsError(p ActivityParams) error {
+	if p.Start < 0 {
+		return &ParameterBoundsError{Parameter: "activity.start", Value: int(p.Start), Minimum: 0}
+	}
+	if p.End < 0 {
+		return &ParameterBoundsError{Parameter: "activity.end", Value: int(p.End), Minimum: 0}
+	}
+	return nil
+}
+
 func boundedLimit(limit, max int) int {
 	if limit <= 0 {
 		return 0
