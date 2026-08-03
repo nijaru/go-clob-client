@@ -10,8 +10,11 @@
 // requests under /v1/info/*. Authenticated account reads and the delegated
 // WebSocket session are available through NewAuthenticated. Signed entry-order
 // placement and low-level batch/cancel/cancel-all/leverage commands are
-// available when the delegated private key is supplied; TP/SL orchestration
-// and credential lifecycle remain separate follow-ups.
+// available when the delegated private key is supplied. Authenticated
+// notification pages, read-state operations, fills cursor/sort pagination,
+// and typed notification resync events are available as an experimental
+// extension; TP/SL orchestration and credential lifecycle remain separate
+// follow-ups.
 //
 // Decimal values are represented as their wire strings (e.g. "123.450000") to
 // avoid precision loss; callers should parse with a decimal library as needed.

@@ -25,6 +25,7 @@ var defaultSessionChannels = []string{
 	"funding",
 	"deposits",
 	"withdrawals",
+	"notifications",
 	"tpsl",
 }
 
@@ -46,14 +47,37 @@ type SessionConfig struct {
 	Channels []string
 }
 
-// PerpsSessionEvent is a raw authenticated account update. Data is retained as
-// JSON so callers can decode the channel-specific payload without precision
-// loss or an SDK release for every new event field.
+// PerpsResyncReason identifies why a session resync event was emitted.
+type PerpsResyncReason string
+
+const (
+	PerpsResyncReconnect     PerpsResyncReason = "reconnect"
+	PerpsResyncSequenceGap   PerpsResyncReason = "sequence_gap"
+	PerpsResyncServerRequest PerpsResyncReason = "server"
+)
+
+// PerpsSessionResync is emitted when the server asks the notifications stream
+// to be backfilled or the session reconnects.
+type PerpsSessionResync struct {
+	Reason           PerpsResyncReason
+	Channel          string
+	Timestamp        int64
+	Sequence         int64
+	PreviousSequence *int64
+}
+
+// PerpsSessionEvent is an authenticated account update. Data is retained as
+// JSON so callers can decode channel-specific payloads without precision loss
+// or an SDK release for every new event field. Known notification frames also
+// populate Notification; server resync frames populate Resync.
 type PerpsSessionEvent struct {
-	Channel   string
-	Timestamp int64
-	Sequence  int64
-	Data      json.RawMessage
+	Channel      string
+	Timestamp    int64
+	Sequence     int64
+	Type         string
+	Data         json.RawMessage
+	Notification *PerpsNotification
+	Resync       *PerpsSessionResync
 }
 
 type sessionFrame struct {
@@ -110,6 +134,8 @@ type Session struct {
 	orderWaitMu  sync.Mutex
 	orderWaiters map[int][]chan orderWaitResponse
 	orderUpdates []perpsOrderUpdate
+	sequenceMu   sync.Mutex
+	sequences    map[string]int64
 	closeOnce    sync.Once
 	closeErr     error
 }
@@ -152,6 +178,7 @@ func (c *AuthenticatedClient) OpenSession(
 		pending:      make(map[int]chan sessionResponse),
 		nextRequest:  3,
 		orderWaiters: make(map[int][]chan orderWaitResponse),
+		sequences:    make(map[string]int64),
 	}
 	session.lastMessage.Store(time.Now().UnixNano())
 	session.signer, err = c.delegatedSigner()
@@ -300,6 +327,12 @@ func (s *Session) readLoop() {
 				return
 			}
 			if s.reconnect(err) {
+				s.emitEvent(PerpsSessionEvent{
+					Type: "resync",
+					Resync: &PerpsSessionResync{
+						Reason: PerpsResyncReconnect,
+					},
+				})
 				continue
 			}
 			s.rejectPending(err)
@@ -341,7 +374,8 @@ func (s *Session) handlePayload(payload []byte) {
 	var frame struct {
 		Channel   string          `json:"ch"`
 		Timestamp int64           `json:"ts"`
-		Sequence  int64           `json:"sq"`
+		Sequence  *int64          `json:"sq"`
+		Type      string          `json:"type"`
 		Data      json.RawMessage `json:"data"`
 	}
 	if err := json.Unmarshal(payload, &frame); err != nil {
@@ -351,17 +385,49 @@ func (s *Session) handlePayload(payload []byte) {
 	if frame.Channel == "" {
 		return
 	}
+	sequence := int64(0)
+	if frame.Sequence != nil {
+		sequence = *frame.Sequence
+	}
+	if frame.Channel == "notifications" && frame.Type == "resync" {
+		s.emitEvent(PerpsSessionEvent{
+			Channel:   frame.Channel,
+			Timestamp: frame.Timestamp,
+			Sequence:  sequence,
+			Type:      "resync",
+			Resync: &PerpsSessionResync{
+				Reason:    PerpsResyncServerRequest,
+				Channel:   frame.Channel,
+				Timestamp: frame.Timestamp,
+				Sequence:  sequence,
+			},
+		})
+		return
+	}
+
+	if frame.Sequence != nil {
+		if resync := s.sequenceResync(frame.Channel, sequence, frame.Timestamp); resync != nil {
+			s.emitEvent(PerpsSessionEvent{Type: "resync", Resync: resync})
+		}
+	}
 	event := PerpsSessionEvent{
 		Channel:   frame.Channel,
 		Timestamp: frame.Timestamp,
-		Sequence:  frame.Sequence,
+		Sequence:  sequence,
+		Type:      frame.Type,
 		Data:      append(json.RawMessage(nil), frame.Data...),
 	}
-	s.resolveOrderWaiters(event)
-	select {
-	case s.events <- event:
-	case <-s.ctx.Done():
+	if frame.Channel == "notifications" {
+		event.Type = "notification"
+		var notification PerpsNotification
+		if err := json.Unmarshal(frame.Data, &notification); err == nil {
+			event.Notification = &notification
+		} else if !errors.Is(err, ErrUnknownPerpsNotification) {
+			s.reportError(fmt.Errorf("perps: decode notification event: %w", err))
+		}
 	}
+	s.resolveOrderWaiters(event)
+	s.emitEvent(event)
 }
 
 func (s *Session) heartbeatLoop() {
@@ -417,6 +483,9 @@ func (s *Session) reconnect(cause error) bool {
 			old := s.conn
 			s.conn = conn
 			s.connMu.Unlock()
+			s.sequenceMu.Lock()
+			s.sequences = make(map[string]int64)
+			s.sequenceMu.Unlock()
 			if old != nil {
 				_ = old.Close(websocket.StatusNormalClosure, "replaced")
 			}
@@ -433,6 +502,29 @@ func (s *Session) reconnect(cause error) bool {
 		if wait > perpsReconnectMaxWait {
 			wait = perpsReconnectMaxWait
 		}
+	}
+}
+
+func (s *Session) sequenceResync(channel string, sequence, timestamp int64) *PerpsSessionResync {
+	if channel == "notifications" {
+		return nil
+	}
+	s.sequenceMu.Lock()
+	defer s.sequenceMu.Unlock()
+	if s.sequences == nil {
+		s.sequences = make(map[string]int64)
+	}
+	previous, ok := s.sequences[channel]
+	s.sequences[channel] = sequence
+	if !ok || sequence == previous+1 {
+		return nil
+	}
+	return &PerpsSessionResync{
+		Reason:           PerpsResyncSequenceGap,
+		Channel:          channel,
+		Timestamp:        timestamp,
+		Sequence:         sequence,
+		PreviousSequence: &previous,
 	}
 }
 
@@ -592,6 +684,29 @@ func (s *Session) sendCommand(ctx context.Context, body map[string]any) (json.Ra
 	case <-s.ctx.Done():
 		return nil, errors.New("perps session closed")
 	}
+}
+
+func (s *Session) emitEvent(event PerpsSessionEvent) {
+	select {
+	case s.events <- event:
+	case <-s.ctx.Done():
+	}
+}
+
+// AsNotification returns the typed notification payload for a notification
+// event, decoding Data when the event was constructed by a caller.
+func (e PerpsSessionEvent) AsNotification() (*PerpsNotification, error) {
+	if e.Notification != nil {
+		return e.Notification, nil
+	}
+	if e.Channel != "notifications" || e.Resync != nil {
+		return nil, fmt.Errorf("perps session event is not a notification")
+	}
+	var notification PerpsNotification
+	if err := json.Unmarshal(e.Data, &notification); err != nil {
+		return nil, err
+	}
+	return &notification, nil
 }
 
 func (s *Session) reportError(err error) {
