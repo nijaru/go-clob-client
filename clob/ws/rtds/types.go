@@ -3,6 +3,8 @@ package rtds
 import (
 	stdjson "encoding/json" //nolint:depguard // numeric JSON normalization for RTDS payloads
 	"fmt"
+	"math/big"
+	"strings"
 	"time"
 
 	json "github.com/go-json-experiment/json"
@@ -93,6 +95,57 @@ func (m *RtdsMessage) AsChainlinkPrice() (*ChainlinkPrice, error) {
 	return &p, nil
 }
 
+// AsChainlinkTWAPPrice attempts to unmarshal a Chainlink TWAP payload.
+// The exact signed E18 value is preferred over the rounded display value.
+func (m *RtdsMessage) AsChainlinkTWAPPrice() (*ChainlinkTWAPPrice, error) {
+	window, expected, err := chainlinkTWAPMessageWindow(m.Topic)
+	if err != nil {
+		return nil, err
+	}
+	if m.Type != "update" {
+		return nil, fmt.Errorf("message type is %s, not update", m.Type)
+	}
+
+	var wire struct {
+		Symbol            string             `json:"symbol"`
+		Value             stdjson.RawMessage `json:"value"`
+		FullAccuracyValue stdjson.RawMessage `json:"full_accuracy_value"`
+		Timestamp         int64              `json:"timestamp"`
+		WindowSeconds     int                `json:"window_s"`
+	}
+	if err := stdjson.Unmarshal(m.Payload, &wire); err != nil {
+		return nil, fmt.Errorf("decode Chainlink TWAP payload: %w", err)
+	}
+	if _, err := decodeDecimalValue(wire.Value); err != nil {
+		return nil, fmt.Errorf("Chainlink TWAP display value: %w", err)
+	}
+	if len(wire.FullAccuracyValue) == 0 {
+		return nil, fmt.Errorf("Chainlink TWAP full_accuracy_value is required")
+	}
+	var fullAccuracyValue string
+	if err := stdjson.Unmarshal(wire.FullAccuracyValue, &fullAccuracyValue); err != nil {
+		return nil, fmt.Errorf("Chainlink TWAP full_accuracy_value: expected signed integer string: %w", err)
+	}
+	value, err := chainlinkE18ToDecimalString(fullAccuracyValue)
+	if err != nil {
+		return nil, fmt.Errorf("Chainlink TWAP full_accuracy_value: %w", err)
+	}
+	if wire.WindowSeconds != int(window) {
+		return nil, fmt.Errorf(
+			"Chainlink TWAP topic %q requires window_s=%d, got %d",
+			m.Topic,
+			expected,
+			wire.WindowSeconds,
+		)
+	}
+	return &ChainlinkTWAPPrice{
+		Symbol:        wire.Symbol,
+		Timestamp:     wire.Timestamp,
+		Value:         value,
+		WindowSeconds: window,
+	}, nil
+}
+
 // AsComment attempts to unmarshal the payload as a Comment.
 func (m *RtdsMessage) AsComment() (*Comment, error) {
 	if m.Topic != "comments" {
@@ -129,6 +182,83 @@ func (p *CryptoPrice) UnmarshalJSON(data []byte) error {
 	}
 	*p = CryptoPrice{Symbol: wire.Symbol, Timestamp: wire.Timestamp, Value: value}
 	return nil
+}
+
+// ChainlinkTWAPWindowSeconds identifies a supported Chainlink TWAP averaging window.
+type ChainlinkTWAPWindowSeconds int
+
+const (
+	ChainlinkTWAP30Seconds ChainlinkTWAPWindowSeconds = 30
+	ChainlinkTWAP60Seconds ChainlinkTWAPWindowSeconds = 60
+
+	// Short aliases for callers that prefer window-oriented names.
+	ChainlinkTWAPWindow30 = ChainlinkTWAP30Seconds
+	ChainlinkTWAPWindow60 = ChainlinkTWAP60Seconds
+)
+
+// ChainlinkTWAPPrice represents a Chainlink time-weighted average price update.
+// Value is normalized from the signed E18 full_accuracy_value field.
+type ChainlinkTWAPPrice struct {
+	Symbol        string                     `json:"symbol"`
+	Timestamp     int64                      `json:"timestamp"`
+	Value         string                     `json:"value"`
+	WindowSeconds ChainlinkTWAPWindowSeconds `json:"window_s"`
+}
+
+func chainlinkTWAPMessageWindow(topic string) (ChainlinkTWAPWindowSeconds, int, error) {
+	switch topic {
+	case "crypto_prices_twap_thirty":
+		return ChainlinkTWAP30Seconds, int(ChainlinkTWAP30Seconds), nil
+	case "crypto_prices_twap_sixty":
+		return ChainlinkTWAP60Seconds, int(ChainlinkTWAP60Seconds), nil
+	case "prices.crypto.chainlink.twap":
+		return 0, 0, fmt.Errorf("logical Chainlink TWAP topic requires a raw window topic")
+	default:
+		return 0, 0, fmt.Errorf("message topic is %s, not a Chainlink TWAP topic", topic)
+	}
+}
+
+func chainlinkE18ToDecimalString(value string) (string, error) {
+	if value == "" || (value[0] != '-' && (value[0] < '0' || value[0] > '9')) {
+		return "", fmt.Errorf("expected signed integer string")
+	}
+	for i, r := range value {
+		if i == 0 && r == '-' {
+			if len(value) == 1 {
+				return "", fmt.Errorf("expected signed integer string")
+			}
+			continue
+		}
+		if r < '0' || r > '9' {
+			return "", fmt.Errorf("expected signed integer string")
+		}
+	}
+
+	n := new(big.Int)
+	if _, ok := n.SetString(value, 10); !ok {
+		return "", fmt.Errorf("expected signed integer string")
+	}
+	negative := n.Sign() < 0
+	n.Abs(n)
+	digits := n.String()
+	const scale = 18
+	whole := "0"
+	fraction := ""
+	if len(digits) > scale {
+		whole = digits[:len(digits)-scale]
+		fraction = digits[len(digits)-scale:]
+	} else {
+		fraction = strings.Repeat("0", scale-len(digits)) + digits
+	}
+	fraction = strings.TrimRight(fraction, "0")
+	result := whole
+	if fraction != "" {
+		result += "." + fraction
+	}
+	if negative && result != "0" {
+		result = "-" + result
+	}
+	return result, nil
 }
 
 // ChainlinkPrice represents a Chainlink price feed update. Value preserves

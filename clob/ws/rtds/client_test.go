@@ -9,6 +9,7 @@ import (
 	"time"
 
 	json "github.com/go-json-experiment/json"
+	"github.com/go-json-experiment/json/jsontext"
 
 	"github.com/coder/websocket"
 )
@@ -50,6 +51,120 @@ func TestRTDSNumericPricePayloads(t *testing.T) {
 				t.Fatalf("value = %q, want %q", price.Value, tc.want)
 			}
 		})
+	}
+}
+
+func TestChainlinkTWAPPriceUsesExactE18Value(t *testing.T) {
+	t.Parallel()
+
+	var message RtdsMessage
+	if err := json.Unmarshal([]byte(`{
+		"topic":"crypto_prices_twap_thirty",
+		"type":"update",
+		"timestamp":1772752581815,
+		"payload":{
+			"symbol":"btc/usd",
+			"value":65000.12,
+			"full_accuracy_value":"65000123456789012345678",
+			"timestamp":1772752581815,
+			"window_s":30
+		}
+	}`), &message); err != nil {
+		t.Fatalf("decode RTDS message: %v", err)
+	}
+	price, err := message.AsChainlinkTWAPPrice()
+	if err != nil {
+		t.Fatalf("decode Chainlink TWAP price: %v", err)
+	}
+	if price.Symbol != "btc/usd" || price.Timestamp != 1772752581815 ||
+		price.Value != "65000.123456789012345678" ||
+		price.WindowSeconds != ChainlinkTWAP30Seconds {
+		t.Fatalf("price = %+v", price)
+	}
+}
+
+func TestChainlinkE18Conversion(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		input string
+		want  string
+	}{
+		{input: "1", want: "0.000000000000000001"},
+		{input: "-1230000000000000000", want: "-1.23"},
+		{input: "-0", want: "0"},
+		{input: "100000000000000000000", want: "100"},
+	} {
+		t.Run(tc.input, func(t *testing.T) {
+			got, err := chainlinkE18ToDecimalString(tc.input)
+			if err != nil || got != tc.want {
+				t.Fatalf("conversion = %q, %v; want %q", got, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestChainlinkTWAPPriceValidation(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name    string
+		topic   string
+		payload string
+	}{
+		{
+			name:    "topic window mismatch",
+			topic:   "crypto_prices_twap_thirty",
+			payload: `{"symbol":"btc/usd","value":1,"full_accuracy_value":"1000000000000000000","timestamp":1,"window_s":60}`,
+		},
+		{
+			name:    "missing exact value",
+			topic:   "crypto_prices_twap_thirty",
+			payload: `{"symbol":"btc/usd","value":1,"timestamp":1,"window_s":30}`,
+		},
+		{
+			name:    "non integer exact value",
+			topic:   "crypto_prices_twap_thirty",
+			payload: `{"symbol":"btc/usd","value":1,"full_accuracy_value":"1.2","timestamp":1,"window_s":30}`,
+		},
+		{
+			name:    "unknown topic",
+			topic:   "crypto_prices_twap_other",
+			payload: `{"symbol":"btc/usd","value":1,"full_accuracy_value":"1","timestamp":1,"window_s":30}`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			message := RtdsMessage{
+				Topic:   tc.topic,
+				Type:    "update",
+				Payload: jsontext.Value(tc.payload),
+			}
+			if _, err := message.AsChainlinkTWAPPrice(); err == nil {
+				t.Fatal("expected validation error")
+			}
+		})
+	}
+}
+
+func TestChainlinkTWAPSubscriptions(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		window ChainlinkTWAPWindowSeconds
+		topic  string
+	}{
+		{window: ChainlinkTWAP30Seconds, topic: "crypto_prices_twap_thirty"},
+		{window: ChainlinkTWAP60Seconds, topic: "crypto_prices_twap_sixty"},
+	} {
+		t.Run(tc.topic, func(t *testing.T) {
+			got, err := chainlinkTWAPTopic(tc.window)
+			if err != nil || got != tc.topic {
+				t.Fatalf("topic = %q, %v; want %q", got, err, tc.topic)
+			}
+		})
+	}
+	if _, err := chainlinkTWAPTopic(45); err == nil {
+		t.Fatal("expected invalid window error")
 	}
 }
 

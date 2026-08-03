@@ -222,6 +222,31 @@ func (c *Client) SubscribeChainlinkPrices(ctx context.Context, symbol string) er
 	return c.Subscribe(ctx, sub)
 }
 
+// SubscribeChainlinkTWAP subscribes broadly to a supported Chainlink TWAP
+// window. Filter the typed messages by Symbol locally when needed; RTDS
+// replaces the prior topic filter when a second filtered subscription is sent.
+func (c *Client) SubscribeChainlinkTWAP(
+	ctx context.Context,
+	window ChainlinkTWAPWindowSeconds,
+) error {
+	topic, err := chainlinkTWAPTopic(window)
+	if err != nil {
+		return err
+	}
+	sub := Subscription{Topic: topic, Type: "update"}
+	return c.Subscribe(ctx, sub)
+}
+
+// SubscribeChainlinkTWAP30Seconds subscribes to the 30-second TWAP feed.
+func (c *Client) SubscribeChainlinkTWAP30Seconds(ctx context.Context) error {
+	return c.SubscribeChainlinkTWAP(ctx, ChainlinkTWAP30Seconds)
+}
+
+// SubscribeChainlinkTWAP60Seconds subscribes to the 60-second TWAP feed.
+func (c *Client) SubscribeChainlinkTWAP60Seconds(ctx context.Context) error {
+	return c.SubscribeChainlinkTWAP(ctx, ChainlinkTWAP60Seconds)
+}
+
 // SubscribeComments subscribes to comment events.
 func (c *Client) SubscribeComments(
 	ctx context.Context,
@@ -409,6 +434,28 @@ func (c *Client) UnsubscribeChainlinkPrices(ctx context.Context) error {
 	return c.unsubscribe(ctx, "crypto_prices_chainlink", "*")
 }
 
+// UnsubscribeChainlinkTWAP unsubscribes from one Chainlink TWAP window.
+func (c *Client) UnsubscribeChainlinkTWAP(
+	ctx context.Context,
+	window ChainlinkTWAPWindowSeconds,
+) error {
+	topic, err := chainlinkTWAPTopic(window)
+	if err != nil {
+		return err
+	}
+	return c.unsubscribe(ctx, topic, "update")
+}
+
+// UnsubscribeChainlinkTWAP30Seconds unsubscribes from the 30-second TWAP feed.
+func (c *Client) UnsubscribeChainlinkTWAP30Seconds(ctx context.Context) error {
+	return c.UnsubscribeChainlinkTWAP(ctx, ChainlinkTWAP30Seconds)
+}
+
+// UnsubscribeChainlinkTWAP60Seconds unsubscribes from the 60-second TWAP feed.
+func (c *Client) UnsubscribeChainlinkTWAP60Seconds(ctx context.Context) error {
+	return c.UnsubscribeChainlinkTWAP(ctx, ChainlinkTWAP60Seconds)
+}
+
 // UnsubscribeComments unsubscribes from comment events.
 func (c *Client) UnsubscribeComments(ctx context.Context, commentType CommentType) error {
 	msgType := string(commentType)
@@ -449,6 +496,17 @@ func (c *Client) IsConnected() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.conn != nil && !c.closed
+}
+
+func chainlinkTWAPTopic(window ChainlinkTWAPWindowSeconds) (string, error) {
+	switch window {
+	case ChainlinkTWAP30Seconds:
+		return "crypto_prices_twap_thirty", nil
+	case ChainlinkTWAP60Seconds:
+		return "crypto_prices_twap_sixty", nil
+	default:
+		return "", fmt.Errorf("rtds: Chainlink TWAP window must be 30 or 60 seconds, got %d", window)
+	}
 }
 
 // SubscriptionCount returns the number of active subscriptions.
