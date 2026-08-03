@@ -84,6 +84,75 @@ func TestGetJSONReturnsStructuredAPIError(t *testing.T) {
 	}
 }
 
+func TestAPIErrorRetryAfterHeader(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "17.5")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`{"retry_after_seconds":3}`))
+	}))
+	defer server.Close()
+
+	client := &Client{BaseURL: server.URL, HTTPClient: server.Client(), UserAgent: "test"}
+	err := client.GetJSON(context.Background(), "/", nil, AuthNone, nil)
+	apiErr, ok := err.(*APIError)
+	if !ok || apiErr.RetryAfterSeconds == nil || *apiErr.RetryAfterSeconds != 17.5 {
+		t.Fatalf("unexpected retry metadata: %#v", err)
+	}
+}
+
+func TestAPIErrorRetryAfterBodyFallback(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"error":"rate limited","retry_after_seconds":2.25}`))
+	}))
+	defer server.Close()
+
+	client := &Client{BaseURL: server.URL, HTTPClient: server.Client(), UserAgent: "test"}
+	err := client.GetJSON(context.Background(), "/", nil, AuthNone, nil)
+	apiErr, ok := err.(*APIError)
+	if !ok || apiErr.RetryAfterSeconds == nil || *apiErr.RetryAfterSeconds != 2.25 {
+		t.Fatalf("unexpected retry metadata: %#v", err)
+	}
+}
+
+func TestAPIErrorRetryAfterRejectsInvalidValues(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name   string
+		header string
+		body   string
+	}{
+		{name: "negative header", header: "-1", body: `{}`},
+		{name: "nonfinite header", header: "NaN", body: `{}`},
+		{name: "string body", body: `{"retry_after_seconds":"4"}`},
+		{name: "negative body", body: `{"retry_after_seconds":-1}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if tc.header != "" {
+					w.Header().Set("Retry-After", tc.header)
+				}
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer server.Close()
+
+			client := &Client{BaseURL: server.URL, HTTPClient: server.Client(), UserAgent: "test"}
+			err := client.GetJSON(context.Background(), "/", nil, AuthNone, nil)
+			apiErr, ok := err.(*APIError)
+			if !ok || apiErr.RetryAfterSeconds != nil {
+				t.Fatalf("unexpected retry metadata: %#v", err)
+			}
+		})
+	}
+}
+
 func TestGetJSONWrapsTransportError(t *testing.T) {
 	t.Parallel()
 

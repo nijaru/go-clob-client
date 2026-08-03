@@ -33,6 +33,14 @@ const (
 	PerpsSideShort PerpsSide = "short"
 )
 
+// PerpsSortDirection controls chronological ordering for account fills.
+type PerpsSortDirection string
+
+const (
+	PerpsSortDescending PerpsSortDirection = "desc"
+	PerpsSortAscending  PerpsSortDirection = "asc"
+)
+
 // PerpsTimeInForce is the time-in-force of a perps order.
 type PerpsTimeInForce string
 
@@ -375,8 +383,9 @@ type PerpsOrder struct {
 
 // PerpsPage is the wire page returned by authenticated history endpoints.
 type PerpsPage[T any] struct {
-	Data []T  `json:"data"`
-	More bool `json:"more"`
+	Data       []T    `json:"data"`
+	More       bool   `json:"more"`
+	NextCursor string `json:"-"`
 }
 
 // PerpsAccountFill is an authenticated trade fill.

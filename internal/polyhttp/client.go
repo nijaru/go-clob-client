@@ -3,8 +3,10 @@ package polyhttp
 import (
 	"bytes"
 	"context"
+	stdjson "encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -43,6 +45,9 @@ type APIError struct {
 	Message     string
 	Body        []byte // Response body
 	RequestBody []byte // Original request body
+	// RetryAfterSeconds is the server-requested delay before retrying. It is
+	// nil when neither the Retry-After header nor the JSON fallback is valid.
+	RetryAfterSeconds *float64
 }
 
 func (e *APIError) Error() string {
@@ -275,9 +280,10 @@ func marshalBody(body any) ([]byte, error) {
 
 func newAPIError(resp *http.Response, body, requestBody []byte) *APIError {
 	err := &APIError{
-		StatusCode:  resp.StatusCode,
-		Body:        bytes.Clone(body),
-		RequestBody: bytes.Clone(requestBody),
+		StatusCode:        resp.StatusCode,
+		Body:              bytes.Clone(body),
+		RequestBody:       bytes.Clone(requestBody),
+		RetryAfterSeconds: retryAfterSeconds(resp.Header.Get("Retry-After"), body),
 	}
 	var payload struct {
 		Error any `json:"error"`
@@ -303,4 +309,43 @@ func newAPIError(resp *http.Response, body, requestBody []byte) *APIError {
 	}
 
 	return err
+}
+
+// retryAfterSeconds extracts a finite, non-negative retry delay. A valid
+// Retry-After header takes precedence over the JSON body fallback.
+func retryAfterSeconds(header string, body []byte) *float64 {
+	if seconds, ok := parseRetryAfterNumber(header); ok {
+		return &seconds
+	}
+
+	var payload struct {
+		RetryAfterSeconds stdjson.RawMessage `json:"retry_after_seconds"`
+	}
+	if stdjson.Unmarshal(body, &payload) != nil {
+		return nil
+	}
+	seconds, ok := parseRetryAfterJSONNumber(payload.RetryAfterSeconds)
+	if !ok {
+		return nil
+	}
+	return &seconds
+}
+
+func parseRetryAfterNumber(value string) (float64, bool) {
+	if strings.TrimSpace(value) == "" {
+		return 0, false
+	}
+	seconds, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+	return seconds, err == nil && !math.IsInf(seconds, 0) && !math.IsNaN(seconds) && seconds >= 0
+}
+
+func parseRetryAfterJSONNumber(raw stdjson.RawMessage) (float64, bool) {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
+		return 0, false
+	}
+	if raw[0] == '"' {
+		return 0, false
+	}
+	return parseRetryAfterNumber(string(raw))
 }

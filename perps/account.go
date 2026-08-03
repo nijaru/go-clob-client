@@ -2,6 +2,7 @@ package perps
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"strconv"
 )
@@ -42,6 +43,10 @@ type AccountHistoryParams struct {
 	DepositStatus    PerpsDepositStatus
 	WithdrawalStatus PerpsWithdrawalStatus
 	Hash             string
+	// Sort and Cursor are used by GetFillsPage. They are ignored by the
+	// other account history endpoints, which have their own cursor semantics.
+	Sort   PerpsSortDirection
+	Cursor string
 }
 
 // AccountIntervalHistoryParams filters an equity or PnL history page.
@@ -145,9 +150,17 @@ func (c *AuthenticatedClient) GetFillsPage(
 	ctx context.Context,
 	p AccountHistoryParams,
 ) (PerpsPage[PerpsAccountFill], error) {
-	var out PerpsPage[PerpsAccountFill]
-	if err := c.getAuthenticatedJSON(ctx, "/v1/account/fills", historyQuery(p), &out); err != nil {
+	if err := validateSortDirection(p.Sort); err != nil {
 		return PerpsPage[PerpsAccountFill]{}, err
+	}
+	var out PerpsPage[PerpsAccountFill]
+	if err := c.getAuthenticatedJSON(ctx, "/v1/account/fills", fillsQuery(p), &out); err != nil {
+		return PerpsPage[PerpsAccountFill]{}, err
+	}
+	if out.More && len(out.Data) > 0 {
+		out.NextCursor = strconv.FormatInt(out.Data[len(out.Data)-1].TradeID, 10)
+	} else {
+		out.More = false
 	}
 	return out, nil
 }
@@ -212,6 +225,17 @@ func (c *AuthenticatedClient) GetPnlHistoryPage(
 	return out, nil
 }
 
+func fillsQuery(p AccountHistoryParams) url.Values {
+	query := historyQuery(p)
+	if p.Sort != "" {
+		query.Set("sort", string(p.Sort))
+	}
+	if p.Cursor != "" {
+		query.Set("cursor", p.Cursor)
+	}
+	return query
+}
+
 func historyQuery(p AccountHistoryParams) url.Values {
 	query := url.Values{}
 	if p.Start != 0 {
@@ -233,6 +257,13 @@ func historyQuery(p AccountHistoryParams) url.Values {
 		query.Set("hash", p.Hash)
 	}
 	return query
+}
+
+func validateSortDirection(sort PerpsSortDirection) error {
+	if sort == "" || sort == PerpsSortDescending || sort == PerpsSortAscending {
+		return nil
+	}
+	return fmt.Errorf("perps: invalid sort direction %q", sort)
 }
 
 func intervalHistoryQuery(p AccountIntervalHistoryParams) url.Values {

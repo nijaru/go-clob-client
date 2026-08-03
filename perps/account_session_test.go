@@ -163,6 +163,46 @@ func TestAuthenticatedAccountReads(t *testing.T) {
 	}
 }
 
+func TestFillsPageCarriesSortAndNextCursor(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/account/fills", func(w http.ResponseWriter, r *http.Request) {
+		assertPerpsAuth(t, r)
+		query := r.URL.Query()
+		if query.Get("sort") != "asc" || query.Get("cursor") != "12" {
+			t.Errorf("fills query = %v, want sort=asc cursor=12", query)
+		}
+		_ = json.NewEncoder(w).Encode(PerpsPage[PerpsAccountFill]{
+			Data: []PerpsAccountFill{{TradeID: 34}},
+			More: true,
+		})
+	})
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+
+	client, err := NewAuthenticated(AuthenticatedConfig{
+		Config:      Config{Host: server.URL},
+		Credentials: testPerpsCredentials(),
+	})
+	if err != nil {
+		t.Fatalf("NewAuthenticated: %v", err)
+	}
+	page, err := client.GetFillsPage(t.Context(), AccountHistoryParams{
+		Sort:   PerpsSortAscending,
+		Cursor: "12",
+	})
+	if err != nil {
+		t.Fatalf("GetFillsPage: %v", err)
+	}
+	if !page.More || page.NextCursor != "34" {
+		t.Fatalf("page = %+v, want more with cursor 34", page)
+	}
+
+	_, err = client.GetFillsPage(t.Context(), AccountHistoryParams{Sort: "middle"})
+	if err == nil || !strings.Contains(err.Error(), "invalid sort direction") {
+		t.Fatalf("invalid sort error = %v", err)
+	}
+}
+
 func TestOpenSessionAuthenticatesSubscribesAndEmitsEvents(t *testing.T) {
 	frames := make(chan map[string]any, 2)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -364,6 +404,15 @@ func TestSessionReconnectsAndResubscribes(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = session.Close() })
 
+	select {
+	case event, ok := <-session.Events():
+		if !ok || event.Type != "resync" || event.Resync == nil ||
+			event.Resync.Reason != PerpsResyncReconnect {
+			t.Fatalf("reconnect resync event = %+v, open = %v", event, ok)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for reconnect resync event")
+	}
 	select {
 	case event, ok := <-session.Events():
 		if !ok || event.Channel != "balances" || event.Sequence != 11 {
