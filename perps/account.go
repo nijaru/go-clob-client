@@ -171,7 +171,12 @@ func (c *AuthenticatedClient) GetFundingPaymentsPage(
 	p AccountHistoryParams,
 ) (PerpsPage[PerpsAccountFundingPayment], error) {
 	var out PerpsPage[PerpsAccountFundingPayment]
-	if err := c.getAuthenticatedJSON(ctx, "/v1/account/funding", historyQuery(p), &out); err != nil {
+	if err := c.getAuthenticatedJSON(
+		ctx,
+		"/v1/account/funding",
+		historyQuery(p),
+		&out,
+	); err != nil {
 		return PerpsPage[PerpsAccountFundingPayment]{}, err
 	}
 	return out, nil
@@ -183,7 +188,12 @@ func (c *AuthenticatedClient) GetDepositsPage(
 	p AccountHistoryParams,
 ) (PerpsPage[PerpsDeposit], error) {
 	var out PerpsPage[PerpsDeposit]
-	if err := c.getAuthenticatedJSON(ctx, "/v1/account/deposits", historyQuery(p), &out); err != nil {
+	if err := c.getAuthenticatedJSON(
+		ctx,
+		"/v1/account/deposits",
+		historyQuery(p),
+		&out,
+	); err != nil {
 		return PerpsPage[PerpsDeposit]{}, err
 	}
 	return out, nil
@@ -195,7 +205,12 @@ func (c *AuthenticatedClient) GetWithdrawalsPage(
 	p AccountHistoryParams,
 ) (PerpsPage[PerpsWithdrawal], error) {
 	var out PerpsPage[PerpsWithdrawal]
-	if err := c.getAuthenticatedJSON(ctx, "/v1/account/withdrawals", historyQuery(p), &out); err != nil {
+	if err := c.getAuthenticatedJSON(
+		ctx,
+		"/v1/account/withdrawals",
+		historyQuery(p),
+		&out,
+	); err != nil {
 		return PerpsPage[PerpsWithdrawal]{}, err
 	}
 	return out, nil
@@ -207,7 +222,12 @@ func (c *AuthenticatedClient) GetEquityHistoryPage(
 	p AccountIntervalHistoryParams,
 ) (PerpsPage[PerpsEquityPoint], error) {
 	var out PerpsPage[PerpsEquityPoint]
-	if err := c.getAuthenticatedJSON(ctx, "/v1/account/equity", intervalHistoryQuery(p), &out); err != nil {
+	if err := c.getAuthenticatedJSON(
+		ctx,
+		"/v1/account/equity",
+		intervalHistoryQuery(p),
+		&out,
+	); err != nil {
 		return PerpsPage[PerpsEquityPoint]{}, err
 	}
 	return out, nil
@@ -219,7 +239,12 @@ func (c *AuthenticatedClient) GetPnlHistoryPage(
 	p AccountIntervalHistoryParams,
 ) (PerpsPage[PerpsPnlPoint], error) {
 	var out PerpsPage[PerpsPnlPoint]
-	if err := c.getAuthenticatedJSON(ctx, "/v1/account/pnl", intervalHistoryQuery(p), &out); err != nil {
+	if err := c.getAuthenticatedJSON(
+		ctx,
+		"/v1/account/pnl",
+		intervalHistoryQuery(p),
+		&out,
+	); err != nil {
 		return PerpsPage[PerpsPnlPoint]{}, err
 	}
 	return out, nil

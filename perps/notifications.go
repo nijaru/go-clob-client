@@ -142,7 +142,9 @@ func (n *PerpsNotification) UnmarshalJSON(data []byte) error {
 	}
 	*n = PerpsNotification{ID: probe.ID, Type: probe.Type}
 	switch probe.Type {
-	case PerpsNotificationPositionOpened, PerpsNotificationPositionIncreased, PerpsNotificationPositionReduced:
+	case PerpsNotificationPositionOpened,
+		PerpsNotificationPositionIncreased,
+		PerpsNotificationPositionReduced:
 		var value PerpsPositionChangeNotification
 		if err := stdjson.Unmarshal(data, &value); err != nil {
 			return fmt.Errorf("decode perps position change notification: %w", err)
@@ -267,7 +269,9 @@ func validateLiquidationWarningNotification(value PerpsLiquidationWarningNotific
 		}
 	case PerpsMarginCross:
 		if value.InstrumentID != nil || value.LiquidationPrice != "" {
-			return fmt.Errorf("perps cross liquidation warning has invalid instrument or liquidation price")
+			return fmt.Errorf(
+				"perps cross liquidation warning has invalid instrument or liquidation price",
+			)
 		}
 	default:
 		return fmt.Errorf("perps liquidation warning margin type %q is invalid", value.MarginType)
@@ -360,10 +364,14 @@ func (c *AuthenticatedClient) GetNotificationsPage(
 	p NotificationsParams,
 ) (PerpsNotificationsPage, error) {
 	if p.SinceSequence < 0 {
-		return PerpsNotificationsPage{}, fmt.Errorf("perps: notification since sequence must be non-negative")
+		return PerpsNotificationsPage{}, fmt.Errorf(
+			"perps: notification since sequence must be non-negative",
+		)
 	}
 	if p.Limit < 0 {
-		return PerpsNotificationsPage{}, fmt.Errorf("perps: notification limit must be non-negative")
+		return PerpsNotificationsPage{}, fmt.Errorf(
+			"perps: notification limit must be non-negative",
+		)
 	}
 	query := url.Values{}
 	if p.SinceSequence != 0 {
@@ -449,7 +457,12 @@ func (c *AuthenticatedClient) MarkNotificationsRead(
 		Status string `json:"status"`
 		Error  string `json:"error"`
 	}
-	if err := c.postAuthenticatedJSON(ctx, accountNotificationsReadEndpoint, body, &response); err != nil {
+	if err := c.postAuthenticatedJSON(
+		ctx,
+		accountNotificationsReadEndpoint,
+		body,
+		&response,
+	); err != nil {
 		return err
 	}
 	if response.Status == "ok" {
@@ -458,7 +471,10 @@ func (c *AuthenticatedClient) MarkNotificationsRead(
 	if response.Status == "err" && response.Error != "" {
 		return fmt.Errorf("perps: mark notifications read: %s", response.Error)
 	}
-	return fmt.Errorf("perps: unexpected mark notifications read response status %q", response.Status)
+	return fmt.Errorf(
+		"perps: unexpected mark notifications read response status %q",
+		response.Status,
+	)
 }
 
 func encodeNotificationReadCursor(cursor PerpsNotificationReadCursor) (string, error) {

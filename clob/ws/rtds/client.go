@@ -505,7 +505,10 @@ func chainlinkTWAPTopic(window ChainlinkTWAPWindowSeconds) (string, error) {
 	case ChainlinkTWAP60Seconds:
 		return "crypto_prices_twap_sixty", nil
 	default:
-		return "", fmt.Errorf("rtds: Chainlink TWAP window must be 30 or 60 seconds, got %d", window)
+		return "", fmt.Errorf(
+			"rtds: Chainlink TWAP window must be 30 or 60 seconds, got %d",
+			window,
+		)
 	}
 }
 

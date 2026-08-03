@@ -134,13 +134,15 @@ func TestAPIErrorRetryAfterRejectsInvalidValues(t *testing.T) {
 		{name: "negative body", body: `{"retry_after_seconds":-1}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if tc.header != "" {
-					w.Header().Set("Retry-After", tc.header)
-				}
-				w.WriteHeader(http.StatusBadRequest)
-				_, _ = w.Write([]byte(tc.body))
-			}))
+			server := httptest.NewServer(
+				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if tc.header != "" {
+						w.Header().Set("Retry-After", tc.header)
+					}
+					w.WriteHeader(http.StatusBadRequest)
+					_, _ = w.Write([]byte(tc.body))
+				}),
+			)
 			defer server.Close()
 
 			client := &Client{BaseURL: server.URL, HTTPClient: server.Client(), UserAgent: "test"}

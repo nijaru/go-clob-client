@@ -128,7 +128,10 @@ func (m *RtdsMessage) AsChainlinkTWAPPrice() (*ChainlinkTWAPPrice, error) {
 	}
 	var fullAccuracyValue string
 	if err := stdjson.Unmarshal(wire.FullAccuracyValue, &fullAccuracyValue); err != nil {
-		return nil, fmt.Errorf("Chainlink TWAP full_accuracy_value: expected signed integer string: %w", err)
+		return nil, fmt.Errorf(
+			"Chainlink TWAP full_accuracy_value: expected signed integer string: %w",
+			err,
+		)
 	}
 	value, err := chainlinkE18ToDecimalString(fullAccuracyValue)
 	if err != nil {

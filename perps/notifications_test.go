@@ -99,7 +99,8 @@ func TestPerpsNotificationAccountMethods(t *testing.T) {
 		case "1":
 			_ = stdjson.NewEncoder(w).Encode(map[string]any{"unread": 4})
 		default:
-			if query.Get("since_seq") != "10" || query.Get("limit") != "2" || query.Get("cursor") != "cursor-1" {
+			if query.Get("since_seq") != "10" || query.Get("limit") != "2" ||
+				query.Get("cursor") != "cursor-1" {
 				t.Errorf("notification query = %v", query)
 			}
 			_ = stdjson.NewEncoder(w).Encode(map[string]any{
@@ -176,10 +177,16 @@ func TestPerpsNotificationAccountMethods(t *testing.T) {
 			t.Fatalf("params %+v: expected validation error", params)
 		}
 	}
-	if _, err := client.GetNotificationsPage(context.Background(), NotificationsParams{SinceSequence: -1}); err == nil {
+	if _, err := client.GetNotificationsPage(
+		context.Background(),
+		NotificationsParams{SinceSequence: -1},
+	); err == nil {
 		t.Fatal("expected negative since sequence error")
 	}
-	if _, err := client.GetNotificationsPage(context.Background(), NotificationsParams{Limit: -1}); err == nil {
+	if _, err := client.GetNotificationsPage(
+		context.Background(),
+		NotificationsParams{Limit: -1},
+	); err == nil {
 		t.Fatal("expected negative limit error")
 	}
 }
@@ -218,7 +225,11 @@ func TestPerpsSessionTypedNotificationAndResync(t *testing.T) {
 		errors:       make(chan error, 1),
 		orderWaiters: make(map[int][]chan orderWaitResponse),
 	}
-	session.handlePayload([]byte(`{"ch":"notifications","ts":100,"sq":7,"data":{"id":"n-1","type":"position_reduced","instrument_id":7,"side":"short","size":"2","avg_price":"50","leverage":2}}`))
+	session.handlePayload(
+		[]byte(
+			`{"ch":"notifications","ts":100,"sq":7,"data":{"id":"n-1","type":"position_reduced","instrument_id":7,"side":"short","size":"2","avg_price":"50","leverage":2}}`,
+		),
+	)
 	session.handlePayload([]byte(`{"ch":"notifications","type":"resync","ts":101,"sq":8}`))
 
 	update := <-session.events
