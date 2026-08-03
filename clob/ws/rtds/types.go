@@ -116,7 +116,11 @@ func (m *RtdsMessage) AsChainlinkTWAPPrice() (*ChainlinkTWAPPrice, error) {
 	if err := stdjson.Unmarshal(m.Payload, &wire); err != nil {
 		return nil, fmt.Errorf("decode Chainlink TWAP payload: %w", err)
 	}
-	if _, err := decodeDecimalValue(wire.Value); err != nil {
+	displayValue, err := decodeDecimalValue(wire.Value)
+	if err != nil || displayValue == "" {
+		if err == nil {
+			err = fmt.Errorf("value is empty")
+		}
 		return nil, fmt.Errorf("Chainlink TWAP display value: %w", err)
 	}
 	if len(wire.FullAccuracyValue) == 0 {
