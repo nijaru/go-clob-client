@@ -11,6 +11,7 @@ const (
 	accountBalancesEndpoint   = "/v1/account/balances"
 	accountPortfolioEndpoint  = "/v1/account/portfolio"
 	accountStatsEndpoint      = "/v1/account/stats"
+	accountAutoCancelEndpoint = "/v1/account/auto-cancel"
 	accountConfigEndpoint     = "/v1/account/config"
 	accountOpenOrdersEndpoint = "/v1/account/open-orders"
 	accountOrdersEndpoint     = "/v1/account/orders"
@@ -78,6 +79,18 @@ func (c *AuthenticatedClient) GetPortfolio(ctx context.Context) (*PerpsPortfolio
 func (c *AuthenticatedClient) GetAccountStats(ctx context.Context) (*PerpsAccountStats, error) {
 	var out PerpsAccountStats
 	if err := c.getAuthenticatedJSON(ctx, accountStatsEndpoint, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetAutoCancelStatus returns the authenticated account's auto-cancel schedule
+// and daily trigger counters. A zero deadline means that it is disarmed.
+func (c *AuthenticatedClient) GetAutoCancelStatus(
+	ctx context.Context,
+) (*PerpsAutoCancelStatus, error) {
+	var out PerpsAutoCancelStatus
+	if err := c.getAuthenticatedJSON(ctx, accountAutoCancelEndpoint, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

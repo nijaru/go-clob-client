@@ -171,6 +171,28 @@ func (c *AuthenticatedClient) postAuthenticatedJSON(
 	)
 }
 
+func (c *AuthenticatedClient) patchAuthenticatedJSON(
+	ctx context.Context,
+	path string,
+	body any,
+	out any,
+) error {
+	return c.http.DoJSON(
+		ctx,
+		http.MethodPatch,
+		path,
+		nil,
+		body,
+		polyhttp.AuthNone,
+		nil,
+		map[string]string{
+			"POLYMARKET-PROXY":  c.credentials.Proxy,
+			"POLYMARKET-SECRET": c.credentials.Secret,
+		},
+		out,
+	)
+}
+
 // Host returns the configured API host.
 func (c *Client) Host() string { return c.host }
 

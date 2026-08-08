@@ -3,10 +3,12 @@ package perps
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/coder/websocket"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -110,6 +112,146 @@ func TestPostOrdersSignsAndSendsOfficialCommandShape(t *testing.T) {
 		}
 	case <-t.Context().Done():
 		t.Fatal("timed out waiting for command capture")
+	}
+}
+
+func TestAutoCancelSignsAndSendsAuthenticatedREST(t *testing.T) {
+	const proxy = "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf"
+	const privateKey = "0x0000000000000000000000000000000000000000000000000000000000000001"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPatch || r.URL.Path != "/v1/trade/auto-cancel" {
+			t.Errorf("request = %s %s", r.Method, r.URL.Path)
+		}
+		if r.Header.Get("POLYMARKET-PROXY") != proxy ||
+			r.Header.Get("POLYMARKET-SECRET") != "secret" {
+			t.Errorf("auth headers = %v", r.Header)
+		}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode body: %v", err)
+		}
+		op, ok := body["op"].(map[string]any)
+		if !ok || op["type"] != "autoCancel" {
+			t.Errorf("signed op = %#v", body["op"])
+		}
+		args, ok := op["args"].(map[string]any)
+		if !ok || args["time"] == nil || body["sig"] == "" {
+			t.Errorf("signed auto-cancel body = %#v", body)
+		}
+		_, _ = w.Write([]byte(`{"status":"ok","deadline":123}`))
+	}))
+	t.Cleanup(server.Close)
+	client, err := NewAuthenticated(AuthenticatedConfig{
+		Config:      Config{Host: server.URL, ChainID: 31337},
+		Credentials: PerpsCredentials{Proxy: proxy, Secret: "secret", PrivateKey: privateKey},
+	})
+	if err != nil {
+		t.Fatalf("NewAuthenticated: %v", err)
+	}
+	signer, err := client.delegatedSigner()
+	if err != nil {
+		t.Fatalf("delegatedSigner: %v", err)
+	}
+	session := &Session{client: client, chainID: 31337, signer: signer}
+	if err := session.ArmAutoCancel(
+		t.Context(),
+		time.Now().Add(10*time.Second).UnixMilli(),
+		0,
+	); err != nil {
+		t.Fatalf("ArmAutoCancel: %v", err)
+	}
+	if err := session.DisarmAutoCancel(t.Context(), 0); err != nil {
+		t.Fatalf("DisarmAutoCancel: %v", err)
+	}
+	if err := session.ArmAutoCancel(t.Context(), time.Now().UnixMilli(), 0); err == nil {
+		t.Fatal("ArmAutoCancel accepted a deadline less than five seconds away")
+	}
+}
+
+func TestAutoCancelDailyLimitIsClassified(t *testing.T) {
+	const proxy = "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf"
+	const privateKey = "0x0000000000000000000000000000000000000000000000000000000000000001"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"error":"auto_cancel_daily_limit_reached (daily limit)"}`))
+	}))
+	t.Cleanup(server.Close)
+	client, err := NewAuthenticated(AuthenticatedConfig{
+		Config:      Config{Host: server.URL, ChainID: 31337},
+		Credentials: PerpsCredentials{Proxy: proxy, Secret: "secret", PrivateKey: privateKey},
+	})
+	if err != nil {
+		t.Fatalf("NewAuthenticated: %v", err)
+	}
+	signer, _ := client.delegatedSigner()
+	session := &Session{client: client, chainID: 31337, signer: signer}
+	err = session.ArmAutoCancel(t.Context(), time.Now().Add(10*time.Second).UnixMilli(), 0)
+	if !errors.Is(err, ErrPerpsAutoCancelDailyLimit) {
+		t.Fatalf("error = %v, want ErrPerpsAutoCancelDailyLimit", err)
+	}
+}
+
+func TestUpdateMarginSignsOfficialCommandShape(t *testing.T) {
+	const proxy = "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf"
+	const privateKey = "0x0000000000000000000000000000000000000000000000000000000000000001"
+	command := make(chan map[string]any, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close(websocket.StatusNormalClosure, "")
+		for i := 1; i <= 3; i++ {
+			_, payload, err := conn.Read(r.Context())
+			if err != nil {
+				return
+			}
+			var frame map[string]any
+			if err := json.Unmarshal(payload, &frame); err != nil {
+				return
+			}
+			id := int(frame["id"].(float64))
+			if i == 3 {
+				command <- frame
+			}
+			response := map[string]any{"id": id, "data": map[string]any{"status": "ok"}}
+			encoded, _ := json.Marshal(response)
+			if err := conn.Write(r.Context(), websocket.MessageText, encoded); err != nil {
+				return
+			}
+		}
+	}))
+	t.Cleanup(server.Close)
+	client, err := NewAuthenticated(AuthenticatedConfig{
+		Config: Config{
+			WebSocketHost: "ws" + strings.TrimPrefix(server.URL, "http"),
+			ChainID:       31337,
+		},
+		Credentials: PerpsCredentials{Proxy: proxy, Secret: "secret", PrivateKey: privateKey},
+	})
+	if err != nil {
+		t.Fatalf("NewAuthenticated: %v", err)
+	}
+	session, err := client.OpenSession(t.Context(), SessionConfig{})
+	if err != nil {
+		t.Fatalf("OpenSession: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+	if err := session.UpdateMargin(t.Context(), 7, "-100.5000"); err != nil {
+		t.Fatalf("UpdateMargin: %v", err)
+	}
+	select {
+	case frame := <-command:
+		op, ok := frame["op"].(map[string]any)
+		if !ok || op["type"] != "updateMargin" {
+			t.Fatalf("command op = %#v", frame["op"])
+		}
+		args, ok := op["args"].(map[string]any)
+		if !ok || args["iid"] != float64(7) || args["amt"] != "-100.5" {
+			t.Fatalf("command args = %#v", op["args"])
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for margin command")
 	}
 }
 

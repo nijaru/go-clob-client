@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
+	"github.com/quagmt/udecimal"
 )
 
 // PerpsOrderSide is the direction of an authenticated order.
@@ -65,6 +67,10 @@ type PerpsCancelResult struct {
 	ClientOrderID string `json:"coid,omitempty"`
 	Error         string `json:"error,omitempty"`
 }
+
+// ErrPerpsAutoCancelDailyLimit indicates that the account cannot arm another
+// auto-cancel schedule until its daily trigger counter resets.
+var ErrPerpsAutoCancelDailyLimit = errors.New("perps: auto-cancel daily trigger limit reached")
 
 // PerpsLeverageResult is the acknowledgement returned by updateLeverage.
 type PerpsLeverageResult struct {
@@ -340,6 +346,131 @@ func (s *Session) UpdateLeverage(
 		return nil, fmt.Errorf("perps: %w", err)
 	}
 	return &result, nil
+}
+
+const (
+	perpsAutoCancelMinimumDelay = 5 * time.Second
+	autoCancelDailyLimitCode    = "auto_cancel_daily_limit_reached"
+)
+
+// ArmAutoCancel arms the one-shot schedule that cancels all open orders at
+// cancelAt, expressed as Unix milliseconds. The deadline must be at least five
+// seconds in the future. Arming again replaces the prior schedule.
+func (s *Session) ArmAutoCancel(
+	ctx context.Context,
+	cancelAt int64,
+	expiresAt int64,
+) error {
+	if cancelAt < time.Now().Add(perpsAutoCancelMinimumDelay).UnixMilli() {
+		return fmt.Errorf("perps: cancel time must be at least 5 seconds in the future")
+	}
+	return s.updateAutoCancel(ctx, cancelAt, expiresAt)
+}
+
+// DisarmAutoCancel clears the current auto-cancel schedule without triggering
+// it. It remains allowed after the daily trigger limit is reached.
+func (s *Session) DisarmAutoCancel(ctx context.Context, expiresAt int64) error {
+	return s.updateAutoCancel(ctx, 0, expiresAt)
+}
+
+// GetAutoCancelStatus returns the schedule and daily trigger counters for the
+// session account.
+func (s *Session) GetAutoCancelStatus(
+	ctx context.Context,
+) (*PerpsAutoCancelStatus, error) {
+	return s.client.GetAutoCancelStatus(ctx)
+}
+
+func (s *Session) updateAutoCancel(
+	ctx context.Context,
+	deadline int64,
+	expiresAt int64,
+) error {
+	if expiresAt < 0 {
+		return fmt.Errorf("perps: expiration must not be negative")
+	}
+	op := []any{"autoCancel", []any{deadline}}
+	body, err := makePerpsSignedCommand(
+		s.signer,
+		s.chainID,
+		op,
+		map[string]any{"type": "autoCancel", "args": map[string]any{"time": deadline}},
+		expiresAt,
+	)
+	if err != nil {
+		return err
+	}
+	var response PerpsAutoCancelResponse
+	if err := s.client.patchAuthenticatedJSON(
+		ctx,
+		"/v1/trade/auto-cancel",
+		body,
+		&response,
+	); err != nil {
+		if isAutoCancelDailyLimitError(err) {
+			return fmt.Errorf("%w: %w", ErrPerpsAutoCancelDailyLimit, err)
+		}
+		return err
+	}
+	if response.Status != "ok" {
+		if response.Error == "" {
+			response.Error = "auto-cancel update rejected"
+		}
+		return fmt.Errorf("perps: %s", response.Error)
+	}
+	return nil
+}
+
+func isAutoCancelDailyLimitError(err error) bool {
+	var apiErr *polyhttp.APIError
+	return errors.As(err, &apiErr) && strings.Contains(apiErr.Message, autoCancelDailyLimitCode)
+}
+
+// UpdateMargin adjusts isolated margin for an instrument. Positive amounts add
+// margin and negative amounts remove it.
+func (s *Session) UpdateMargin(
+	ctx context.Context,
+	instrumentID int,
+	amount string,
+) error {
+	if instrumentID < 0 {
+		return fmt.Errorf("perps: instrument ID must be non-negative")
+	}
+	normalizedAmount, err := normalizePerpsDecimal(amount)
+	if err != nil {
+		return err
+	}
+	op := []any{"updateMargin", []any{instrumentID, normalizedAmount}}
+	data, err := s.sendSignedCommand(ctx, op, map[string]any{
+		"type": "updateMargin",
+		"args": map[string]any{"iid": instrumentID, "amt": normalizedAmount},
+	})
+	if err != nil {
+		return err
+	}
+	var ack sessionAck
+	if err := json.Unmarshal(data, &ack); err != nil {
+		return fmt.Errorf("perps: decode margin acknowledgement: %w", err)
+	}
+	if ack.Status != "ok" {
+		if ack.Error == "" {
+			ack.Error = "margin update rejected"
+		}
+		return fmt.Errorf("perps: %s", ack.Error)
+	}
+	return nil
+}
+
+func normalizePerpsDecimal(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", fmt.Errorf("perps: margin amount is required")
+	}
+	decimal, err := udecimal.Parse(value)
+	if err != nil {
+		return "", fmt.Errorf("perps: invalid margin amount %q: %w", value, err)
+	}
+	return decimal.String(), nil
 }
 
 func validatePerpsPostOrderAck(ack PerpsOrderAck) error {

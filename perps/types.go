@@ -322,6 +322,22 @@ type PerpsAccountStats struct {
 	EntityName          string `json:"entity_name,omitempty"`
 }
 
+// PerpsAutoCancelStatus is the current one-shot auto-cancel schedule. A zero
+// Deadline means that no schedule is armed; all timestamps are Unix milliseconds.
+type PerpsAutoCancelStatus struct {
+	Deadline   int64 `json:"deadline"`
+	Triggered  int   `json:"triggered"`
+	DailyLimit int   `json:"daily_limit"`
+	NextReset  int64 `json:"next_reset"`
+}
+
+// PerpsAutoCancelResponse acknowledges an auto-cancel arm or disarm command.
+type PerpsAutoCancelResponse struct {
+	Status   string `json:"status"`
+	Deadline int64  `json:"deadline"`
+	Error    string `json:"error,omitempty"`
+}
+
 // PerpsPortfolioPosition is an open position in the authenticated portfolio.
 type PerpsPortfolioPosition struct {
 	InstrumentID      int    `json:"instrument_id"`
@@ -409,6 +425,7 @@ type PerpsAccountFill struct {
 
 // PerpsAccountFundingPayment is an account funding payment entry.
 type PerpsAccountFundingPayment struct {
+	ID           int64  `json:"id"`
 	InstrumentID int    `json:"instrument_id"`
 	Size         string `json:"size"`
 	FundingRate  string `json:"funding_rate"`

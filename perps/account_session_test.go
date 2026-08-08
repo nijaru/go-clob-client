@@ -34,6 +34,15 @@ func TestAuthenticatedAccountReads(t *testing.T) {
 		assertPerpsAuth(t, r)
 		_ = json.NewEncoder(w).Encode(PerpsAccountStats{Volume7d: "100"})
 	})
+	mux.HandleFunc("/v1/account/auto-cancel", func(w http.ResponseWriter, r *http.Request) {
+		assertPerpsAuth(t, r)
+		_ = json.NewEncoder(w).Encode(PerpsAutoCancelStatus{
+			Deadline:   1234567890,
+			Triggered:  2,
+			DailyLimit: 10,
+			NextReset:  1234567999,
+		})
+	})
 	mux.HandleFunc("/v1/account/config", func(w http.ResponseWriter, r *http.Request) {
 		assertPerpsAuth(t, r)
 		if got := r.URL.Query().Get("instrument_id"); got != "7" {
@@ -69,7 +78,7 @@ func TestAuthenticatedAccountReads(t *testing.T) {
 	mux.HandleFunc("/v1/account/funding", func(w http.ResponseWriter, r *http.Request) {
 		assertPerpsAuth(t, r)
 		_ = json.NewEncoder(w).Encode(PerpsPage[PerpsAccountFundingPayment]{
-			Data: []PerpsAccountFundingPayment{{InstrumentID: 7, Funding: "0.1"}},
+			Data: []PerpsAccountFundingPayment{{ID: 8, InstrumentID: 7, Funding: "0.1"}},
 		})
 	})
 	mux.HandleFunc("/v1/account/deposits", func(w http.ResponseWriter, r *http.Request) {
@@ -115,6 +124,10 @@ func TestAuthenticatedAccountReads(t *testing.T) {
 	if err != nil || stats.Volume7d != "100" {
 		t.Fatalf("GetAccountStats = %+v, %v", stats, err)
 	}
+	autoCancel, err := client.GetAutoCancelStatus(t.Context())
+	if err != nil || autoCancel.Deadline != 1234567890 || autoCancel.DailyLimit != 10 {
+		t.Fatalf("GetAutoCancelStatus = %+v, %v", autoCancel, err)
+	}
 	instrumentID := 7
 	configs, err := client.GetAccountConfig(
 		t.Context(),
@@ -136,7 +149,8 @@ func TestAuthenticatedAccountReads(t *testing.T) {
 		t.Fatalf("GetFillsPage = %+v, %v", fills, err)
 	}
 	funding, err := client.GetFundingPaymentsPage(t.Context(), AccountHistoryParams{})
-	if err != nil || len(funding.Data) != 1 || funding.Data[0].Funding != "0.1" {
+	if err != nil || len(funding.Data) != 1 || funding.Data[0].Funding != "0.1" ||
+		funding.Data[0].ID != 8 {
 		t.Fatalf("GetFundingPaymentsPage = %+v, %v", funding, err)
 	}
 	deposits, err := client.GetDepositsPage(t.Context(), AccountHistoryParams{})
