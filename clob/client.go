@@ -30,12 +30,20 @@ type Client struct {
 	geoblockHTTP         *polyhttp.Client
 	rpcURL               string
 
-	tickSizeMu         *sync.RWMutex
-	tickSizeCache      map[string]TickSize
-	tickSizeTimestamps map[string]time.Time
-	negRiskMu          *sync.RWMutex
-	negRiskCache       map[string]bool
-	negRiskTimestamps  map[string]time.Time
+	tickSizeMu              *sync.RWMutex
+	tickSizeCache           map[string]TickSize
+	tickSizeTimestamps      map[string]time.Time
+	negRiskMu               *sync.RWMutex
+	negRiskCache            map[string]bool
+	negRiskTimestamps       map[string]time.Time
+	orderMetadataMu         *sync.Mutex
+	orderMetadataGeneration *uint64
+	orderConditionCache     map[string]string
+	orderConditionLoads     map[string]*orderConditionLoad
+	orderMetadataCache      map[string]orderMetadataEntry
+	orderMetadataLoads      map[string]*orderMetadataLoad
+	builderFeeCache         map[string]builderFeeEntry
+	builderFeeLoads         map[string]*orderMetadataLoad
 
 	cacheTTL     time.Duration
 	retryMax     int
@@ -138,19 +146,27 @@ func (c *AuthenticatedClient) PromoteToBuilder(auth BuilderAuth) {
 
 func newBase(config Config) *Client {
 	base := &Client{
-		host:                 config.Host,
-		rtdsHost:             config.RTDSHost,
-		relayerHost:          config.RelayerHost,
-		collateralReturnHost: config.CollateralReturnHost,
-		chainID:              config.ChainID,
-		useServerTime:        config.UseServerTime,
-		rpcURL:               config.RPCURL,
-		tickSizeMu:           &sync.RWMutex{},
-		tickSizeCache:        make(map[string]TickSize),
-		tickSizeTimestamps:   make(map[string]time.Time),
-		negRiskMu:            &sync.RWMutex{},
-		negRiskCache:         make(map[string]bool),
-		negRiskTimestamps:    make(map[string]time.Time),
+		host:                    config.Host,
+		rtdsHost:                config.RTDSHost,
+		relayerHost:             config.RelayerHost,
+		collateralReturnHost:    config.CollateralReturnHost,
+		chainID:                 config.ChainID,
+		useServerTime:           config.UseServerTime,
+		rpcURL:                  config.RPCURL,
+		tickSizeMu:              &sync.RWMutex{},
+		tickSizeCache:           make(map[string]TickSize),
+		tickSizeTimestamps:      make(map[string]time.Time),
+		negRiskMu:               &sync.RWMutex{},
+		negRiskCache:            make(map[string]bool),
+		negRiskTimestamps:       make(map[string]time.Time),
+		orderMetadataMu:         &sync.Mutex{},
+		orderMetadataGeneration: new(uint64),
+		orderConditionCache:     make(map[string]string),
+		orderConditionLoads:     make(map[string]*orderConditionLoad),
+		orderMetadataCache:      make(map[string]orderMetadataEntry),
+		orderMetadataLoads:      make(map[string]*orderMetadataLoad),
+		builderFeeCache:         make(map[string]builderFeeEntry),
+		builderFeeLoads:         make(map[string]*orderMetadataLoad),
 
 		cacheTTL:     config.TickSizeCacheTTL,
 		retryMax:     config.RetryMax,
@@ -443,7 +459,8 @@ func (c *AuthenticatedClient) runHeartbeatLoop(
 	}
 }
 
-// ClearTickSizeCache removes the cached tick size, negative risk flag, and fee rate for a specific token.
+// ClearTickSizeCache removes the cached tick size, negative risk flag, and
+// order metadata for a specific token.
 func (c *Client) ClearTickSizeCache(tokenID string) {
 	c.tickSizeMu.Lock()
 	delete(c.tickSizeCache, tokenID)
@@ -454,6 +471,7 @@ func (c *Client) ClearTickSizeCache(tokenID string) {
 	delete(c.negRiskCache, tokenID)
 	delete(c.negRiskTimestamps, tokenID)
 	c.negRiskMu.Unlock()
+	c.clearOrderMetadata(tokenID)
 }
 
 // ClearNegRiskCache removes the cached negative risk flag for a specific token.
@@ -462,6 +480,7 @@ func (c *Client) ClearNegRiskCache(tokenID string) {
 	delete(c.negRiskCache, tokenID)
 	delete(c.negRiskTimestamps, tokenID)
 	c.negRiskMu.Unlock()
+	c.clearOrderMetadata(tokenID)
 }
 
 // SetTickSize pre-populates the tick size cache for tokenID, bypassing the HTTP fetch.
@@ -482,7 +501,8 @@ func (c *Client) SetNegRisk(tokenID string, negRisk bool) {
 	c.negRiskMu.Unlock()
 }
 
-// InvalidateCaches clears all internal caches (tick size, neg risk).
+// InvalidateCaches clears all internal caches (tick size, neg risk, order
+// market metadata, and builder fee rates).
 func (c *Client) InvalidateCaches() {
 	c.tickSizeMu.Lock()
 	c.tickSizeCache = make(map[string]TickSize)
@@ -493,6 +513,7 @@ func (c *Client) InvalidateCaches() {
 	c.negRiskCache = make(map[string]bool)
 	c.negRiskTimestamps = make(map[string]time.Time)
 	c.negRiskMu.Unlock()
+	c.clearAllOrderMetadata()
 }
 
 // Host returns the base CLOB API host for the client.

@@ -44,6 +44,12 @@ func newOrderLifecycleServer(t *testing.T) (*httptest.Server, *orderLifecycleSer
 		w.Header().Set("Content-Type", "application/json")
 
 		switch r.URL.Path {
+		case marketsByTokenEndpoint + "100":
+			w.Write([]byte(`{"condition_id":"cid"}`))
+
+		case clobMarketEndpoint + "/cid":
+			w.Write([]byte(`{"c":"cid","mts":"0.01","nr":false,"t":[{"t":"100"}]}`))
+
 		case tickSizeEndpoint:
 			w.Write([]byte(`{"minimum_tick_size":"0.01"}`))
 
@@ -450,6 +456,10 @@ func TestOrderLifecycle_PostOrderAuthHeaders(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
+		case marketsByTokenEndpoint + "100":
+			w.Write([]byte(`{"condition_id":"cid"}`))
+		case clobMarketEndpoint + "/cid":
+			w.Write([]byte(`{"c":"cid","mts":"0.01","nr":false,"t":[{"t":"100"}]}`))
 		case tickSizeEndpoint:
 			w.Write([]byte(`{"minimum_tick_size":"0.01"}`))
 		case negRiskEndpoint:

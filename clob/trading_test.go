@@ -621,6 +621,20 @@ func newTradingTestServerWithTickSize(
 		w.Header().Set("Content-Type", "application/json")
 
 		switch r.URL.Path {
+		case marketsByTokenEndpoint + "100":
+			_, _ = w.Write(
+				[]byte(
+					`{"condition_id":"cid","primary_token_id":"100","secondary_token_id":"200"}`,
+				),
+			)
+		case clobMarketEndpoint + "/cid":
+			data, _ := json.Marshal(ClobMarketInfoResponse{
+				ConditionID: "cid",
+				MinTickSize: string(tickSize),
+				NegRisk:     false,
+				FeeDetails:  &FeeDetails{},
+			})
+			_, _ = w.Write(data)
 		case tickSizeEndpoint:
 			data, _ := json.Marshal(TickSizeResponse{MinimumTickSize: tickSize})
 			_, _ = w.Write(data)

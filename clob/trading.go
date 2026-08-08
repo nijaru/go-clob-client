@@ -54,24 +54,83 @@ func (c *SignerClient) CreateOrder(
 		return nil, err
 	}
 
-	tickSize, err := c.resolveTickSize(ctx, userOrder.TokenID, options)
+	var metadata orderMarketMetadata
+	var err error
+	tickSizeOption := options != nil && options.TickSize != ""
+	negRiskOption := options != nil && options.NegRisk != nil
+	marketTickSize, tickCached := c.cachedTickSize(userOrder.TokenID)
+	cachedNegRisk, negRiskCached := c.cachedNegRisk(userOrder.TokenID)
+	metadataLoaded := (!tickCached && !tickSizeOption) || (!negRiskCached && !negRiskOption)
+	if metadataLoaded {
+		metadata, err = c.resolveOrderMarketMetadata(ctx, userOrder.TokenID, false)
+		if err != nil {
+			return nil, err
+		}
+		if !tickCached {
+			marketTickSize = metadata.TickSize
+		}
+		if !negRiskCached {
+			cachedNegRisk = metadata.NegRisk
+			negRiskCached = true
+		}
+	}
+
+	var tickSize TickSize
+	if tickSizeOption {
+		if marketTickSize == "" {
+			marketTickSize, err = c.resolveTickSize(ctx, userOrder.TokenID, nil)
+			if err != nil {
+				return nil, err
+			}
+		}
+		smaller, err := isTickSizeSmaller(options.TickSize, marketTickSize)
+		if err != nil {
+			return nil, fmt.Errorf("invalid tick size option: %w", err)
+		}
+		if smaller {
+			return nil, fmt.Errorf(
+				"invalid tick size %q, minimum for market is %q",
+				options.TickSize,
+				marketTickSize,
+			)
+		}
+		tickSize = options.TickSize
+	} else if tickCached || metadataLoaded {
+		tickSize = marketTickSize
+		if tickSize == "" {
+			tickSize, err = c.resolveTickSize(ctx, userOrder.TokenID, nil)
+			if err != nil {
+				return nil, err
+			}
+		}
+	} else {
+		tickSize, err = c.resolveTickSize(ctx, userOrder.TokenID, options)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	tickSize, err = c.validateLimitPriceWithRefresh(
+		ctx,
+		userOrder.TokenID,
+		userOrder.Price,
+		tickSize,
+		options,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := validatePrice(userOrder.Price, tickSize); err != nil {
-		return nil, err
-	}
-	if err := validateLimitPricePrecision(userOrder.Price, tickSize); err != nil {
-		return nil, err
-	}
-	if err := validateTickAlignment(userOrder.Price, tickSize); err != nil {
-		return nil, err
-	}
-
-	isNegRisk, err := c.resolveNegRisk(ctx, userOrder.TokenID, options)
-	if err != nil {
-		return nil, err
+	var isNegRisk bool
+	if negRiskOption {
+		isNegRisk = *options.NegRisk
+	} else if negRiskCached {
+		isNegRisk = cachedNegRisk
+	} else {
+		isNegRisk, err = c.resolveNegRisk(ctx, userOrder.TokenID, options)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return c.buildSignedLimitOrder(ctx, userOrder, CreateOrderOptions{
@@ -116,10 +175,14 @@ func (c *SignerClient) CreateMarketOrder(
 		userOrder.Price = price
 	}
 
-	if err := validatePrice(userOrder.Price, tickSize); err != nil {
-		return nil, err
-	}
-	if err := validateTickAlignment(userOrder.Price, tickSize); err != nil {
+	tickSize, err = c.validateLimitPriceWithRefresh(
+		ctx,
+		userOrder.TokenID,
+		userOrder.Price,
+		tickSize,
+		options,
+	)
+	if err != nil {
 		return nil, err
 	}
 
@@ -422,13 +485,14 @@ func (c *SignerClient) buildSignedMarketOrder(
 		// BUY: Amount is USDC notional. Adjust for fees if MaxSpend is set.
 		adjustedAmount := amount
 		if userOrder.MaxSpend != nil && !userOrder.MaxSpend.IsZero() {
-			feeInfo, err := c.GetFeeInfo(ctx, userOrder.TokenID)
+			metadata, err := c.resolveOrderMarketMetadata(ctx, userOrder.TokenID, false)
 			if err != nil {
-				return nil, fmt.Errorf("resolve V2 fee info: %w", err)
+				return nil, fmt.Errorf("resolve V2 order metadata: %w", err)
 			}
+			feeInfo := metadata.FeeInfo
 			builderTakerFeeRate := udecimal.Zero
 			if userOrder.BuilderCode != "" {
-				builderFee, err := c.GetBuilderFeeRate(ctx, userOrder.BuilderCode)
+				builderFee, err := c.resolveBuilderFeeRateCached(ctx, userOrder.BuilderCode)
 				if err != nil {
 					return nil, fmt.Errorf("resolve builder fee rate: %w", err)
 				}
@@ -820,6 +884,61 @@ func normalizeTaker(taker string) string {
 		return zeroAddress
 	}
 	return taker
+}
+
+func (c *Client) validateLimitPriceWithRefresh(
+	ctx context.Context,
+	tokenID string,
+	price udecimal.Decimal,
+	tickSize TickSize,
+	options *CreateOrderOptions,
+) (TickSize, error) {
+	validate := func(size TickSize) error {
+		if err := validatePrice(price, size); err != nil {
+			return err
+		}
+		if err := validateLimitPricePrecision(price, size); err != nil {
+			return err
+		}
+		return validateTickAlignment(price, size)
+	}
+	if err := validate(tickSize); err == nil {
+		return tickSize, nil
+	} else if options != nil && options.TickSize != "" {
+		return tickSize, err
+	} else {
+		metadata, refreshErr := c.resolveOrderMarketMetadata(ctx, tokenID, true)
+		if refreshErr == nil && metadata.TickSize != "" {
+			if refreshedErr := validate(metadata.TickSize); refreshedErr == nil {
+				return metadata.TickSize, nil
+			} else {
+				return metadata.TickSize, refreshedErr
+			}
+		}
+		return tickSize, err
+	}
+}
+
+func (c *Client) cachedTickSize(tokenID string) (TickSize, bool) {
+	c.tickSizeMu.RLock()
+	cached, ok := c.tickSizeCache[tokenID]
+	ts := c.tickSizeTimestamps[tokenID]
+	c.tickSizeMu.RUnlock()
+	if ok && (c.cacheTTL == 0 || time.Since(ts) < c.cacheTTL) {
+		return cached, true
+	}
+	return "", false
+}
+
+func (c *Client) cachedNegRisk(tokenID string) (bool, bool) {
+	c.negRiskMu.RLock()
+	cached, ok := c.negRiskCache[tokenID]
+	ts := c.negRiskTimestamps[tokenID]
+	c.negRiskMu.RUnlock()
+	if ok && (c.cacheTTL == 0 || time.Since(ts) < c.cacheTTL) {
+		return cached, true
+	}
+	return false, false
 }
 
 func (c *Client) resolveTickSize(
