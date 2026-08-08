@@ -4,7 +4,6 @@ import (
 	"context"
 	"iter"
 	"net/url"
-	"slices"
 )
 
 const (
@@ -215,12 +214,9 @@ func (c *Client) GetActivity(ctx context.Context, p ActivityParams) ([]Activity,
 	q.Set("user", p.User)
 	p.Filter.appendQuery(q)
 	setCommaList(q, "type", p.ActivityTypes)
-	if slices.Contains(p.ActivityTypes, ActivityTypeDeposit) ||
-		slices.Contains(p.ActivityTypes, ActivityTypeWithdrawal) {
-		// The service defaults this exclusion to true. Explicitly disable it
-		// when the caller requests either account-level activity type.
-		q.Set("excludeDepositsWithdrawals", "false")
-	}
+	// The service defaults this exclusion to true. Disable it unconditionally
+	// so unfiltered activity includes account-level deposits and withdrawals.
+	q.Set("excludeDepositsWithdrawals", "false")
 	setInt(q, "limit", p.Limit)
 	setInt(q, "offset", p.Offset)
 	setInt64(q, "start", p.Start)
