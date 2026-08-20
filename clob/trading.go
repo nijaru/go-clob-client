@@ -54,6 +54,16 @@ func (c *SignerClient) CreateOrder(
 		return nil, err
 	}
 
+	// Position-backed (V3) orders skip the CLOB token market metadata
+	// resolution: tick size and neg-risk are CLOB token concepts and the
+	// Exchange V3 order body does not carry them.
+	if userOrder.PositionID != "" {
+		return c.buildSignedLimitOrder(ctx, userOrder, CreateOrderOptions{
+			TickSize: TickSizeTenth,
+			NegRisk:  new(false),
+		})
+	}
+
 	var metadata orderMarketMetadata
 	var err error
 	tickSizeOption := options != nil && options.TickSize != ""
@@ -147,6 +157,26 @@ func (c *SignerClient) CreateMarketOrder(
 ) (*SignedOrder, error) {
 	if err := validateMarketOrderArgs(userOrder); err != nil {
 		return nil, err
+	}
+
+	// Position-backed (V3) orders skip the CLOB token market metadata
+	// resolution and the order-book price derivation.
+	if userOrder.PositionID != "" {
+		if userOrder.OrderType == "" {
+			userOrder.OrderType = OrderTypeFOK
+		}
+		if userOrder.OrderType != OrderTypeFOK && userOrder.OrderType != OrderTypeFAK {
+			return nil, fmt.Errorf("market orders only support FOK or FAK order types")
+		}
+		if userOrder.Price.IsZero() {
+			return nil, fmt.Errorf(
+				"market orders require an explicit price for V3 position-backed outcomes",
+			)
+		}
+		return c.buildSignedMarketOrder(ctx, userOrder, CreateOrderOptions{
+			TickSize: TickSizeHundredth,
+			NegRisk:  new(false),
+		})
 	}
 
 	tickSize, err := c.resolveTickSize(ctx, userOrder.TokenID, options)
@@ -452,6 +482,7 @@ func (c *SignerClient) buildSignedLimitOrder(
 
 	return c.signOrder(ctx, orderBuildInput{
 		TokenID:       userOrder.TokenID,
+		PositionID:    userOrder.PositionID,
 		MakerAmount:   toTokenDecimals(rawMakerAmount),
 		TakerAmount:   toTokenDecimals(rawTakerAmount),
 		Side:          userOrder.Side,
@@ -531,6 +562,7 @@ func (c *SignerClient) buildSignedMarketOrder(
 
 	return c.signOrder(ctx, orderBuildInput{
 		TokenID:       userOrder.TokenID,
+		PositionID:    userOrder.PositionID,
 		MakerAmount:   toTokenDecimals(rawMakerAmount),
 		TakerAmount:   toTokenDecimals(rawTakerAmount),
 		Side:          userOrder.Side,
@@ -545,6 +577,7 @@ func (c *SignerClient) buildSignedMarketOrder(
 
 type orderBuildInput struct {
 	TokenID       string
+	PositionID    string
 	MakerAmount   udecimal.Decimal
 	TakerAmount   udecimal.Decimal
 	Side          Side
@@ -556,10 +589,57 @@ type orderBuildInput struct {
 	DeferExec     bool
 }
 
+// orderExchange selects the verifying contract and EIP-712 domain version for
+// an order. V2 token orders sign against the CTF Exchange with protocol
+// version "2"; V3 position-backed orders sign against Exchange V3 with
+// protocol version "3". The order body shape is identical — the wire field
+// is named `tokenId` for both CTF token IDs and PolyV2 position IDs.
+type orderExchange struct {
+	VerifyingContract string
+	Version           string
+}
+
+func (c *SignerClient) resolveOrderExchange(
+	input orderBuildInput,
+	contracts contractConfig,
+) (orderExchange, error) {
+	if input.PositionID != "" {
+		if contracts.ExchangeV3 == "" {
+			return orderExchange{}, fmt.Errorf(
+				"exchange v3 contract not configured for chain %d", c.chainID,
+			)
+		}
+		return orderExchange{
+			VerifyingContract: contracts.ExchangeV3,
+			Version:           "3",
+		}, nil
+	}
+	verifyingContract := contracts.Exchange
+	if input.NegRisk {
+		verifyingContract = contracts.NegRiskExchange
+	}
+	if verifyingContract == "" {
+		return orderExchange{}, fmt.Errorf(
+			"exchange contract not configured for chain %d", c.chainID,
+		)
+	}
+	return orderExchange{
+		VerifyingContract: verifyingContract,
+		Version:           protocolVersion,
+	}, nil
+}
+
 func (c *SignerClient) signOrder(ctx context.Context, input orderBuildInput) (*SignedOrder, error) {
 	contracts, err := getContractConfig(c.chainID)
 	if err != nil {
 		return nil, err
+	}
+
+	if input.TokenID == "" && input.PositionID == "" {
+		return nil, fmt.Errorf("order requires exactly one of TokenID or PositionID")
+	}
+	if input.TokenID != "" && input.PositionID != "" {
+		return nil, fmt.Errorf("order must not set both TokenID and PositionID")
 	}
 
 	signerAddress := c.signer.Address().Hex()
@@ -573,12 +653,9 @@ func (c *SignerClient) signOrder(ctx context.Context, input orderBuildInput) (*S
 		return nil, fmt.Errorf("generate order salt: %w", err)
 	}
 
-	verifyingContract := contracts.Exchange
-	if input.NegRisk {
-		verifyingContract = contracts.NegRiskExchange
-	}
-	if verifyingContract == "" {
-		return nil, fmt.Errorf("exchange contract not configured for chain %d", c.chainID)
+	exchange, err := c.resolveOrderExchange(input, contracts)
+	if err != nil {
+		return nil, err
 	}
 
 	timestampMs := time.Now().UnixMilli()
@@ -592,12 +669,19 @@ func (c *SignerClient) signOrder(ctx context.Context, input orderBuildInput) (*S
 		builderCode = zeroBytes32
 	}
 
+	// The wire field is named `tokenId` for both CTF token IDs and PolyV2
+	// position IDs. V3 position-backed orders carry the position ID there.
+	wireTokenID := input.TokenID
+	if wireTokenID == "" {
+		wireTokenID = input.PositionID
+	}
+
 	order := SignedOrder{
 		Order: Order{
 			Salt:          strconv.FormatUint(salt, 10),
 			Maker:         maker,
 			Signer:        signerAddress,
-			TokenID:       input.TokenID,
+			TokenID:       wireTokenID,
 			MakerAmount:   input.MakerAmount.StringFixed(0),
 			TakerAmount:   input.TakerAmount.StringFixed(0),
 			Side:          input.Side,
@@ -609,7 +693,7 @@ func (c *SignerClient) signOrder(ctx context.Context, input orderBuildInput) (*S
 		Expiration: strconv.FormatUint(input.Expiration, 10),
 	}
 
-	typedData := buildOrderTypedData(c.chainID, verifyingContract, order)
+	typedData := buildOrderTypedData(c.chainID, exchange.Version, exchange.VerifyingContract, order)
 
 	var signature string
 	if input.SignatureType == SignatureTypePoly1271 {
@@ -737,6 +821,7 @@ func appendHex(dst, data []byte) []byte {
 
 func buildOrderTypedData(
 	chainID int64,
+	protocolVersion string,
 	verifyingContract string,
 	order SignedOrder,
 ) apitypes.TypedData {
@@ -809,8 +894,11 @@ func validateGTDExpiration(expiration uint64, now int64) error {
 }
 
 func validateLimitOrderArgs(order OrderArgs) error {
-	if order.TokenID == "" {
-		return fmt.Errorf("token id is required")
+	if order.TokenID == "" && order.PositionID == "" {
+		return fmt.Errorf("order requires exactly one of TokenID or PositionID")
+	}
+	if order.TokenID != "" && order.PositionID != "" {
+		return fmt.Errorf("order must not set both TokenID and PositionID")
 	}
 	if order.Size.Cmp(udecimal.Zero) <= 0 {
 		return fmt.Errorf("size must be positive")
@@ -828,8 +916,11 @@ func validateLimitOrderArgs(order OrderArgs) error {
 }
 
 func validateMarketOrderArgs(order MarketOrderArgs) error {
-	if order.TokenID == "" {
-		return fmt.Errorf("token id is required")
+	if order.TokenID == "" && order.PositionID == "" {
+		return fmt.Errorf("order requires exactly one of TokenID or PositionID")
+	}
+	if order.TokenID != "" && order.PositionID != "" {
+		return fmt.Errorf("order must not set both TokenID and PositionID")
 	}
 	if order.Amount.Cmp(udecimal.Zero) <= 0 {
 		return fmt.Errorf("amount must be positive")

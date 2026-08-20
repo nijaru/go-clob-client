@@ -19,7 +19,7 @@ import (
 func TestOrderMetadataCacheWarmsSiblingTokensAndDeduplicatesLoads(t *testing.T) {
 	var conditionCalls atomic.Int32
 	var marketCalls atomic.Int32
-	var releaseMarket = make(chan struct{})
+	releaseMarket := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
@@ -33,7 +33,11 @@ func TestOrderMetadataCacheWarmsSiblingTokensAndDeduplicatesLoads(t *testing.T) 
 			case <-time.After(time.Second):
 				t.Error("timed out waiting to release market response")
 			}
-			_, _ = w.Write([]byte(`{"c":"cid","mts":"0.01","nr":true,"fd":{"r":"0.02","e":1},"t":[{"t":"yes"},{"t":"no"}]}`))
+			_, _ = w.Write(
+				[]byte(
+					`{"c":"cid","mts":"0.01","nr":true,"fd":{"r":"0.02","e":1},"t":[{"t":"yes"},{"t":"no"}]}`,
+				),
+			)
 		default:
 			t.Errorf("unexpected path: %s", r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)
@@ -133,7 +137,7 @@ func TestOrderMetadataCacheRefreshesMarketWithoutResolvingCondition(t *testing.T
 
 func TestBuilderFeeCacheDeduplicatesLoads(t *testing.T) {
 	var calls atomic.Int32
-	var release = make(chan struct{})
+	release := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != builderFeeRateEndpoint+"builder" {
 			t.Errorf("unexpected path: %s", r.URL.Path)
@@ -244,7 +248,7 @@ func TestCreateOrderHonorsIndependentNegRiskCache(t *testing.T) {
 }
 
 func signatureUsesContract(order *SignedOrder, chainID int64, contract string) bool {
-	typedData := buildOrderTypedData(chainID, contract, *order)
+	typedData := buildOrderTypedData(chainID, protocolVersion, contract, *order)
 	digest, _, err := apitypes.TypedDataAndHash(typedData)
 	if err != nil {
 		return false

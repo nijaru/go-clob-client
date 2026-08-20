@@ -385,8 +385,13 @@ type Trade struct {
 }
 
 // OrderArgs contains the inputs for building a limit order.
+//
+// Provide exactly one of TokenID or PositionID. TokenID identifies a CTF token
+// outcome and routes the order through the V2 exchange; PositionID identifies a
+// Polymarket V2 position-backed outcome and routes it through Exchange V3.
 type OrderArgs struct {
 	TokenID    string
+	PositionID string
 	Price      udecimal.Decimal
 	Size       udecimal.Decimal
 	Side       Side
@@ -398,8 +403,15 @@ type OrderArgs struct {
 }
 
 // MarketOrderArgs contains the inputs for building a market order.
+//
+// Provide exactly one of TokenID or PositionID. TokenID identifies a CTF token
+// outcome and routes the order through the V2 exchange; PositionID identifies a
+// Polymarket V2 position-backed outcome and routes it through Exchange V3.
 type MarketOrderArgs struct {
 	TokenID string
+	// PositionID identifies a Polymarket V2 position-backed outcome. When set,
+	// the order routes through Exchange V3 and TokenID must be empty.
+	PositionID string
 	// Amount is the quantity to trade:
 	//   BUY:  Amount is the USDC notional to spend. Shares are derived from price.
 	//   SELL: Amount is the number of shares to sell.

@@ -53,7 +53,12 @@ func TestNormalizeFunderAddressMatchesReferenceWalletDerivation(t *testing.T) {
 	if _, err := normalizeFunderAddress(80002, signer, SignatureTypePolyProxy, ""); err == nil {
 		t.Fatal("expected proxy derivation on amoy to fail")
 	}
-	if _, err := normalizeFunderAddress(PolygonChainID, signer, SignatureTypeEOA, signer); err == nil {
+	if _, err := normalizeFunderAddress(
+		PolygonChainID,
+		signer,
+		SignatureTypeEOA,
+		signer,
+	); err == nil {
 		t.Fatal("expected EOA funder validation to fail")
 	}
 }
@@ -278,6 +283,69 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 			},
 			wantExp: "0",
 		},
+		{
+			name: "limit-buy-v3-position-eoa",
+			client: Config{
+				Host:       server.URL,
+				PrivateKey: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+				Credentials: &Credentials{
+					Key:        "api-key",
+					Secret:     "c2VjcmV0",
+					Passphrase: "pass",
+				},
+			},
+			build: func(client *SignerClient) (*SignedOrder, error) {
+				return client.CreateOrder(t.Context(), OrderArgs{
+					PositionID: "999",
+					Price:      udecimal.MustParse("0.5"),
+					Size:       udecimal.MustParse("100"),
+					Side:       SideBuy,
+				}, &CreateOrderOptions{TickSize: TickSizeTenth, NegRisk: new(false)})
+			},
+			want: Order{
+				Salt:          "1",
+				Maker:         "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+				Signer:        "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+				TokenID:       "999",
+				MakerAmount:   "50000000",
+				TakerAmount:   "100000000",
+				Side:          SideBuy,
+				SignatureType: SignatureTypeEOA,
+			},
+			wantExp: "0",
+		},
+		{
+			name: "market-sell-v3-position-eoa",
+			client: Config{
+				Host:       server.URL,
+				PrivateKey: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+				Credentials: &Credentials{
+					Key:        "api-key",
+					Secret:     "c2VjcmV0",
+					Passphrase: "pass",
+				},
+			},
+			build: func(client *SignerClient) (*SignedOrder, error) {
+				return client.CreateMarketOrder(t.Context(), MarketOrderArgs{
+					PositionID: "999",
+					Price:      udecimal.MustParse("0.56"),
+					Amount:     udecimal.MustParse("100"),
+					Side:       SideSell,
+					OrderType:  OrderTypeFOK,
+				}, &CreateOrderOptions{TickSize: TickSizeHundredth, NegRisk: new(false)})
+			},
+			want: Order{
+				Salt:          "1",
+				Maker:         "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+				Signer:        "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+				TokenID:       "999",
+				MakerAmount:   "100000000",
+				TakerAmount:   "56000000",
+				Side:          SideSell,
+				SignatureType: SignatureTypeEOA,
+			},
+			wantExp: "0",
+		},
 	}
 
 	for _, fixture := range fixtures {
@@ -349,5 +417,79 @@ func TestDeterministicSignedOrderFixtures(t *testing.T) {
 				t.Fatalf("expiration = %s, want %s", order.Expiration, fixture.wantExp)
 			}
 		})
+	}
+}
+
+// TestV3PositionRoutingUsesExchangeV3Domain verifies that a position-backed
+// order signs against Exchange V3 with protocol version "3" while a token
+// order signs against the CTF Exchange with version "2". Same order body,
+// different verifying contract, so the signatures must differ.
+func TestV3PositionRoutingUsesExchangeV3Domain(t *testing.T) {
+	t.Parallel()
+
+	server := newTradingFixtureServer(t)
+	defer server.Close()
+
+	client, err := NewSignerClient(Config{
+		Host:       server.URL,
+		PrivateKey: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	client.saltGenerator = func() (uint64, error) { return 1, nil }
+
+	v2Order, err := client.CreateOrder(t.Context(), OrderArgs{
+		TokenID: "123",
+		Price:   udecimal.MustParse("0.5"),
+		Size:    udecimal.MustParse("100"),
+		Side:    SideBuy,
+	}, &CreateOrderOptions{TickSize: TickSizeTenth, NegRisk: new(false)})
+	if err != nil {
+		t.Fatalf("create v2 order: %v", err)
+	}
+
+	v3Order, err := client.CreateOrder(t.Context(), OrderArgs{
+		PositionID: "999",
+		Price:      udecimal.MustParse("0.5"),
+		Size:       udecimal.MustParse("100"),
+		Side:       SideBuy,
+	}, &CreateOrderOptions{TickSize: TickSizeTenth, NegRisk: new(false)})
+	if err != nil {
+		t.Fatalf("create v3 order: %v", err)
+	}
+
+	if v2Order.Signature == v3Order.Signature {
+		t.Fatal("v2 and v3 signatures must differ for the same order body")
+	}
+}
+
+// TestOrderAssetExactlyOneIdentifier enforces the discriminated-union asset
+// contract: an order must provide exactly one of TokenID or PositionID.
+func TestOrderAssetExactlyOneIdentifier(t *testing.T) {
+	t.Parallel()
+
+	server := newTradingFixtureServer(t)
+	defer server.Close()
+
+	client, err := NewSignerClient(Config{
+		Host:       server.URL,
+		PrivateKey: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+
+	if _, err := client.CreateOrder(t.Context(), OrderArgs{}, &CreateOrderOptions{}); err == nil {
+		t.Fatal("expected error for order with no identifier")
+	}
+	if _, err := client.CreateOrder(t.Context(), OrderArgs{
+		TokenID:    "123",
+		PositionID: "999",
+		Price:      udecimal.MustParse("0.5"),
+		Size:       udecimal.MustParse("100"),
+		Side:       SideBuy,
+	}, &CreateOrderOptions{}); err == nil {
+		t.Fatal("expected error for order with both identifiers")
 	}
 }
