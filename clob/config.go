@@ -17,6 +17,9 @@ const (
 	DefaultGeoblockHost = "https://polymarket.com"
 	// DefaultRelayerHost is the production Polymarket gasless relayer URL.
 	DefaultRelayerHost = "https://relayer-v2.polymarket.com"
+	// DefaultBuilderGatewayHost is the production Polymarket builder gateway
+	// URL used for requester-side combo RFQ requests and accepts.
+	DefaultBuilderGatewayHost = "https://combos-rfq-gateway-builder.polymarket.com"
 	// DefaultCollateralReturnHost is the production collateral-return service URL.
 	DefaultCollateralReturnHost = "https://combos-rfq-collateral-return.polymarket.com"
 	// PolygonChainID is the Polygon mainnet chain ID used by Polymarket.
@@ -58,6 +61,10 @@ type Config struct {
 	// CollateralReturnHost overrides the collateral-return service URL.
 	// Defaults to DefaultCollateralReturnHost.
 	CollateralReturnHost string
+	// BuilderGatewayHost overrides the builder gateway URL used for
+	// requester-side combo RFQ requests and accepts. Defaults to
+	// DefaultBuilderGatewayHost.
+	BuilderGatewayHost string
 	// ChainID is the EVM chain ID. Defaults to PolygonChainID (137).
 	ChainID int64
 	// PrivateKey is the hex-encoded Ethereum private key used for signing.
@@ -141,6 +148,11 @@ func (c Config) normalized() Config {
 		c.CollateralReturnHost = DefaultCollateralReturnHost
 	}
 	c.CollateralReturnHost = strings.TrimRight(c.CollateralReturnHost, "/")
+
+	if c.BuilderGatewayHost == "" {
+		c.BuilderGatewayHost = DefaultBuilderGatewayHost
+	}
+	c.BuilderGatewayHost = strings.TrimRight(c.BuilderGatewayHost, "/")
 
 	if c.ChainID == 0 {
 		c.ChainID = PolygonChainID

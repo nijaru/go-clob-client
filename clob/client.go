@@ -24,10 +24,12 @@ type Client struct {
 	rtdsHost             string
 	relayerHost          string
 	collateralReturnHost string
+	builderGatewayHost   string
 	chainID              int64
 	useServerTime        bool
 	http                 *polyhttp.Client
 	geoblockHTTP         *polyhttp.Client
+	gatewayHTTP          *polyhttp.Client
 	rpcURL               string
 
 	tickSizeMu              *sync.RWMutex
@@ -118,6 +120,7 @@ func NewAuthenticatedClient(config Config) (*AuthenticatedClient, error) {
 		heartbeatInterval: config.HeartbeatInterval,
 	}
 	base.http.Headers = authClient.addAuthHeaders
+	base.gatewayHTTP.Headers = authClient.addAuthHeaders
 	if !config.DisableAutoHeartbeat {
 		if err := authClient.StartHeartbeats(); err != nil {
 			return nil, err
@@ -150,6 +153,7 @@ func newBase(config Config) *Client {
 		rtdsHost:                config.RTDSHost,
 		relayerHost:             config.RelayerHost,
 		collateralReturnHost:    config.CollateralReturnHost,
+		builderGatewayHost:      config.BuilderGatewayHost,
 		chainID:                 config.ChainID,
 		useServerTime:           config.UseServerTime,
 		rpcURL:                  config.RPCURL,
@@ -185,6 +189,12 @@ func newBase(config Config) *Client {
 		UserAgent:         config.UserAgent,
 		OnRateLimitUpdate: config.OnRateLimitUpdate,
 	}
+	base.gatewayHTTP = &polyhttp.Client{
+		BaseURL:           config.BuilderGatewayHost,
+		HTTPClient:        config.HTTPClient,
+		UserAgent:         config.UserAgent,
+		OnRateLimitUpdate: config.OnRateLimitUpdate,
+	}
 	return base
 }
 
@@ -211,6 +221,7 @@ func newSignerFrom(base *Client, config Config) (*SignerClient, error) {
 		rpcURL:        config.RPCURL,
 	}
 	base.http.Headers = sc.addAuthHeaders
+	base.gatewayHTTP.Headers = sc.addAuthHeaders
 	return sc, nil
 }
 
@@ -227,6 +238,11 @@ func (c *Client) copyBase() *Client {
 		BaseURL:    c.geoblockHTTP.BaseURL,
 		HTTPClient: c.geoblockHTTP.HTTPClient,
 		UserAgent:  c.geoblockHTTP.UserAgent,
+	}
+	copy.gatewayHTTP = &polyhttp.Client{
+		BaseURL:    c.gatewayHTTP.BaseURL,
+		HTTPClient: c.gatewayHTTP.HTTPClient,
+		UserAgent:  c.gatewayHTTP.UserAgent,
 	}
 	return &copy
 }
@@ -303,6 +319,7 @@ func (c *SignerClient) AsAuthenticatedWithInterval(
 		heartbeatInterval: heartbeatInterval,
 	}
 	ac.http.Headers = ac.addAuthHeaders
+	ac.gatewayHTTP.Headers = ac.addAuthHeaders
 	return ac, nil
 }
 

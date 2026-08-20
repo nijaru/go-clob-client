@@ -72,6 +72,9 @@ const (
 	rfqDataQuotesEndpoint    = "/rfq/data/quotes"
 	rfqComboMarketsEndpoint  = "/v1/rfq/combo-markets"
 
+	// Builder-gateway combo RFQ endpoints (separate host).
+	builderRFQRequestsEndpoint = "/v1/builder/rfq/requests"
+
 	clobMarketEndpoint = "/clob-markets"
 
 	builderFeeRateEndpoint = "/fees/builder-fees/"
