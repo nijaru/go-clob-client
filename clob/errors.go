@@ -6,6 +6,22 @@ import (
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
 )
 
+// TradingRestriction identifies the trading restriction that caused a
+// rejection. It mirrors the upstream TS/Python classification.
+type TradingRestriction = polyhttp.TradingRestriction
+
+const (
+	// TradingRestrictionRestarting means the matching engine is restarting
+	// and rejects order requests until it is back.
+	TradingRestrictionRestarting = polyhttp.TradingRestrictionRestarting
+	// TradingRestrictionCancelOnly means cancels are accepted but new orders
+	// are rejected.
+	TradingRestrictionCancelOnly = polyhttp.TradingRestrictionCancelOnly
+	// TradingRestrictionPostOnly means cancels and post-only orders are
+	// accepted while other orders are rejected.
+	TradingRestrictionPostOnly = polyhttp.TradingRestrictionPostOnly
+)
+
 // APIError is the typed error returned for non-successful Polymarket API responses.
 type APIError = polyhttp.APIError
 
@@ -66,6 +82,26 @@ func IsNotFound(err error) bool { return errors.Is(err, ErrNotFound) }
 
 // IsRateLimit reports whether err is a 429 rate-limit error.
 func IsRateLimit(err error) bool { return errors.Is(err, ErrRateLimit) }
+
+// IsTradingRestriction reports whether err is an APIError carrying a typed
+// trading restriction.
+func IsTradingRestriction(err error) bool {
+	apiErr, ok := errors.AsType[*polyhttp.APIError](err)
+	if !ok {
+		return false
+	}
+	return apiErr.TradingRestriction != nil
+}
+
+// AsTradingRestriction returns the trading restriction carried by err, or nil
+// when err is not a trading-restriction error.
+func AsTradingRestriction(err error) *TradingRestriction {
+	apiErr, ok := errors.AsType[*polyhttp.APIError](err)
+	if !ok {
+		return nil
+	}
+	return apiErr.TradingRestriction
+}
 
 // IsGeoBlocked reports whether err is a 451 geo-block error.
 func IsGeoBlocked(err error) bool { return errors.Is(err, ErrGeoBlock) }

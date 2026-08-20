@@ -2,6 +2,9 @@ package clob
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"net/url"
 	"strconv"
 	"strings"
@@ -39,13 +42,30 @@ func (c *AuthenticatedClient) DeleteReadonlyAPIKey(ctx context.Context, key stri
 }
 
 // GetNotifications returns all notifications for the authenticated account.
+// Notifications whose type is unknown to this SDK are skipped so newly
+// introduced kinds cannot fail the feed; known kinds with malformed payloads
+// reject the entire response.
 func (c *AuthenticatedClient) GetNotifications(ctx context.Context) ([]Notification, error) {
 	query := url.Values{}
 	query.Set("signature_type", signatureTypeString(c.signatureType))
 
-	var out []Notification
-	err := c.getJSON(ctx, notificationsEndpoint, query, polyhttp.AuthL2, &out)
-	return out, err
+	var raw []json.RawMessage
+	if err := c.getJSON(ctx, notificationsEndpoint, query, polyhttp.AuthL2, &raw); err != nil {
+		return nil, err
+	}
+
+	out := make([]Notification, 0, len(raw))
+	for _, item := range raw {
+		var notification Notification
+		if err := json.Unmarshal(item, &notification); err != nil {
+			if errors.Is(err, errUnknownNotificationType) {
+				continue
+			}
+			return nil, fmt.Errorf("decode notification: %w", err)
+		}
+		out = append(out, notification)
+	}
+	return out, nil
 }
 
 // DeleteNotifications deletes notifications by ID when provided, or all notifications otherwise.

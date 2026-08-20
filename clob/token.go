@@ -404,24 +404,21 @@ func (c *AuthenticatedClient) SetupTradingApprovalsGasless(
 	if plan.Empty() {
 		return nil, nil
 	}
-	calls := make(
-		[]polyrelay.TransactionCall,
-		0,
-		len(plan.ERC20Approvals)+len(plan.ERC1155Approvals),
-	)
-	for _, approval := range plan.ERC20Approvals {
-		data, err := packERC20Approval(approval)
-		if err != nil {
-			return nil, err
-		}
-		calls = append(calls, tokenCall(approval.TokenAddress, data))
+	missing := &MissingTradingApprovals{
+		ERC20Approvals: make([]Erc20TradingApproval, 0, len(plan.ERC20Approvals)),
+		ERC1155Approvals: make([]ERC1155ApprovalForAllRequest, 0, len(plan.ERC1155Approvals)),
 	}
-	for _, approval := range plan.ERC1155Approvals {
-		data, err := packERC1155ApprovalForAll(approval)
-		if err != nil {
-			return nil, err
-		}
-		calls = append(calls, tokenCall(approval.TokenAddress, data))
+	for _, approval := range plan.ERC20Approvals {
+		missing.ERC20Approvals = append(missing.ERC20Approvals, Erc20TradingApproval{
+			TokenAddress:   approval.TokenAddress,
+			SpenderAddress: approval.SpenderAddress,
+			Amount:         new(big.Int).Set(approval.Amount),
+		})
+	}
+	missing.ERC1155Approvals = append(missing.ERC1155Approvals, plan.ERC1155Approvals...)
+	calls, err := buildMissingTradingApprovalCalls(missing)
+	if err != nil {
+		return nil, err
 	}
 	if metadata == "" {
 		metadata = "Trading setup approvals"

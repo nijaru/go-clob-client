@@ -174,14 +174,16 @@ func newBase(config Config) *Client {
 		rateLimiter:  newLimiter(config.RateLimit, config.RateBurst),
 	}
 	base.http = &polyhttp.Client{
-		BaseURL:    config.Host,
-		HTTPClient: config.HTTPClient,
-		UserAgent:  config.UserAgent,
+		BaseURL:           config.Host,
+		HTTPClient:        config.HTTPClient,
+		UserAgent:         config.UserAgent,
+		OnRateLimitUpdate: config.OnRateLimitUpdate,
 	}
 	base.geoblockHTTP = &polyhttp.Client{
-		BaseURL:    config.GeoblockHost,
-		HTTPClient: config.HTTPClient,
-		UserAgent:  config.UserAgent,
+		BaseURL:           config.GeoblockHost,
+		HTTPClient:        config.HTTPClient,
+		UserAgent:         config.UserAgent,
+		OnRateLimitUpdate: config.OnRateLimitUpdate,
 	}
 	return base
 }

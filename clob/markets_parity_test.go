@@ -223,3 +223,59 @@ func TestTypedMarketPricingSurfaces(t *testing.T) {
 		t.Fatalf("unexpected last trades prices: %+v", lastTrades)
 	}
 }
+
+// TestGetLastTradePriceEmptySide returns nil when the server reports an empty side
+// (a token that has not traded), rather than a placeholder price.
+func TestGetLastTradePriceEmptySide(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"price":"0.55","side":""}`))
+		}),
+	)
+	defer server.Close()
+
+	client, err := NewClient(Config{Host: server.URL})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+
+	lastTrade, err := client.GetLastTradePrice(t.Context(), "123")
+	if err != nil {
+		t.Fatalf("get last trade price: %v", err)
+	}
+	if lastTrade != nil {
+		t.Fatalf("expected nil for empty-side token, got %+v", lastTrade)
+	}
+}
+
+// TestGetLastTradesPricesSparse omits tokens without trades and matches by token_id.
+func TestGetLastTradesPricesSparse(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[{"token_id":"123","price":"0.55","side":"BUY"},{"token_id":"456","price":"","side":""}]`))
+		}),
+	)
+	defer server.Close()
+
+	client, err := NewClient(Config{Host: server.URL})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+
+	lastTrades, err := client.GetLastTradesPrices(
+		t.Context(),
+		[]BookParams{{TokenID: "123"}, {TokenID: "456"}},
+	)
+	if err != nil {
+		t.Fatalf("get last trades prices: %v", err)
+	}
+	if len(lastTrades) != 1 || lastTrades[0].TokenID != "123" {
+		t.Fatalf("expected sparse result with only token 123, got %+v", lastTrades)
+	}
+}

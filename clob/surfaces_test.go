@@ -213,7 +213,9 @@ func TestTypedAuthenticatedSurfaces(t *testing.T) {
 				_, _ = w.Write([]byte(`[
 					{
 						"type": 1,
+						"id": 1,
 						"owner": "api-key",
+						"timestamp": 1700000000000,
 						"payload": {
 							"asset_id": "123",
 							"condition_id": "cond-1",

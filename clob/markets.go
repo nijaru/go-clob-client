@@ -325,7 +325,9 @@ func (c *Client) GetSpreads(ctx context.Context, books []BookParams) (SpreadsRes
 	return out, err
 }
 
-// GetLastTradePrice returns the last trade price for a token.
+// GetLastTradePrice returns the last trade price for a token. It returns
+// nil when the token has not traded (the server reports an empty side),
+// rather than a placeholder price.
 func (c *Client) GetLastTradePrice(
 	ctx context.Context,
 	tokenID string,
@@ -335,10 +337,18 @@ func (c *Client) GetLastTradePrice(
 
 	var out LastTradePriceResponse
 	err := c.getJSON(ctx, lastTradePriceEndpoint, query, polyhttp.AuthNone, &out)
-	return &out, err
+	if err != nil {
+		return nil, err
+	}
+	if out.Side == "" {
+		return nil, nil
+	}
+	return &out, nil
 }
 
 // GetLastTradesPrices returns the last trade prices for multiple tokens.
+// Tokens without trades (server reports an empty side) are omitted from the
+// result, so callers must match entries by token_id rather than by position.
 func (c *Client) GetLastTradesPrices(
 	ctx context.Context,
 	books []BookParams,
@@ -354,7 +364,16 @@ func (c *Client) GetLastTradesPrices(
 		&out,
 		nil,
 	)
-	return out, err
+	if err != nil {
+		return nil, err
+	}
+	filtered := out[:0]
+	for _, entry := range out {
+		if entry.Side != "" {
+			filtered = append(filtered, entry)
+		}
+	}
+	return filtered, nil
 }
 
 // GetTickSize returns the minimum tick size for a token.

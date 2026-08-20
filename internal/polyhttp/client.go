@@ -38,7 +38,47 @@ type Client struct {
 	HTTPClient *http.Client
 	UserAgent  string
 	Headers    HeaderFunc
+	// OnRateLimitUpdate is invoked with the parsed Poly-RateLimit-* state
+	// whenever a response reports it, both successful and failed. Errors
+	// raised by the listener are ignored and must not affect request
+	// handling.
+	OnRateLimitUpdate func(*RateLimitUpdate)
 }
+
+// RateLimitUpdate is the per-signer rate-limit state reported by a response.
+// Fields mirror the Poly-RateLimit-* response headers. Each optional field
+// is populated independently, so any subset can be present depending on how
+// the request was evaluated.
+type RateLimitUpdate struct {
+	// Remaining is the token balance left in the applicable rate-limit bucket
+	// after the request was accounted for. It can be negative for tiers that
+	// allow a negative cancellation balance.
+	Remaining *float64
+	// Reset is the Unix timestamp, in seconds, when the current rate-limit
+	// wait period ends.
+	Reset *float64
+	// Tier is the rate-limit tier applied to the request.
+	Tier *string
+	// Warning is true when the limiter runs in warning mode and the request
+	// would have been rejected under live enforcement.
+	Warning bool
+}
+
+// TradingRestriction identifies the trading restriction that caused a
+// rejection. It mirrors the upstream TS/Python classification.
+type TradingRestriction string
+
+const (
+	// TradingRestrictionRestarting means the matching engine is restarting
+	// and rejects order requests until it is back.
+	TradingRestrictionRestarting TradingRestriction = "restarting"
+	// TradingRestrictionCancelOnly means cancels are accepted but new orders
+	// are rejected.
+	TradingRestrictionCancelOnly TradingRestriction = "cancel_only"
+	// TradingRestrictionPostOnly means cancels and post-only orders are
+	// accepted while other orders are rejected.
+	TradingRestrictionPostOnly TradingRestriction = "post_only"
+)
 
 type APIError struct {
 	StatusCode  int
@@ -48,6 +88,15 @@ type APIError struct {
 	// RetryAfterSeconds is the server-requested delay before retrying. It is
 	// nil when neither the Retry-After header nor the JSON fallback is valid.
 	RetryAfterSeconds *float64
+	// Code is the machine-readable error code from the response body, when
+	// present. It is nil when the response does not provide one.
+	Code *string
+	// TradingRestriction identifies the trading restriction that caused the
+	// rejection. It is nil when the rejection is not a trading restriction.
+	TradingRestriction *TradingRestriction
+	// RateLimit is the per-signer rate-limit state reported with the
+	// response. It is nil when the response does not report it.
+	RateLimit *RateLimitUpdate
 }
 
 func (e *APIError) Error() string {
@@ -200,6 +249,8 @@ func (c *Client) doJSON(
 	}
 	defer resp.Body.Close()
 
+	c.notifyRateLimitUpdate(resp)
+
 	if resp.StatusCode >= http.StatusBadRequest {
 		payload, _ := io.ReadAll(resp.Body)
 		return newAPIError(resp, payload, requestBody)
@@ -258,6 +309,130 @@ func (c *Client) doJSON(
 	}
 }
 
+// notifyRateLimitUpdate parses the Poly-RateLimit-* headers on every
+// response and invokes the configured listener when present. A listener
+// error is swallowed so it cannot affect request handling.
+func (c *Client) notifyRateLimitUpdate(resp *http.Response) {
+	if c.OnRateLimitUpdate == nil {
+		return
+	}
+	update := parseRateLimitHeaders(resp.Header)
+	if update == nil {
+		return
+	}
+	func() {
+		defer func() {
+			recover()
+		}()
+		c.OnRateLimitUpdate(update)
+	}()
+}
+
+// parseRateLimitHeaders extracts the Poly-RateLimit-* response headers.
+// Returns nil when the response carries none of them.
+func parseRateLimitHeaders(headers http.Header) *RateLimitUpdate {
+	remaining := parseRateLimitNumber(headers.Get("Poly-RateLimit-Remaining"))
+	reset := parseRateLimitNumber(headers.Get("Poly-RateLimit-Reset"))
+	tier := parseRateLimitText(headers.Get("Poly-RateLimit-Tier"))
+	warningHeader := parseRateLimitText(headers.Get("Poly-RateLimit-Warning"))
+	warning := warningHeader != nil && strings.EqualFold(*warningHeader, "true")
+
+	if remaining == nil && reset == nil && tier == nil && !warning {
+		return nil
+	}
+
+	return &RateLimitUpdate{
+		Remaining: remaining,
+		Reset:     reset,
+		Tier:      tier,
+		Warning:   warning,
+	}
+}
+
+func parseRateLimitNumber(value string) *float64 {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+	if err != nil || math.IsInf(parsed, 0) || math.IsNaN(parsed) {
+		return nil
+	}
+	return &parsed
+}
+
+func parseRateLimitText(value string) *string {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	out := strings.TrimSpace(value)
+	return &out
+}
+
+// extractResponseErrorCode pulls the top-level "code" field from a JSON error
+// body. It is nil when the body is not JSON, the field is absent, or the value
+// is not a non-empty string.
+func extractResponseErrorCode(body []byte) *string {
+	var payload struct {
+		Code string `json:"code"`
+	}
+	if json.Unmarshal(body, &payload) != nil {
+		return nil
+	}
+	if payload.Code == "" {
+		return nil
+	}
+	return &payload.Code
+}
+
+// detectTradingRestriction classifies a non-success response as a trading
+// restriction when the server reports one. It mirrors the upstream TS/Python
+// classification:
+//
+//   - HTTP 425 → restarting
+//   - HTTP 503 with body code "post_only_mode" → post_only
+//   - HTTP 503 whose message contains "cancel-only" → cancel_only
+//
+// All other responses return nil.
+func detectTradingRestriction(resp *http.Response, body []byte) *TradingRestriction {
+	if resp.StatusCode == http.StatusTooEarly {
+		restriction := TradingRestrictionRestarting
+		return &restriction
+	}
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		return nil
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	if !strings.Contains(strings.ToLower(contentType), "application/json") {
+		return nil
+	}
+
+	var payload struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+		Error   any    `json:"error"`
+	}
+	if json.Unmarshal(body, &payload) != nil {
+		return nil
+	}
+
+	if payload.Code == "post_only_mode" {
+		restriction := TradingRestrictionPostOnly
+		return &restriction
+	}
+
+	if msg, ok := payload.Error.(string); ok && strings.Contains(strings.ToLower(msg), "cancel-only") {
+		restriction := TradingRestrictionCancelOnly
+		return &restriction
+	}
+	if strings.Contains(strings.ToLower(payload.Message), "cancel-only") {
+		restriction := TradingRestrictionCancelOnly
+		return &restriction
+	}
+
+	return nil
+}
+
 func marshalBody(body any) ([]byte, error) {
 	if body == nil {
 		return nil, nil
@@ -280,11 +455,15 @@ func marshalBody(body any) ([]byte, error) {
 
 func newAPIError(resp *http.Response, body, requestBody []byte) *APIError {
 	err := &APIError{
-		StatusCode:        resp.StatusCode,
-		Body:              bytes.Clone(body),
-		RequestBody:       bytes.Clone(requestBody),
-		RetryAfterSeconds: retryAfterSeconds(resp.Header.Get("Retry-After"), body),
+		StatusCode:         resp.StatusCode,
+		Body:               bytes.Clone(body),
+		RequestBody:        bytes.Clone(requestBody),
+		RetryAfterSeconds:  retryAfterSeconds(resp.Header.Get("Retry-After"), body),
+		RateLimit:          parseRateLimitHeaders(resp.Header),
+		TradingRestriction: detectTradingRestriction(resp, body),
 	}
+	err.Code = extractResponseErrorCode(body)
+
 	var payload struct {
 		Error any `json:"error"`
 	}

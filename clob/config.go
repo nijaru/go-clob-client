@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/nijaru/go-clob-client/internal/polyhttp"
 )
 
 const (
@@ -107,6 +109,11 @@ type Config struct {
 	// RateBurst is the maximum burst size for the rate limiter.
 	// Defaults to 10.
 	RateBurst int
+	// OnRateLimitUpdate is invoked with the parsed Poly-RateLimit-* state
+	// whenever a response reports it, both successful and failed. Errors
+	// raised by the listener are ignored and must not affect request
+	// handling.
+	OnRateLimitUpdate func(*polyhttp.RateLimitUpdate)
 }
 
 func (c Config) normalized() Config {
