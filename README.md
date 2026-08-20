@@ -120,6 +120,22 @@ resp, err := client.CreateAndPostMarketOrder(ctx, clob.MarketOrderArgs{
 }, nil, clob.OrderTypeFOK)
 ```
 
+### Position-backed orders (Exchange V3)
+
+Orders take exactly one asset identifier: `TokenID` routes through the CTF Exchange (V2),
+`PositionID` routes through Exchange V3 for position-backed outcomes. The wire field stays
+`tokenId` for both.
+
+```go
+// Buy 10 shares of a position-backed outcome
+resp, err := client.CreateAndPostOrder(ctx, clob.OrderArgs{
+	PositionID: "4806087868183709353058267124167238610126851596433849971812422822",
+	Price:      udecimal.MustParse("0.50"),
+	Size:       udecimal.MustParse("10"),
+	Side:       clob.SideBuy,
+}, nil, clob.OrderTypeGTC, false)
+```
+
 ### Iterators
 
 List endpoints expose both a slice and a Go 1.26 range-over-function iterator:
@@ -206,7 +222,43 @@ For one-call trading setup, `PrepareTradingApprovals` reads the current on-chain
 allowances already present. Use `SignerClient.SetupTradingApprovals` for sequential EOA
 transactions or `AuthenticatedClient.SetupTradingApprovalsGasless` for one relayed batch. The
 resolver follows the current Polygon contract set; callers should treat a nil gasless handle as
-“already approved.”
+“already approved.” `GetTradingApprovalsState` returns the same read as an inspectable snapshot
+(`Missing` plus `IsFullyApproved`) without submitting anything.
+
+### Combo RFQ (builder gateway)
+
+`AuthenticatedClient` with `Config.BuilderAuth` can request and accept combo quotes through the
+builder gateway (`Config.BuilderGatewayHost`, default
+`https://combos-rfq-gateway-builder.polymarket.com`). A request with no usable quotes and a maker
+decline are normal outcomes, not errors:
+
+```go
+result, err := client.RequestComboQuote(ctx, clob.RequestComboQuoteParams{
+	LegPositionIDs: []string{yesPositionID, noPositionID},
+	Direction:      clob.RFQDirectionBuy,
+	Amount:         udecimal.MustParse("100"),
+})
+if err != nil { return err }
+if result.Quote == nil {
+	// result.Reason explains why (NO_QUOTES, SIZE_TOO_LARGE).
+	return nil
+}
+
+acceptance, err := client.AcceptComboQuote(ctx, clob.AcceptComboQuoteParams{
+	RFQID:       result.RFQID,
+	Direction:   clob.SideBuy,
+	PositionID:  result.YesPositionID,
+	BuilderCode: result.BuilderCode,
+	Quote: clob.ComboQuoteReference{
+		QuoteID:     result.Quote.QuoteID,
+		MakerAmount: result.Quote.MakerAmount,
+		TakerAmount: result.Quote.TakerAmount,
+	},
+})
+if err != nil { return err }
+// acceptance.Status Executing means the trade was handed off for on-chain
+// execution; follow it with GetComboRFQStatus.
+```
 
 ### Collateral return
 
