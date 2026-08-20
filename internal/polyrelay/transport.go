@@ -85,7 +85,13 @@ func (t *Transport) GaslessTransaction(
 	transactionID string,
 ) (GaslessTransaction, error) {
 	var w gaslessTransactionWire
-	if err := t.http.GetJSON(ctx, gaslessTxPath(transactionID), nil, polyhttp.AuthNone, &w); err != nil {
+	if err := t.http.GetJSON(
+		ctx,
+		gaslessTxPath(transactionID),
+		nil,
+		polyhttp.AuthNone,
+		&w,
+	); err != nil {
 		return GaslessTransaction{}, err
 	}
 	return GaslessTransaction{

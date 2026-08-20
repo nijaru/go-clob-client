@@ -421,7 +421,8 @@ func detectTradingRestriction(resp *http.Response, body []byte) *TradingRestrict
 		return &restriction
 	}
 
-	if msg, ok := payload.Error.(string); ok && strings.Contains(strings.ToLower(msg), "cancel-only") {
+	if msg, ok := payload.Error.(string); ok &&
+		strings.Contains(strings.ToLower(msg), "cancel-only") {
 		restriction := TradingRestrictionCancelOnly
 		return &restriction
 	}

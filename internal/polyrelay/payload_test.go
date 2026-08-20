@@ -89,8 +89,15 @@ func TestBuildSafeSubmit(t *testing.T) {
 	check := func(value *big.Int, op uint8, wantPy string) {
 		t.Helper()
 		req, err := BuildSafeSubmit(SafeSubmitInput{
-			Signer: A, Wallet: C, Target: B, Data: common.FromHex("0xcafe"),
-			Value: value, Operation: op, Nonce: big.NewInt(3), Signature: make([]byte, 65), Metadata: "x",
+			Signer:    A,
+			Wallet:    C,
+			Target:    B,
+			Data:      common.FromHex("0xcafe"),
+			Value:     value,
+			Operation: op,
+			Nonce:     big.NewInt(3),
+			Signature: make([]byte, 65),
+			Metadata:  "x",
 		})
 		if err != nil {
 			t.Fatalf("BuildSafeSubmit: %v", err)
@@ -169,16 +176,34 @@ func TestBuildWalletCreate(t *testing.T) {
 func TestBuildSubmitRejectsBadInput(t *testing.T) {
 	t.Parallel()
 	sig := make([]byte, 65)
-	if _, err := BuildProxySubmit(ProxySubmitInput{Signer: addrRepeat(1), Nonce: nil, Signature: sig, GasLimit: big.NewInt(1)}); err == nil {
+	if _, err := BuildProxySubmit(
+		ProxySubmitInput{
+			Signer:    addrRepeat(1),
+			Nonce:     nil,
+			Signature: sig,
+			GasLimit:  big.NewInt(1),
+		},
+	); err == nil {
 		t.Fatal("nil nonce: expected error")
 	}
-	if _, err := BuildSafeSubmit(SafeSubmitInput{Value: nil, Nonce: big.NewInt(1), Signature: sig}); err == nil {
+	if _, err := BuildSafeSubmit(
+		SafeSubmitInput{Value: nil, Nonce: big.NewInt(1), Signature: sig},
+	); err == nil {
 		t.Fatal("nil value: expected error")
 	}
-	if _, err := BuildDepositSubmit(DepositSubmitInput{Nonce: big.NewInt(1), Deadline: big.NewInt(2), Signature: sig}); err == nil {
+	if _, err := BuildDepositSubmit(
+		DepositSubmitInput{Nonce: big.NewInt(1), Deadline: big.NewInt(2), Signature: sig},
+	); err == nil {
 		t.Fatal("empty calls: expected error")
 	}
-	if _, err := BuildProxySubmit(ProxySubmitInput{Signer: addrRepeat(1), Nonce: big.NewInt(-1), Signature: sig, GasLimit: big.NewInt(1)}); err == nil {
+	if _, err := BuildProxySubmit(
+		ProxySubmitInput{
+			Signer:    addrRepeat(1),
+			Nonce:     big.NewInt(-1),
+			Signature: sig,
+			GasLimit:  big.NewInt(1),
+		},
+	); err == nil {
 		t.Fatal("negative nonce: expected error")
 	}
 }

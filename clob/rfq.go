@@ -17,7 +17,13 @@ func (c *AuthenticatedClient) CreateRFQRequest(
 	params CreateRFQRequestParams,
 ) (*RFQRequestResponse, error) {
 	var resp RFQRequestResponse
-	if err := c.postJSON(ctx, rfqRequestEndpoint, params, polyhttp.AuthL2Builder, &resp); err != nil {
+	if err := c.postJSON(
+		ctx,
+		rfqRequestEndpoint,
+		params,
+		polyhttp.AuthL2Builder,
+		&resp,
+	); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -80,7 +86,13 @@ func (c *AuthenticatedClient) GetRFQRequests(
 	}
 
 	var resp RFQRequestsResponse
-	if err := c.getJSON(ctx, rfqDataRequestsEndpoint, query, polyhttp.AuthL2Builder, &resp); err != nil {
+	if err := c.getJSON(
+		ctx,
+		rfqDataRequestsEndpoint,
+		query,
+		polyhttp.AuthL2Builder,
+		&resp,
+	); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -161,7 +173,13 @@ func (c *AuthenticatedClient) GetRFQQuotes(
 	}
 
 	var resp RFQQuotesResponse
-	if err := c.getJSON(ctx, rfqDataQuotesEndpoint, query, polyhttp.AuthL2Builder, &resp); err != nil {
+	if err := c.getJSON(
+		ctx,
+		rfqDataQuotesEndpoint,
+		query,
+		polyhttp.AuthL2Builder,
+		&resp,
+	); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -185,7 +203,13 @@ func (c *AuthenticatedClient) ApproveRFQOrder(
 	params ApproveRFQOrderRequest,
 ) (*ApproveRFQOrderResponse, error) {
 	var resp ApproveRFQOrderResponse
-	if err := c.postJSON(ctx, rfqQuoteApproveEndpoint, params, polyhttp.AuthL2Builder, &resp); err != nil {
+	if err := c.postJSON(
+		ctx,
+		rfqQuoteApproveEndpoint,
+		params,
+		polyhttp.AuthL2Builder,
+		&resp,
+	); err != nil {
 		return nil, err
 	}
 	return &resp, nil

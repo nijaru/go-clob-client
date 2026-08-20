@@ -36,7 +36,12 @@ func TestClobMarketInfoDecodesRustWire(t *testing.T) {
 	if response.MakerBaseFee == nil || response.MakerBaseFee.String() != "0.01" ||
 		response.TakerBaseFee == nil || response.TakerBaseFee.String() != "0.02" ||
 		!response.RFQEnabled {
-		t.Fatalf("legacy/RFQ fields = %+v/%+v/%v", response.MakerBaseFee, response.TakerBaseFee, response.RFQEnabled)
+		t.Fatalf(
+			"legacy/RFQ fields = %+v/%+v/%v",
+			response.MakerBaseFee,
+			response.TakerBaseFee,
+			response.RFQEnabled,
+		)
 	}
 	if len(response.Tokens) != 3 || response.Tokens[0] == nil ||
 		response.Tokens[0].TokenID != "123" || response.Tokens[0].Outcome != "YES" ||

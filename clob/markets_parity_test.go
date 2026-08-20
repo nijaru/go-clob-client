@@ -231,8 +231,8 @@ func TestGetLastTradePriceEmptySide(t *testing.T) {
 
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"price":"0.55","side":""}`))
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"price":"0.55","side":""}`))
 		}),
 	)
 	defer server.Close()
@@ -257,8 +257,12 @@ func TestGetLastTradesPricesSparse(t *testing.T) {
 
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`[{"token_id":"123","price":"0.55","side":"BUY"},{"token_id":"456","price":"","side":""}]`))
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write(
+				[]byte(
+					`[{"token_id":"123","price":"0.55","side":"BUY"},{"token_id":"456","price":"","side":""}]`,
+				),
+			)
 		}),
 	)
 	defer server.Close()

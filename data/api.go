@@ -86,7 +86,14 @@ func (c *Client) GetClosedPositions(
 	ctx context.Context,
 	p ClosedPositionParams,
 ) ([]ClosedPosition, error) {
-	if err := validatePagination("closed_positions", p.Limit, p.Offset, 0, 50, 100_000); err != nil {
+	if err := validatePagination(
+		"closed_positions",
+		p.Limit,
+		p.Offset,
+		0,
+		50,
+		100_000,
+	); err != nil {
 		return nil, err
 	}
 	q := url.Values{}
@@ -108,7 +115,14 @@ func (c *Client) IterClosedPositions(
 	p ClosedPositionParams,
 ) iter.Seq2[ClosedPosition, error] {
 	return func(yield func(ClosedPosition, error) bool) {
-		if err := validatePagination("closed_positions", p.Limit, p.Offset, 0, 50, 100_000); err != nil {
+		if err := validatePagination(
+			"closed_positions",
+			p.Limit,
+			p.Offset,
+			0,
+			50,
+			100_000,
+		); err != nil {
 			yield(ClosedPosition{}, err)
 			return
 		}
@@ -375,7 +389,14 @@ func (c *Client) GetBuilderLeaderboard(
 	ctx context.Context,
 	p BuilderLeaderboardParams,
 ) ([]BuilderLeaderboardEntry, error) {
-	if err := validatePagination("builder_leaderboard", p.Limit, p.Offset, 0, 50, 1_000); err != nil {
+	if err := validatePagination(
+		"builder_leaderboard",
+		p.Limit,
+		p.Offset,
+		0,
+		50,
+		1_000,
+	); err != nil {
 		return nil, err
 	}
 	q := url.Values{}
@@ -393,7 +414,14 @@ func (c *Client) IterBuilderLeaderboard(
 	p BuilderLeaderboardParams,
 ) iter.Seq2[BuilderLeaderboardEntry, error] {
 	return func(yield func(BuilderLeaderboardEntry, error) bool) {
-		if err := validatePagination("builder_leaderboard", p.Limit, p.Offset, 0, 50, 1_000); err != nil {
+		if err := validatePagination(
+			"builder_leaderboard",
+			p.Limit,
+			p.Offset,
+			0,
+			50,
+			1_000,
+		); err != nil {
 			yield(BuilderLeaderboardEntry{}, err)
 			return
 		}
@@ -446,7 +474,14 @@ func (c *Client) GetMarketPositions(
 	ctx context.Context,
 	p MarketPositionParams,
 ) ([]MetaMarketPosition, error) {
-	if err := validatePagination("market_positions", p.Limit, p.Offset, 0, 500, 10_000); err != nil {
+	if err := validatePagination(
+		"market_positions",
+		p.Limit,
+		p.Offset,
+		0,
+		500,
+		10_000,
+	); err != nil {
 		return nil, err
 	}
 	q := url.Values{}
@@ -469,7 +504,14 @@ func (c *Client) IterMarketPositions(
 	p MarketPositionParams,
 ) iter.Seq2[MetaMarketPosition, error] {
 	return func(yield func(MetaMarketPosition, error) bool) {
-		if err := validatePagination("market_positions", p.Limit, p.Offset, 0, 500, 10_000); err != nil {
+		if err := validatePagination(
+			"market_positions",
+			p.Limit,
+			p.Offset,
+			0,
+			500,
+			10_000,
+		); err != nil {
 			yield(MetaMarketPosition{}, err)
 			return
 		}

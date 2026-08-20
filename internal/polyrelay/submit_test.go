@@ -217,7 +217,14 @@ func TestPrepareGaslessSafeMultiCallAggregates(t *testing.T) {
 		{To: addrRepeat(0x21), Data: []byte{0x02}, Value: big.NewInt(0)},
 	}
 	tr := testTransport(t, srv)
-	if _, err := PrepareGasless(context.Background(), tr, testGaslessConfig(TransactionTypeSafe), mustKey(t), calls, ""); err != nil {
+	if _, err := PrepareGasless(
+		context.Background(),
+		tr,
+		testGaslessConfig(TransactionTypeSafe),
+		mustKey(t),
+		calls,
+		"",
+	); err != nil {
 		t.Fatalf("PrepareGasless: %v", err)
 	}
 	// Multi-call → target is safeMultisend, operation is delegatecall (1).
@@ -244,7 +251,14 @@ func TestPrepareGaslessSafeSingleCallDirect(t *testing.T) {
 
 	calls := []TransactionCall{{To: addrRepeat(0x20), Data: []byte{0x01}, Value: big.NewInt(0)}}
 	tr := testTransport(t, srv)
-	if _, err := PrepareGasless(context.Background(), tr, testGaslessConfig(TransactionTypeSafe), mustKey(t), calls, ""); err != nil {
+	if _, err := PrepareGasless(
+		context.Background(),
+		tr,
+		testGaslessConfig(TransactionTypeSafe),
+		mustKey(t),
+		calls,
+		"",
+	); err != nil {
 		t.Fatalf("PrepareGasless: %v", err)
 	}
 	// Single call → target is the call's own target, operation is CALL (0).
@@ -371,7 +385,14 @@ func TestPrepareGaslessValidation(t *testing.T) {
 	cfg := testGaslessConfig(TransactionTypeWallet)
 
 	t.Run("nil key", func(t *testing.T) {
-		if _, err := PrepareGasless(context.Background(), tr, cfg, nil, []TransactionCall{{To: addrRepeat(1), Value: big.NewInt(0)}}, ""); !errors.Is(
+		if _, err := PrepareGasless(
+			context.Background(),
+			tr,
+			cfg,
+			nil,
+			[]TransactionCall{{To: addrRepeat(1), Value: big.NewInt(0)}},
+			"",
+		); !errors.Is(
 			err,
 			ErrNilKey,
 		) {
@@ -388,7 +409,14 @@ func TestPrepareGaslessValidation(t *testing.T) {
 	})
 	t.Run("metadata too long", func(t *testing.T) {
 		long := strings.Repeat("x", MetadataMaxLength+1)
-		if _, err := PrepareGasless(context.Background(), tr, cfg, mustKey(t), []TransactionCall{{To: addrRepeat(1), Value: big.NewInt(0)}}, long); !errors.Is(
+		if _, err := PrepareGasless(
+			context.Background(),
+			tr,
+			cfg,
+			mustKey(t),
+			[]TransactionCall{{To: addrRepeat(1), Value: big.NewInt(0)}},
+			long,
+		); !errors.Is(
 			err,
 			ErrMetadataTooLong,
 		) {

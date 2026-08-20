@@ -184,7 +184,8 @@ func TestAPIErrorTradingRestrictionRestarting(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected APIError, got %T", err)
 	}
-	if apiErr.TradingRestriction == nil || *apiErr.TradingRestriction != TradingRestrictionRestarting {
+	if apiErr.TradingRestriction == nil ||
+		*apiErr.TradingRestriction != TradingRestrictionRestarting {
 		t.Fatalf("unexpected restriction: %#v", apiErr.TradingRestriction)
 	}
 }
@@ -205,7 +206,8 @@ func TestAPIErrorTradingRestrictionPostOnly(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected APIError, got %T", err)
 	}
-	if apiErr.TradingRestriction == nil || *apiErr.TradingRestriction != TradingRestrictionPostOnly {
+	if apiErr.TradingRestriction == nil ||
+		*apiErr.TradingRestriction != TradingRestrictionPostOnly {
 		t.Fatalf("unexpected restriction: %#v", apiErr.TradingRestriction)
 	}
 	if apiErr.Code == nil || *apiErr.Code != "post_only_mode" {
@@ -229,7 +231,8 @@ func TestAPIErrorTradingRestrictionCancelOnly(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected APIError, got %T", err)
 	}
-	if apiErr.TradingRestriction == nil || *apiErr.TradingRestriction != TradingRestrictionCancelOnly {
+	if apiErr.TradingRestriction == nil ||
+		*apiErr.TradingRestriction != TradingRestrictionCancelOnly {
 		t.Fatalf("unexpected restriction: %#v", apiErr.TradingRestriction)
 	}
 }
@@ -414,9 +417,9 @@ func TestRateLimitCallbackDoesNotAffectRequestHandling(t *testing.T) {
 	defer server.Close()
 
 	client := &Client{
-		BaseURL:   server.URL,
+		BaseURL:    server.URL,
 		HTTPClient: server.Client(),
-		UserAgent: "test",
+		UserAgent:  "test",
 		OnRateLimitUpdate: func(u *RateLimitUpdate) {
 			panic("listener must not affect request handling")
 		},

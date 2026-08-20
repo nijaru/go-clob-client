@@ -98,7 +98,7 @@ type Notification struct {
 type NotificationType int
 
 const (
-	NotificationOrderCancellation  NotificationType = 1
+	NotificationOrderCancellation NotificationType = 1
 	NotificationOrderFill         NotificationType = 2
 	NotificationMarketRegistered  NotificationType = 3
 	NotificationMarketResolved    NotificationType = 4
@@ -113,16 +113,16 @@ const (
 // NotificationPayload is a discriminated union keyed by Notification.Type.
 // Exactly one variant is non-nil for a valid notification.
 type NotificationPayload struct {
-	OrderCancellation  *OrderNotificationPayload
-	OrderFill          *OrderNotificationPayload
-	MarketRegistered   *MarketNotificationPayload
-	MarketResolved     *MarketNotificationPayload
-	RewardPayout       *RewardPayoutNotificationPayload
-	ChildComment       *ChildCommentNotificationPayload
-	YieldPayout        *YieldPayoutNotificationPayload
-	OrderFillFailed    *OrderNotificationPayload
-	AutoRedeemed       *AutoRedeemedNotificationPayload
-	ComboAutoRedeemed  *ComboAutoRedeemedNotificationPayload
+	OrderCancellation *OrderNotificationPayload
+	OrderFill         *OrderNotificationPayload
+	MarketRegistered  *MarketNotificationPayload
+	MarketResolved    *MarketNotificationPayload
+	RewardPayout      *RewardPayoutNotificationPayload
+	ChildComment      *ChildCommentNotificationPayload
+	YieldPayout       *YieldPayoutNotificationPayload
+	OrderFillFailed   *OrderNotificationPayload
+	AutoRedeemed      *AutoRedeemedNotificationPayload
+	ComboAutoRedeemed *ComboAutoRedeemedNotificationPayload
 }
 
 // OrderNotificationPayload is the payload of an order lifecycle notification
@@ -153,10 +153,10 @@ type OrderNotificationPayload struct {
 // notification payload. On a market-resolved notification, Winner marks the
 // winning outcome.
 type MarketNotificationToken struct {
-	TokenID  string `json:"token_id"`
-	Outcome  string `json:"outcome"`
-	Price    string `json:"price,omitempty"`
-	Winner   bool   `json:"winner"`
+	TokenID string `json:"token_id"`
+	Outcome string `json:"outcome"`
+	Price   string `json:"price,omitempty"`
+	Winner  bool   `json:"winner"`
 }
 
 // MarketNotificationRewardsRate is one per-asset daily reward rate carried on
@@ -169,58 +169,58 @@ type MarketNotificationRewardsRate struct {
 // MarketNotificationRewards carries liquidity-rewards parameters on a market
 // lifecycle notification.
 type MarketNotificationRewards struct {
-	MinSize  float64                          `json:"min_size"`
-	MaxSpread float64                          `json:"max_spread"`
-	Rates    []MarketNotificationRewardsRate  `json:"rates,omitempty"`
+	MinSize   float64                         `json:"min_size"`
+	MaxSpread float64                         `json:"max_spread"`
+	Rates     []MarketNotificationRewardsRate `json:"rates,omitempty"`
 }
 
 // MarketNotificationPayload is the payload of a market lifecycle notification
 // (market registered and market resolved share this shape).
 type MarketNotificationPayload struct {
-	ConditionID              string                          `json:"condition_id"`
-	QuestionID               string                          `json:"question_id"`
-	Question                 string                          `json:"question"`
-	Description              string                          `json:"description"`
-	MarketSlug               string                          `json:"market_slug"`
-	Icon                     string                          `json:"icon"`
-	Image                    string                          `json:"image"`
-	Fpmm                     string                          `json:"fpmm"`
-	Active                   bool                            `json:"active"`
-	Closed                   bool                            `json:"closed"`
-	Archived                *bool                           `json:"archived,omitempty"`
-	AcceptingOrders          bool                            `json:"accepting_orders"`
-	AcceptingOrdersTimestamp *int64                          `json:"accepting_order_timestamp,omitempty"`
-	EnableOrderBook         *bool                           `json:"enable_order_book,omitempty"`
-	EndDate                 *int64                          `json:"end_date_iso,omitempty"`
-	GameStartTime           *int64                          `json:"game_start_time,omitempty"`
-	SecondsDelay             int                             `json:"seconds_delay"`
-	MinimumOrderSize         string                          `json:"minimum_order_size"`
-	MinimumTickSize         string                          `json:"minimum_tick_size"`
-	MakerBaseFee            *int                            `json:"maker_base_fee,omitempty"`
-	TakerBaseFee            *int                            `json:"taker_base_fee,omitempty"`
-	NotificationsEnabled    *bool                           `json:"notifications_enabled,omitempty"`
-	NegRisk                 *bool                           `json:"neg_risk,omitempty"`
-	NegRiskMarketID         string                          `json:"neg_risk_market_id,omitempty"`
-	NegRiskRequestID        string                          `json:"neg_risk_request_id,omitempty"`
-	Is5050Outcome           *bool                           `json:"is_50_50_outcome,omitempty"`
-	Rewards                 *MarketNotificationRewards      `json:"rewards,omitempty"`
-	Tokens                  []MarketNotificationToken       `json:"tokens"`
-	Tags                    []string                        `json:"tags,omitempty"`
-	EventSlug               string                          `json:"eventSlug,omitempty"`
+	ConditionID              string                     `json:"condition_id"`
+	QuestionID               string                     `json:"question_id"`
+	Question                 string                     `json:"question"`
+	Description              string                     `json:"description"`
+	MarketSlug               string                     `json:"market_slug"`
+	Icon                     string                     `json:"icon"`
+	Image                    string                     `json:"image"`
+	Fpmm                     string                     `json:"fpmm"`
+	Active                   bool                       `json:"active"`
+	Closed                   bool                       `json:"closed"`
+	Archived                 *bool                      `json:"archived,omitempty"`
+	AcceptingOrders          bool                       `json:"accepting_orders"`
+	AcceptingOrdersTimestamp *int64                     `json:"accepting_order_timestamp,omitempty"`
+	EnableOrderBook          *bool                      `json:"enable_order_book,omitempty"`
+	EndDate                  *int64                     `json:"end_date_iso,omitempty"`
+	GameStartTime            *int64                     `json:"game_start_time,omitempty"`
+	SecondsDelay             int                        `json:"seconds_delay"`
+	MinimumOrderSize         string                     `json:"minimum_order_size"`
+	MinimumTickSize          string                     `json:"minimum_tick_size"`
+	MakerBaseFee             *int                       `json:"maker_base_fee,omitempty"`
+	TakerBaseFee             *int                       `json:"taker_base_fee,omitempty"`
+	NotificationsEnabled     *bool                      `json:"notifications_enabled,omitempty"`
+	NegRisk                  *bool                      `json:"neg_risk,omitempty"`
+	NegRiskMarketID          string                     `json:"neg_risk_market_id,omitempty"`
+	NegRiskRequestID         string                     `json:"neg_risk_request_id,omitempty"`
+	Is5050Outcome            *bool                      `json:"is_50_50_outcome,omitempty"`
+	Rewards                  *MarketNotificationRewards `json:"rewards,omitempty"`
+	Tokens                   []MarketNotificationToken  `json:"tokens"`
+	Tags                     []string                   `json:"tags,omitempty"`
+	EventSlug                string                     `json:"eventSlug,omitempty"`
 }
 
 // RewardPayoutNotificationPayload is the payload of a liquidity-reward
 // payout notification.
 type RewardPayoutNotificationPayload struct {
-	ProxyWallet    string `json:"proxyWallet"`
-	Reward         string `json:"reward"`
+	ProxyWallet     string `json:"proxyWallet"`
+	Reward          string `json:"reward"`
 	TransactionHash string `json:"txnHash"`
 }
 
 // YieldPayoutNotificationPayload is the payload of a yield payout notification.
 type YieldPayoutNotificationPayload struct {
-	ProxyWallet    string `json:"proxyWallet"`
-	Amount         string `json:"amount"`
+	ProxyWallet     string `json:"proxyWallet"`
+	Amount          string `json:"amount"`
 	TransactionHash string `json:"txnHash"`
 }
 
@@ -228,48 +228,48 @@ type YieldPayoutNotificationPayload struct {
 // notification: the reply comment, its author's profile, and the event or
 // series the thread belongs to.
 type ChildCommentNotificationPayload struct {
-	ID                int64   `json:"id"`
-	Body              *string `json:"body,omitempty"`
-	ParentEntityType  *string `json:"parentEntityType,omitempty"`
-	ParentEntityID    *int64  `json:"parentEntityID,omitempty"`
-	ParentCommentID   *int64  `json:"parentCommentID,omitempty"`
-	UserAddress       *string `json:"userAddress,omitempty"`
-	CreatedAt         *int64  `json:"createdAt,omitempty"`
-	EventSlug         *string `json:"eventSlug,omitempty"`
-	EventTitle        *string `json:"eventTitle,omitempty"`
-	SeriesSlug        *string `json:"seriesSlug,omitempty"`
-	SeriesTitle       *string `json:"seriesTitle,omitempty"`
-	Image             *string `json:"image,omitempty"`
+	ID               int64   `json:"id"`
+	Body             *string `json:"body,omitempty"`
+	ParentEntityType *string `json:"parentEntityType,omitempty"`
+	ParentEntityID   *int64  `json:"parentEntityID,omitempty"`
+	ParentCommentID  *int64  `json:"parentCommentID,omitempty"`
+	UserAddress      *string `json:"userAddress,omitempty"`
+	CreatedAt        *int64  `json:"createdAt,omitempty"`
+	EventSlug        *string `json:"eventSlug,omitempty"`
+	EventTitle       *string `json:"eventTitle,omitempty"`
+	SeriesSlug       *string `json:"seriesSlug,omitempty"`
+	SeriesTitle      *string `json:"seriesTitle,omitempty"`
+	Image            *string `json:"image,omitempty"`
 }
 
 // AutoRedeemedNotificationPayload is the payload of an auto-redeem
 // notification: a winning position redeemed on-chain on the account's behalf.
 type AutoRedeemedNotificationPayload struct {
-	ProxyWallet      string `json:"proxyWallet"`
-	Amount           string `json:"amount"`
-	ConditionID      string `json:"conditionId"`
-	Question         string `json:"question"`
-	Image            string `json:"image"`
-	MarketSlug       string `json:"slug"`
-	Position         *string `json:"position,omitempty"`
-	MarketURL        *string `json:"marketUrl,omitempty"`
-	PortfolioURL     *string `json:"portfolioUrl,omitempty"`
-	NegRisk          bool   `json:"negRisk"`
-	TransactionHash  string `json:"txnHash"`
+	ProxyWallet     string  `json:"proxyWallet"`
+	Amount          string  `json:"amount"`
+	ConditionID     string  `json:"conditionId"`
+	Question        string  `json:"question"`
+	Image           string  `json:"image"`
+	MarketSlug      string  `json:"slug"`
+	Position        *string `json:"position,omitempty"`
+	MarketURL       *string `json:"marketUrl,omitempty"`
+	PortfolioURL    *string `json:"portfolioUrl,omitempty"`
+	NegRisk         bool    `json:"negRisk"`
+	TransactionHash string  `json:"txnHash"`
 }
 
 // ComboAutoRedeemedNotificationPayload is the payload of a combo auto-redeem
 // notification: a winning combo position redeemed on-chain on the account's
 // behalf. Legs is the combo arity.
 type ComboAutoRedeemedNotificationPayload struct {
-	ProxyWallet     string `json:"proxyWallet"`
-	Amount          string `json:"amount"`
-	PositionID      string `json:"positionId"`
-	ConditionID     string `json:"conditionId"`
-	OutcomeIndex    int    `json:"outcomeIndex"`
-	Legs            int    `json:"legs"`
+	ProxyWallet     string  `json:"proxyWallet"`
+	Amount          string  `json:"amount"`
+	PositionID      string  `json:"positionId"`
+	ConditionID     string  `json:"conditionId"`
+	OutcomeIndex    int     `json:"outcomeIndex"`
+	Legs            int     `json:"legs"`
 	PortfolioURL    *string `json:"portfolioUrl,omitempty"`
-	TransactionHash string `json:"txnHash"`
+	TransactionHash string  `json:"txnHash"`
 }
 
 // errUnknownNotificationType is returned by Notification.UnmarshalJSON when
@@ -340,7 +340,9 @@ func (n *Notification) UnmarshalJSON(data []byte) error {
 		n.fill(id, owner, ts, ntype)
 		return nil
 	case NotificationRewardPayout:
-		id, owner, ts, reward, err := decodeNotificationPayload[RewardPayoutNotificationPayload](data)
+		id, owner, ts, reward, err := decodeNotificationPayload[RewardPayoutNotificationPayload](
+			data,
+		)
 		if err != nil {
 			return err
 		}
@@ -348,7 +350,9 @@ func (n *Notification) UnmarshalJSON(data []byte) error {
 		n.fill(id, owner, ts, ntype)
 		return nil
 	case NotificationChildComment:
-		id, owner, ts, comment, err := decodeNotificationPayload[ChildCommentNotificationPayload](data)
+		id, owner, ts, comment, err := decodeNotificationPayload[ChildCommentNotificationPayload](
+			data,
+		)
 		if err != nil {
 			return err
 		}
@@ -364,7 +368,9 @@ func (n *Notification) UnmarshalJSON(data []byte) error {
 		n.fill(id, owner, ts, ntype)
 		return nil
 	case NotificationAutoRedeemed:
-		id, owner, ts, redeemed, err := decodeNotificationPayload[AutoRedeemedNotificationPayload](data)
+		id, owner, ts, redeemed, err := decodeNotificationPayload[AutoRedeemedNotificationPayload](
+			data,
+		)
 		if err != nil {
 			return err
 		}
@@ -372,7 +378,9 @@ func (n *Notification) UnmarshalJSON(data []byte) error {
 		n.fill(id, owner, ts, ntype)
 		return nil
 	case NotificationComboAutoRedeemed:
-		id, owner, ts, combo, err := decodeNotificationPayload[ComboAutoRedeemedNotificationPayload](data)
+		id, owner, ts, combo, err := decodeNotificationPayload[ComboAutoRedeemedNotificationPayload](
+			data,
+		)
 		if err != nil {
 			return err
 		}
@@ -396,7 +404,9 @@ func (n *Notification) fill(id int64, owner string, ts int64, ntype Notification
 // decodeNotificationPayload decodes the shared notification envelope: the
 // account-scoped id and owner, a timestamp that may arrive as epoch
 // milliseconds or an ISO 8601 string, and the kind-specific payload.
-func decodeNotificationPayload[T any](data []byte) (id int64, owner string, ts int64, payload *T, err error) {
+func decodeNotificationPayload[T any](
+	data []byte,
+) (id int64, owner string, ts int64, payload *T, err error) {
 	var envelope struct {
 		ID        int64          `json:"id"`
 		Owner     string         `json:"owner"`

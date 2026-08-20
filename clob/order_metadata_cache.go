@@ -62,7 +62,8 @@ func (c *Client) resolveOrderMarketMetadata(
 		c.orderMetadataMu.Lock()
 		currentGeneration := *c.orderMetadataGeneration
 		if !force {
-			if entry, ok := c.orderMetadataCache[conditionID]; ok && time.Now().Before(entry.expiresAt) {
+			if entry, ok := c.orderMetadataCache[conditionID]; ok &&
+				time.Now().Before(entry.expiresAt) {
 				value := entry.value
 				c.orderMetadataMu.Unlock()
 				return validateOrderMarketToken(value, tokenID)

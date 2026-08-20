@@ -111,7 +111,11 @@ func TestClient_RustResourceOptions(t *testing.T) {
 		}
 	})
 
-	if _, err := client.GetMarket(t.Context(), "m-1", MarketOptions{IncludeTag: boolPtr(true)}); err != nil {
+	if _, err := client.GetMarket(
+		t.Context(),
+		"m-1",
+		MarketOptions{IncludeTag: boolPtr(true)},
+	); err != nil {
 		t.Fatalf("GetMarket options: %v", err)
 	}
 	if _, err := client.GetEvent(t.Context(), "e-1", EventOptions{
@@ -120,10 +124,18 @@ func TestClient_RustResourceOptions(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("GetEvent options: %v", err)
 	}
-	if _, err := client.GetSeries(t.Context(), "s-1", SeriesOptions{IncludeChat: boolPtr(true)}); err != nil {
+	if _, err := client.GetSeries(
+		t.Context(),
+		"s-1",
+		SeriesOptions{IncludeChat: boolPtr(true)},
+	); err != nil {
 		t.Fatalf("GetSeries options: %v", err)
 	}
-	if _, err := client.GetTag(t.Context(), "t-1", TagOptions{IncludeTemplate: boolPtr(true)}); err != nil {
+	if _, err := client.GetTag(
+		t.Context(),
+		"t-1",
+		TagOptions{IncludeTemplate: boolPtr(true)},
+	); err != nil {
 		t.Fatalf("GetTag options: %v", err)
 	}
 	if _, err := client.GetRelatedTags(t.Context(), "t-1", RelatedTagsOptions{

@@ -93,7 +93,11 @@ func TestFetchExecuteParamsRejectsBadNonce(t *testing.T) {
 		tr := newTestTransport(t, map[string]any{
 			executeParamsPath: map[string]string{"address": "0x", "nonce": nonce},
 		}, &[]recordedReq{})
-		if _, err := tr.FetchExecuteParams(context.Background(), "0x", TransactionTypeWallet); err == nil {
+		if _, err := tr.FetchExecuteParams(
+			context.Background(),
+			"0x",
+			TransactionTypeWallet,
+		); err == nil {
 			t.Fatalf("expected error for nonce %q", nonce)
 		}
 	}

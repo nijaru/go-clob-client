@@ -102,7 +102,10 @@ func TestCTFClientRejectsInvalidReadInputs(t *testing.T) {
 	if _, err := client.ConditionID(t.Context(), ConditionIDRequest{}); err == nil {
 		t.Fatal("expected missing outcome slot count error")
 	}
-	if _, err := client.CollectionID(t.Context(), CollectionIDRequest{IndexSet: big.NewInt(-1)}); err == nil {
+	if _, err := client.CollectionID(
+		t.Context(),
+		CollectionIDRequest{IndexSet: big.NewInt(-1)},
+	); err == nil {
 		t.Fatal("expected negative index set error")
 	}
 	if _, err := NewCTFClient(provider, 1); err == nil {

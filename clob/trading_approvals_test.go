@@ -66,7 +66,10 @@ func TestGetTradingApprovalsStateMissing(t *testing.T) {
 		t.Fatalf("expected 7 missing ERC20 approvals, got %d", len(state.Missing.ERC20Approvals))
 	}
 	if len(state.Missing.ERC1155Approvals) != 8 {
-		t.Fatalf("expected 8 missing ERC1155 approvals, got %d", len(state.Missing.ERC1155Approvals))
+		t.Fatalf(
+			"expected 8 missing ERC1155 approvals, got %d",
+			len(state.Missing.ERC1155Approvals),
+		)
 	}
 	if got := calls.Load(); got != 15 {
 		t.Fatalf("eth_call count = %d, want 15", got)

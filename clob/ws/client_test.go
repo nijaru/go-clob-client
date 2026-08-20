@@ -476,7 +476,12 @@ func TestHandleMessageMalformedBatchElementIsDropped(t *testing.T) {
 	t.Parallel()
 
 	c := NewClient("")
-	c.handleMessage(t.Context(), []byte(`[{"event_type":"book","bids":"not-an-array"},{"event_type":"book","asset_id":"a1"}]`))
+	c.handleMessage(
+		t.Context(),
+		[]byte(
+			`[{"event_type":"book","bids":"not-an-array"},{"event_type":"book","asset_id":"a1"}]`,
+		),
+	)
 
 	select {
 	case err := <-c.Errors():

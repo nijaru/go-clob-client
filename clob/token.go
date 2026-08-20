@@ -405,7 +405,7 @@ func (c *AuthenticatedClient) SetupTradingApprovalsGasless(
 		return nil, nil
 	}
 	missing := &MissingTradingApprovals{
-		ERC20Approvals: make([]Erc20TradingApproval, 0, len(plan.ERC20Approvals)),
+		ERC20Approvals:   make([]Erc20TradingApproval, 0, len(plan.ERC20Approvals)),
 		ERC1155Approvals: make([]ERC1155ApprovalForAllRequest, 0, len(plan.ERC1155Approvals)),
 	}
 	for _, approval := range plan.ERC20Approvals {

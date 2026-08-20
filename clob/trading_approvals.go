@@ -45,7 +45,9 @@ type TradingApprovalsState struct {
 // buildMissingTradingApprovalCalls converts a missing-approvals set into the
 // ABI calls required to grant it. It is shared by the EOA and gasless setup
 // paths so the two flows cannot drift.
-func buildMissingTradingApprovalCalls(missing *MissingTradingApprovals) ([]polyrelay.TransactionCall, error) {
+func buildMissingTradingApprovalCalls(
+	missing *MissingTradingApprovals,
+) ([]polyrelay.TransactionCall, error) {
 	calls := make(
 		[]polyrelay.TransactionCall,
 		0,
@@ -107,7 +109,13 @@ func (c *SignerClient) GetTradingApprovalsState(
 		ERC1155Approvals: make([]ERC1155ApprovalForAllRequest, 0, len(erc1155)),
 	}
 	for _, approval := range erc20 {
-		allowance, err := readERC20Allowance(ctx, ec, approval.TokenAddress, owner, approval.SpenderAddress)
+		allowance, err := readERC20Allowance(
+			ctx,
+			ec,
+			approval.TokenAddress,
+			owner,
+			approval.SpenderAddress,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("token: read ERC20 approval for %s: %w",
 				approval.SpenderAddress.Hex(), err)
@@ -121,7 +129,13 @@ func (c *SignerClient) GetTradingApprovalsState(
 		}
 	}
 	for _, approval := range erc1155 {
-		approved, err := readERC1155ApprovalForAll(ctx, ec, approval.TokenAddress, owner, approval.OperatorAddress)
+		approved, err := readERC1155ApprovalForAll(
+			ctx,
+			ec,
+			approval.TokenAddress,
+			owner,
+			approval.OperatorAddress,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("token: read ERC1155 approval for %s: %w",
 				approval.OperatorAddress.Hex(), err)

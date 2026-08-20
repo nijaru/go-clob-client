@@ -59,7 +59,13 @@ func main() {
 					continue
 				}
 				for _, change := range e.PriceChanges {
-					fmt.Printf("[PRICE] %s: %s %s @ %s\n", change.AssetID, change.Side, change.Size, change.Price)
+					fmt.Printf(
+						"[PRICE] %s: %s %s @ %s\n",
+						change.AssetID,
+						change.Side,
+						change.Size,
+						change.Price,
+					)
 				}
 			case *ws.LastTradePriceEvent:
 				fmt.Printf("[TRADE] %s: %s @ %s (%s)\n", e.AssetID, e.Size, e.Price, e.Side)
