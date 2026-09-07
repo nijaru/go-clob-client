@@ -1,9 +1,11 @@
 package clob
 
 import (
+	"bytes"
 	stdjson "encoding/json" //nolint:depguard // compact CLOB market wire decoding
 	"fmt"
 
+	json "github.com/go-json-experiment/json"
 	"github.com/quagmt/udecimal"
 )
 
@@ -60,10 +62,12 @@ type OutcomeToken struct {
 }
 
 // UnmarshalJSON accepts numeric or string token IDs and prices from reward and
-// market responses.
+// market responses. The asset ID is accepted under the asset_id key as well as
+// the legacy token_id spelling.
 func (t *OutcomeToken) UnmarshalJSON(data []byte) error {
 	var wire struct {
 		TokenID stdjson.RawMessage `json:"token_id"`
+		AssetID stdjson.RawMessage `json:"asset_id"`
 		Outcome string             `json:"outcome"`
 		Price   stdjson.RawMessage `json:"price"`
 		Winner  bool               `json:"winner"`
@@ -71,7 +75,11 @@ func (t *OutcomeToken) UnmarshalJSON(data []byte) error {
 	if err := stdjson.Unmarshal(data, &wire); err != nil {
 		return fmt.Errorf("outcome token: decode object: %w", err)
 	}
-	tokenID, err := decodeStringOrNumber(wire.TokenID)
+	id := wire.TokenID
+	if len(id) == 0 || bytes.Equal(bytes.TrimSpace(id), []byte("null")) {
+		id = wire.AssetID
+	}
+	tokenID, err := decodeStringOrNumber(id)
 	if err != nil {
 		return fmt.Errorf("outcome token id: %w", err)
 	}
@@ -165,6 +173,27 @@ type OrderBookSummary struct {
 	NegRisk        bool           `json:"neg_risk"`
 	LastTradePrice string         `json:"last_trade_price"`
 	Hash           string         `json:"hash"`
+}
+
+// UnmarshalJSON accepts the asset ID under the legacy token_id spelling in
+// addition to asset_id (py-sdk AliasChoices parity for Poly V2 payloads).
+func (b *OrderBookSummary) UnmarshalJSON(data []byte) error {
+	type alias OrderBookSummary
+	var value alias
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	if value.AssetID == "" {
+		var legacy struct {
+			AssetID string `json:"token_id"`
+		}
+		if err := json.Unmarshal(data, &legacy); err != nil {
+			return err
+		}
+		value.AssetID = legacy.AssetID
+	}
+	*b = OrderBookSummary(value)
+	return nil
 }
 
 // TickSizeResponse reports the minimum supported market tick size.
@@ -399,6 +428,27 @@ type LastTradesPricesResponse struct {
 	TokenID string `json:"token_id"`
 	Price   string `json:"price"`
 	Side    Side   `json:"side"`
+}
+
+// UnmarshalJSON accepts the asset ID under the asset_id spelling in addition
+// to the legacy token_id key (py-sdk AliasChoices parity).
+func (r *LastTradesPricesResponse) UnmarshalJSON(data []byte) error {
+	type alias LastTradesPricesResponse
+	var value alias
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	if value.TokenID == "" {
+		var current struct {
+			AssetID string `json:"asset_id"`
+		}
+		if err := json.Unmarshal(data, &current); err != nil {
+			return err
+		}
+		value.TokenID = current.AssetID
+	}
+	*r = LastTradesPricesResponse(value)
+	return nil
 }
 
 // GeoblockResponse reports whether the current client IP is geographically blocked.

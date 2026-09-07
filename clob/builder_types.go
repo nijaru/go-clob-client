@@ -84,13 +84,16 @@ type BuilderTrade struct {
 }
 
 // UnmarshalJSON accepts the official errMsg/err_msg failure fields as well
-// as the older error field.
+// as the older error field, and the asset ID under the asset_id and token_id
+// spellings in addition to assetId (py-sdk AliasChoices parity).
 func (t *BuilderTrade) UnmarshalJSON(data []byte) error {
 	type alias BuilderTrade
 	var wire struct {
 		*alias
 		ErrMsg      string `json:"errMsg"`
 		ErrMsgSnake string `json:"err_msg"`
+		AssetID     string `json:"asset_id"`
+		TokenID     string `json:"token_id"`
 	}
 	wire.alias = (*alias)(t)
 	if err := json.Unmarshal(data, &wire); err != nil {
@@ -100,6 +103,13 @@ func (t *BuilderTrade) UnmarshalJSON(data []byte) error {
 		t.Error = wire.ErrMsg
 	} else if wire.ErrMsgSnake != "" {
 		t.Error = wire.ErrMsgSnake
+	}
+	if t.AssetID == "" {
+		if wire.AssetID != "" {
+			t.AssetID = wire.AssetID
+		} else {
+			t.AssetID = wire.TokenID
+		}
 	}
 	return nil
 }

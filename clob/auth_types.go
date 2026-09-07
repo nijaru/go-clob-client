@@ -149,6 +149,27 @@ type OrderNotificationPayload struct {
 	SeriesSlug      string `json:"seriesSlug,omitempty"`
 }
 
+// UnmarshalJSON accepts the asset ID under the legacy token_id spelling in
+// addition to asset_id (py-sdk AliasChoices parity).
+func (p *OrderNotificationPayload) UnmarshalJSON(data []byte) error {
+	type alias OrderNotificationPayload
+	var value alias
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	if value.AssetID == "" {
+		var legacy struct {
+			AssetID string `json:"token_id"`
+		}
+		if err := json.Unmarshal(data, &legacy); err != nil {
+			return err
+		}
+		value.AssetID = legacy.AssetID
+	}
+	*p = OrderNotificationPayload(value)
+	return nil
+}
+
 // MarketNotificationToken is one outcome token inside a market lifecycle
 // notification payload. On a market-resolved notification, Winner marks the
 // winning outcome.
@@ -157,6 +178,27 @@ type MarketNotificationToken struct {
 	Outcome string `json:"outcome"`
 	Price   string `json:"price,omitempty"`
 	Winner  bool   `json:"winner"`
+}
+
+// UnmarshalJSON accepts the asset ID under the asset_id spelling in addition
+// to the legacy token_id key (py-sdk AliasChoices parity).
+func (t *MarketNotificationToken) UnmarshalJSON(data []byte) error {
+	type alias MarketNotificationToken
+	var value alias
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	if value.TokenID == "" {
+		var current struct {
+			AssetID string `json:"asset_id"`
+		}
+		if err := json.Unmarshal(data, &current); err != nil {
+			return err
+		}
+		value.TokenID = current.AssetID
+	}
+	*t = MarketNotificationToken(value)
+	return nil
 }
 
 // MarketNotificationRewardsRate is one per-asset daily reward rate carried on

@@ -103,6 +103,27 @@ type BookEvent struct {
 	LastTradePrice string              `json:"last_trade_price,omitzero"`
 }
 
+// UnmarshalJSON accepts the asset ID under the legacy token_id spelling in
+// addition to asset_id (py-sdk AliasChoices parity).
+func (e *BookEvent) UnmarshalJSON(data []byte) error {
+	type alias BookEvent
+	var value alias
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	if value.AssetID == "" {
+		var legacy struct {
+			AssetID string `json:"token_id"`
+		}
+		if err := json.Unmarshal(data, &legacy); err != nil {
+			return err
+		}
+		value.AssetID = legacy.AssetID
+	}
+	*e = BookEvent(value)
+	return nil
+}
+
 // PriceChange is one entry in a price_change batch.
 type PriceChange struct {
 	AssetID string    `json:"asset_id"`
@@ -112,6 +133,27 @@ type PriceChange struct {
 	Hash    string    `json:"hash,omitzero"`
 	BestBid string    `json:"best_bid,omitzero"`
 	BestAsk string    `json:"best_ask,omitzero"`
+}
+
+// UnmarshalJSON accepts the asset ID under the legacy token_id spelling in
+// addition to asset_id (py-sdk AliasChoices parity).
+func (e *PriceChange) UnmarshalJSON(data []byte) error {
+	type alias PriceChange
+	var value alias
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	if value.AssetID == "" {
+		var legacy struct {
+			AssetID string `json:"token_id"`
+		}
+		if err := json.Unmarshal(data, &legacy); err != nil {
+			return err
+		}
+		value.AssetID = legacy.AssetID
+	}
+	*e = PriceChange(value)
+	return nil
 }
 
 // PriceChangeEvent is an incremental order book update. The official market
@@ -138,6 +180,27 @@ type TickSizeChangeEvent struct {
 	Timestamp   string        `json:"timestamp"`
 }
 
+// UnmarshalJSON accepts the asset ID under the legacy token_id spelling in
+// addition to asset_id (py-sdk AliasChoices parity).
+func (e *TickSizeChangeEvent) UnmarshalJSON(data []byte) error {
+	type alias TickSizeChangeEvent
+	var value alias
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	if value.AssetID == "" {
+		var legacy struct {
+			AssetID string `json:"token_id"`
+		}
+		if err := json.Unmarshal(data, &legacy); err != nil {
+			return err
+		}
+		value.AssetID = legacy.AssetID
+	}
+	*e = TickSizeChangeEvent(value)
+	return nil
+}
+
 // MidpointEvent is derived from the best bid and ask in a book snapshot.
 // It is emitted for assets subscribed with SubscribeMidpoints; the server does
 // not send a separate midpoint event on the market WebSocket.
@@ -160,6 +223,27 @@ type LastTradePriceEvent struct {
 	FeeRateBps      string    `json:"fee_rate_bps"`
 	Timestamp       string    `json:"timestamp"`
 	TransactionHash string    `json:"transaction_hash,omitzero"`
+}
+
+// UnmarshalJSON accepts the asset ID under the legacy token_id spelling in
+// addition to asset_id (py-sdk AliasChoices parity).
+func (e *LastTradePriceEvent) UnmarshalJSON(data []byte) error {
+	type alias LastTradePriceEvent
+	var value alias
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	if value.AssetID == "" {
+		var legacy struct {
+			AssetID string `json:"token_id"`
+		}
+		if err := json.Unmarshal(data, &legacy); err != nil {
+			return err
+		}
+		value.AssetID = legacy.AssetID
+	}
+	*e = LastTradePriceEvent(value)
+	return nil
 }
 
 // OrderEvent is emitted when a user's order status changes (placed, canceled).
@@ -188,21 +272,26 @@ type OrderEvent struct {
 }
 
 // UnmarshalJSON keeps compatibility with older user payloads that called the
-// order identifier order_id instead of id.
+// order identifier order_id instead of id, and the asset ID token_id instead
+// of asset_id.
 func (e *OrderEvent) UnmarshalJSON(data []byte) error {
 	type alias OrderEvent
 	var value alias
 	if err := json.Unmarshal(data, &value); err != nil {
 		return err
 	}
+	var legacy struct {
+		OrderID string `json:"order_id"`
+		AssetID string `json:"token_id"`
+	}
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		return err
+	}
 	if value.OrderID == "" {
-		var legacy struct {
-			OrderID string `json:"order_id"`
-		}
-		if err := json.Unmarshal(data, &legacy); err != nil {
-			return err
-		}
 		value.OrderID = legacy.OrderID
+	}
+	if value.AssetID == "" {
+		value.AssetID = legacy.AssetID
 	}
 	*e = OrderEvent(value)
 	return nil
@@ -220,6 +309,27 @@ type MakerOrder struct {
 	Outcome       string    `json:"outcome,omitzero"`
 	OutcomeIndex  *int      `json:"outcome_index,omitzero"`
 	Side          clob.Side `json:"side"`
+}
+
+// UnmarshalJSON accepts the asset ID under the legacy token_id spelling in
+// addition to asset_id (py-sdk AliasChoices parity).
+func (m *MakerOrder) UnmarshalJSON(data []byte) error {
+	type alias MakerOrder
+	var value alias
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	if value.AssetID == "" {
+		var legacy struct {
+			AssetID string `json:"token_id"`
+		}
+		if err := json.Unmarshal(data, &legacy); err != nil {
+			return err
+		}
+		value.AssetID = legacy.AssetID
+	}
+	*m = MakerOrder(value)
+	return nil
 }
 
 // TradeEvent is emitted when a user's order is filled (partially or fully).
@@ -250,21 +360,26 @@ type TradeEvent struct {
 }
 
 // UnmarshalJSON keeps compatibility with older user payloads that called the
-// trade identifier trade_id instead of id.
+// trade identifier trade_id instead of id, and the asset ID token_id instead
+// of asset_id.
 func (e *TradeEvent) UnmarshalJSON(data []byte) error {
 	type alias TradeEvent
 	var value alias
 	if err := json.Unmarshal(data, &value); err != nil {
 		return err
 	}
+	var legacy struct {
+		TradeID string `json:"trade_id"`
+		AssetID string `json:"token_id"`
+	}
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		return err
+	}
 	if value.TradeID == "" {
-		var legacy struct {
-			TradeID string `json:"trade_id"`
-		}
-		if err := json.Unmarshal(data, &legacy); err != nil {
-			return err
-		}
 		value.TradeID = legacy.TradeID
+	}
+	if value.AssetID == "" {
+		value.AssetID = legacy.AssetID
 	}
 	*e = TradeEvent(value)
 	return nil
@@ -296,6 +411,27 @@ type BestBidAskEvent struct {
 	BestAsk   string `json:"best_ask"`
 	Spread    string `json:"spread"`
 	Timestamp string `json:"timestamp"`
+}
+
+// UnmarshalJSON accepts the asset ID under the legacy token_id spelling in
+// addition to asset_id (py-sdk AliasChoices parity).
+func (e *BestBidAskEvent) UnmarshalJSON(data []byte) error {
+	type alias BestBidAskEvent
+	var value alias
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	if value.AssetID == "" {
+		var legacy struct {
+			AssetID string `json:"token_id"`
+		}
+		if err := json.Unmarshal(data, &legacy); err != nil {
+			return err
+		}
+		value.AssetID = legacy.AssetID
+	}
+	*e = BestBidAskEvent(value)
+	return nil
 }
 
 // EventMessage contains metadata about a market's event.

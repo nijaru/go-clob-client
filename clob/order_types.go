@@ -231,6 +231,12 @@ type OpenOrder struct {
 	ExpirationTime  *time.Time `json:"-"`
 }
 
+// isEmptyJSON reports whether raw is absent, empty, or a JSON null.
+func isEmptyJSON(raw []byte) bool {
+	trimmed := bytes.TrimSpace(raw)
+	return len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null"))
+}
+
 // UnmarshalJSON normalizes the timestamp representations used by the CLOB
 // API. Rust exposes these as DateTime values; live responses may contain
 // epoch seconds, epoch milliseconds, ISO-8601 strings, or numeric zero.
@@ -238,6 +244,14 @@ func (o *OpenOrder) UnmarshalJSON(data []byte) error {
 	var fields map[string]stdjson.RawMessage
 	if err := stdjson.Unmarshal(data, &fields); err != nil {
 		return fmt.Errorf("open order: decode object: %w", err)
+	}
+
+	// Accept the asset ID under the legacy token_id spelling when the
+	// current key is absent (py-sdk AliasChoices parity).
+	if raw, ok := fields["asset_id"]; !ok || isEmptyJSON(raw) {
+		if legacy, hasLegacy := fields["token_id"]; hasLegacy {
+			fields["asset_id"] = legacy
+		}
 	}
 
 	createdAt, createdRaw, err := normalizeOrderTimestamp(fields["created_at"], false, false)
@@ -359,6 +373,27 @@ type MakerOrder struct {
 	Side          Side   `json:"side"`
 }
 
+// UnmarshalJSON accepts the asset ID under the legacy token_id spelling in
+// addition to asset_id (py-sdk AliasChoices parity).
+func (m *MakerOrder) UnmarshalJSON(data []byte) error {
+	type alias MakerOrder
+	var value alias
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	if value.AssetID == "" {
+		var legacy struct {
+			AssetID string `json:"token_id"`
+		}
+		if err := json.Unmarshal(data, &legacy); err != nil {
+			return err
+		}
+		value.AssetID = legacy.AssetID
+	}
+	*m = MakerOrder(value)
+	return nil
+}
+
 // Trade is an authenticated user trade record.
 type Trade struct {
 	ID              string       `json:"id"`
@@ -382,6 +417,27 @@ type Trade struct {
 	ErrorMsg        string       `json:"error_msg,omitzero"`
 	// RebateEstimated is the projected maker rebate for this trade.
 	RebateEstimated string `json:"rebate_estimated,omitzero"`
+}
+
+// UnmarshalJSON accepts the asset ID under the legacy token_id spelling in
+// addition to asset_id (py-sdk AliasChoices parity).
+func (t *Trade) UnmarshalJSON(data []byte) error {
+	type alias Trade
+	var value alias
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	if value.AssetID == "" {
+		var legacy struct {
+			AssetID string `json:"token_id"`
+		}
+		if err := json.Unmarshal(data, &legacy); err != nil {
+			return err
+		}
+		value.AssetID = legacy.AssetID
+	}
+	*t = Trade(value)
+	return nil
 }
 
 // OrderArgs contains the inputs for building a limit order.

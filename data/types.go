@@ -3,6 +3,7 @@ package data
 import (
 	"time"
 
+	json "github.com/go-json-experiment/json"
 	"github.com/quagmt/udecimal"
 )
 
@@ -138,6 +139,23 @@ type Position struct {
 	NegativeRisk       bool    `json:"negativeRisk"`
 }
 
+// UnmarshalJSON accepts the asset ID under the asset_id and token_id
+// spellings in addition to the legacy asset key (py-sdk AliasChoices parity).
+func (p *Position) UnmarshalJSON(data []byte) error {
+	type alias Position
+	var value alias
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	asset, err := assetCompatKey(data, value.Asset)
+	if err != nil {
+		return err
+	}
+	value.Asset = asset
+	*p = Position(value)
+	return nil
+}
+
 type ClosedPosition struct {
 	ProxyWallet     string  `json:"proxyWallet"`
 	Asset           string  `json:"asset"`
@@ -158,8 +176,45 @@ type ClosedPosition struct {
 	EndDate         string  `json:"endDate"`
 }
 
+// UnmarshalJSON accepts the asset ID under the asset_id and token_id
+// spellings in addition to the legacy asset key (py-sdk AliasChoices parity).
+func (p *ClosedPosition) UnmarshalJSON(data []byte) error {
+	type alias ClosedPosition
+	var value alias
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	asset, err := assetCompatKey(data, value.Asset)
+	if err != nil {
+		return err
+	}
+	value.Asset = asset
+	*p = ClosedPosition(value)
+	return nil
+}
+
 type Health struct {
 	Data string `json:"data"`
+}
+
+// assetCompatKey returns the asset identifier for a record whose primary key
+// is empty, trying asset_id then token_id (py-sdk AliasChoices parity for the
+// data API's asset/asset_id/token_id wire drift).
+func assetCompatKey(data []byte, primary string) (string, error) {
+	if primary != "" {
+		return primary, nil
+	}
+	var compat struct {
+		AssetID string `json:"asset_id"`
+		TokenID string `json:"token_id"`
+	}
+	if err := json.Unmarshal(data, &compat); err != nil {
+		return "", err
+	}
+	if compat.AssetID != "" {
+		return compat.AssetID, nil
+	}
+	return compat.TokenID, nil
 }
 
 type Trade struct {
@@ -182,6 +237,23 @@ type Trade struct {
 	ProfileImage          string  `json:"profileImage,omitzero"`
 	ProfileImageOptimized string  `json:"profileImageOptimized,omitzero"`
 	TransactionHash       string  `json:"transactionHash"`
+}
+
+// UnmarshalJSON accepts the asset ID under the asset_id and token_id
+// spellings in addition to the legacy asset key (py-sdk AliasChoices parity).
+func (t *Trade) UnmarshalJSON(data []byte) error {
+	type alias Trade
+	var value alias
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	asset, err := assetCompatKey(data, value.Asset)
+	if err != nil {
+		return err
+	}
+	value.Asset = asset
+	*t = Trade(value)
+	return nil
 }
 
 type TradeFilter struct {
@@ -214,6 +286,23 @@ type Activity struct {
 	ProfileImageOptimized string       `json:"profileImageOptimized,omitzero"`
 }
 
+// UnmarshalJSON accepts the asset ID under the asset_id and token_id
+// spellings in addition to the legacy asset key (py-sdk AliasChoices parity).
+func (a *Activity) UnmarshalJSON(data []byte) error {
+	type alias Activity
+	var value alias
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	asset, err := assetCompatKey(data, value.Asset)
+	if err != nil {
+		return err
+	}
+	value.Asset = asset
+	*a = Activity(value)
+	return nil
+}
+
 type Holder struct {
 	ProxyWallet           string  `json:"proxyWallet"`
 	Bio                   string  `json:"bio,omitzero"`
@@ -228,9 +317,47 @@ type Holder struct {
 	Verified              *bool   `json:"verified,omitzero"`
 }
 
+// UnmarshalJSON accepts the asset ID under the asset_id and token_id
+// spellings in addition to the legacy asset key (py-sdk AliasChoices parity).
+func (h *Holder) UnmarshalJSON(data []byte) error {
+	type alias Holder
+	var value alias
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	asset, err := assetCompatKey(data, value.Asset)
+	if err != nil {
+		return err
+	}
+	value.Asset = asset
+	*h = Holder(value)
+	return nil
+}
+
 type MetaHolder struct {
 	Token   string   `json:"token"`
 	Holders []Holder `json:"holders"`
+}
+
+// UnmarshalJSON accepts the group key under the asset_id spelling in addition
+// to the legacy token key (py-sdk AliasChoices parity).
+func (m *MetaHolder) UnmarshalJSON(data []byte) error {
+	type alias MetaHolder
+	var value alias
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	if value.Token == "" {
+		var compat struct {
+			AssetID string `json:"asset_id"`
+		}
+		if err := json.Unmarshal(data, &compat); err != nil {
+			return err
+		}
+		value.Token = compat.AssetID
+	}
+	*m = MetaHolder(value)
+	return nil
 }
 
 type Traded struct {
@@ -384,10 +511,48 @@ type MarketPositionDetail struct {
 	OutcomeIndex int     `json:"outcomeIndex,omitzero"`
 }
 
+// UnmarshalJSON accepts the asset ID under the asset_id and token_id
+// spellings in addition to the legacy asset key (py-sdk AliasChoices parity).
+func (d *MarketPositionDetail) UnmarshalJSON(data []byte) error {
+	type alias MarketPositionDetail
+	var value alias
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	asset, err := assetCompatKey(data, value.TokenID)
+	if err != nil {
+		return err
+	}
+	value.TokenID = asset
+	*d = MarketPositionDetail(value)
+	return nil
+}
+
 // MetaMarketPosition groups all wallet positions for a single token in a market.
 type MetaMarketPosition struct {
 	Token     string                 `json:"token,omitzero"`
 	Positions []MarketPositionDetail `json:"positions,omitzero"`
+}
+
+// UnmarshalJSON accepts the group key under the asset_id spelling in addition
+// to the legacy token key (py-sdk AliasChoices parity).
+func (m *MetaMarketPosition) UnmarshalJSON(data []byte) error {
+	type alias MetaMarketPosition
+	var value alias
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	if value.Token == "" {
+		var compat struct {
+			AssetID string `json:"asset_id"`
+		}
+		if err := json.Unmarshal(data, &compat); err != nil {
+			return err
+		}
+		value.Token = compat.AssetID
+	}
+	*m = MetaMarketPosition(value)
+	return nil
 }
 
 // MarketPositionStatus filters market-position queries by lifecycle state.
