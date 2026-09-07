@@ -426,7 +426,12 @@ func (c *AuthenticatedClient) AcceptComboQuote(
 		Metadata:      zeroBytes32,
 	}
 
-	typedData := buildOrderTypedData(c.chainID, comboProtocolVersion, contracts.ExchangeV3, order.typedOrder())
+	typedData := buildOrderTypedData(
+		c.chainID,
+		comboProtocolVersion,
+		contracts.ExchangeV3,
+		order.typedOrder(),
+	)
 	if c.signatureType == SignatureTypePoly1271 {
 		order.Signature, err = signPoly1271Order(c.signer, typedData, c.chainID)
 	} else {
@@ -618,7 +623,10 @@ func comboAcceptanceExpired(err error) (bool, ComboAcceptFailureReason) {
 
 // comboAcceptFailureReason maps a terminal acceptance status to its
 // failure reason, mirroring the official TypeScript SDK mapping.
-func comboAcceptFailureReason(status ComboRFQStatus, gatewayErr *BuilderRfqError) ComboAcceptFailureReason {
+func comboAcceptFailureReason(
+	status ComboRFQStatus,
+	gatewayErr *BuilderRfqError,
+) ComboAcceptFailureReason {
 	switch status {
 	case ComboRFQExpired:
 		return ComboAcceptWindowExpired
@@ -677,7 +685,12 @@ func validateComboAcceptRequest(params AcceptComboQuoteParams) error {
 	if params.PositionID == "" {
 		return fmt.Errorf("combo accept: positionId is required")
 	}
-	if _, err := strconv.ParseUint(params.PositionID, 10, 64); err != nil || !isNumericString(params.PositionID) {
+	if _, err := strconv.ParseUint(
+		params.PositionID,
+		10,
+		64,
+	); err != nil ||
+		!isNumericString(params.PositionID) {
 		return fmt.Errorf("combo accept: positionId must be a numeric string")
 	}
 	if params.Quote.QuoteID == "" {

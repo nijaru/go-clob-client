@@ -44,6 +44,9 @@ func newOrderLifecycleServer(t *testing.T) (*httptest.Server, *orderLifecycleSer
 		w.Header().Set("Content-Type", "application/json")
 
 		switch r.URL.Path {
+		case versionEndpoint:
+			_, _ = w.Write([]byte(`{"version":2}`))
+
 		case marketsByTokenEndpoint + "100":
 			w.Write([]byte(`{"condition_id":"cid"}`))
 
@@ -456,6 +459,8 @@ func TestOrderLifecycle_PostOrderAuthHeaders(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
+		case versionEndpoint:
+			_, _ = w.Write([]byte(`{"version":2}`))
 		case marketsByTokenEndpoint + "100":
 			w.Write([]byte(`{"condition_id":"cid"}`))
 		case clobMarketEndpoint + "/cid":

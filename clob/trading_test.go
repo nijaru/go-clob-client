@@ -621,6 +621,9 @@ func newTradingTestServerWithTickSize(
 		w.Header().Set("Content-Type", "application/json")
 
 		switch r.URL.Path {
+		case versionEndpoint:
+			_, _ = w.Write([]byte(`{"version":2}`))
+
 		case marketsByTokenEndpoint + "100":
 			_, _ = w.Write(
 				[]byte(

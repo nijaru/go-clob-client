@@ -47,6 +47,12 @@ type Client struct {
 	builderFeeCache         map[string]builderFeeEntry
 	builderFeeLoads         map[string]*orderMetadataLoad
 
+	// versionMu guards cachedVersion, the lazily resolved CLOB server
+	// protocol version (0 means uncached). It mirrors the Rust SDK's
+	// resolve_version cache.
+	versionMu     *sync.RWMutex
+	cachedVersion uint32
+
 	cacheTTL     time.Duration
 	retryMax     int
 	retryBackoff time.Duration
@@ -171,6 +177,9 @@ func newBase(config Config) *Client {
 		orderMetadataLoads:      make(map[string]*orderMetadataLoad),
 		builderFeeCache:         make(map[string]builderFeeEntry),
 		builderFeeLoads:         make(map[string]*orderMetadataLoad),
+
+		versionMu:     &sync.RWMutex{},
+		cachedVersion: 0,
 
 		cacheTTL:     config.TickSizeCacheTTL,
 		retryMax:     config.RetryMax,

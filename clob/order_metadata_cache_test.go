@@ -248,7 +248,14 @@ func TestCreateOrderHonorsIndependentNegRiskCache(t *testing.T) {
 }
 
 func signatureUsesContract(order *SignedOrder, chainID int64, contract string) bool {
-	typedData := buildOrderTypedData(chainID, protocolVersion, contract, *order)
+	return signatureUsesDomain(order, chainID, protocolVersion, contract)
+}
+
+// signatureUsesDomain recomputes the EIP-712 digest for order under the given
+// domain version and verifying contract and verifies the recorded signature
+// against the order signer.
+func signatureUsesDomain(order *SignedOrder, chainID int64, domainVersion, contract string) bool {
+	typedData := buildOrderTypedData(chainID, domainVersion, contract, *order)
 	digest, _, err := apitypes.TypedDataAndHash(typedData)
 	if err != nil {
 		return false
@@ -272,6 +279,8 @@ func TestCreateOrderRefreshesStaleTickMetadata(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
+		case versionEndpoint:
+			_, _ = w.Write([]byte(`{"version":2}`))
 		case tickSizeEndpoint:
 			tickCalls.Add(1)
 			_, _ = w.Write([]byte(`{"minimum_tick_size":"0.01"}`))

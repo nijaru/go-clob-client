@@ -280,7 +280,10 @@ func (c *AuthenticatedClient) CreateAndPostMarketOrder(
 	return c.PostOrder(ctx, request)
 }
 
-// BuildAndPostOrder builds, signs, and posts a limit order with version mismatch retry.
+// BuildAndPostOrder builds, signs, and posts a limit order. When the server
+// rejects the order with order_version_mismatch and its protocol version has
+// changed, the order is rebuilt, re-signed against the new exchange, and
+// posted once more (Rust build_sign_and_post semantics).
 func (c *AuthenticatedClient) BuildAndPostOrder(
 	ctx context.Context,
 	userOrder OrderArgs,
@@ -288,20 +291,38 @@ func (c *AuthenticatedClient) BuildAndPostOrder(
 	orderType OrderType,
 	postOnly bool,
 ) (*PostOrderResponse, error) {
-	order, err := c.CreateOrder(ctx, userOrder, options)
-	if err != nil {
-		return nil, err
+	beforeVersion := c.orderBuildServerVersion(ctx, userOrder.TokenID, userOrder.PositionID)
+
+	post := func() (*PostOrderResponse, error) {
+		order, err := c.CreateOrder(ctx, userOrder, options)
+		if err != nil {
+			return nil, err
+		}
+		request, err := c.BuildPostOrderRequest(*order, orderType, postOnly, userOrder.DeferExec)
+		if err != nil {
+			return nil, err
+		}
+		return c.PostOrder(ctx, request)
 	}
 
-	request, err := c.BuildPostOrderRequest(*order, orderType, postOnly, userOrder.DeferExec)
-	if err != nil {
-		return nil, err
+	response, err := post()
+	if isOrderVersionMismatch(err) {
+		c.invalidateServerVersion()
+		if afterVersion := c.orderBuildServerVersion(
+			ctx,
+			userOrder.TokenID,
+			userOrder.PositionID,
+		); afterVersion != beforeVersion {
+			return post()
+		}
 	}
-
-	return c.PostOrder(ctx, request)
+	return response, err
 }
 
-// BuildAndPostMarketOrder builds, signs, and posts a market order with version mismatch retry.
+// BuildAndPostMarketOrder builds, signs, and posts a market order. When the
+// server rejects the order with order_version_mismatch and its protocol
+// version has changed, the order is rebuilt, re-signed against the new
+// exchange, and posted once more (Rust build_sign_and_post semantics).
 func (c *AuthenticatedClient) BuildAndPostMarketOrder(
 	ctx context.Context,
 	userOrder MarketOrderArgs,
@@ -319,17 +340,53 @@ func (c *AuthenticatedClient) BuildAndPostMarketOrder(
 	}
 	userOrder.OrderType = orderType
 
-	order, err := c.CreateMarketOrder(ctx, userOrder, options)
-	if err != nil {
-		return nil, err
+	beforeVersion := c.orderBuildServerVersion(ctx, userOrder.TokenID, userOrder.PositionID)
+
+	post := func() (*PostOrderResponse, error) {
+		order, err := c.CreateMarketOrder(ctx, userOrder, options)
+		if err != nil {
+			return nil, err
+		}
+		request, err := c.BuildPostOrderRequest(*order, orderType, false, userOrder.DeferExec)
+		if err != nil {
+			return nil, err
+		}
+		return c.PostOrder(ctx, request)
 	}
 
-	request, err := c.BuildPostOrderRequest(*order, orderType, false, userOrder.DeferExec)
-	if err != nil {
-		return nil, err
+	response, err := post()
+	if isOrderVersionMismatch(err) {
+		c.invalidateServerVersion()
+		if afterVersion := c.orderBuildServerVersion(
+			ctx,
+			userOrder.TokenID,
+			userOrder.PositionID,
+		); afterVersion != beforeVersion {
+			return post()
+		}
 	}
+	return response, err
+}
 
-	return c.PostOrder(ctx, request)
+// orderBuildServerVersion returns the server protocol version an order build
+// will sign against, or 0 when it cannot be resolved. Position-backed orders
+// always sign against Exchange V3, so they never participate in version
+// mismatch recovery.
+func (c *SignerClient) orderBuildServerVersion(
+	ctx context.Context,
+	tokenID, positionID string,
+) uint32 {
+	if positionID != "" {
+		return 0
+	}
+	if tokenID == "" {
+		return 0
+	}
+	version, err := c.resolveServerVersion(ctx, false)
+	if err != nil {
+		return 0
+	}
+	return version
 }
 
 // BuildPostOrderRequest wraps a signed order in the authenticated post-order payload.
@@ -590,16 +647,20 @@ type orderBuildInput struct {
 }
 
 // orderExchange selects the verifying contract and EIP-712 domain version for
-// an order. V2 token orders sign against the CTF Exchange with protocol
-// version "2"; V3 position-backed orders sign against Exchange V3 with
-// protocol version "3". The order body shape is identical — the wire field
-// is named `tokenId` for both CTF token IDs and PolyV2 position IDs.
+// an order. Position-backed (V3) orders always sign against Exchange V3 with
+// protocol version "3". Token-backed orders sign against the exchange the
+// CLOB server's current protocol version selects: server version 3 signs
+// against Exchange V3 with version "3"; older servers sign against the CTF
+// Exchange (or its neg-risk variant) with version "2". The order body shape
+// is identical for both — the wire field is named `tokenId` for CTF token IDs
+// and PolyV2 position IDs alike.
 type orderExchange struct {
 	VerifyingContract string
 	Version           string
 }
 
 func (c *SignerClient) resolveOrderExchange(
+	ctx context.Context,
 	input orderBuildInput,
 	contracts contractConfig,
 ) (orderExchange, error) {
@@ -614,17 +675,41 @@ func (c *SignerClient) resolveOrderExchange(
 			Version:           "3",
 		}, nil
 	}
-	verifyingContract := contracts.Exchange
 	if input.NegRisk {
-		verifyingContract = contracts.NegRiskExchange
+		if contracts.NegRiskExchange == "" {
+			return orderExchange{}, fmt.Errorf(
+				"exchange contract not configured for chain %d", c.chainID,
+			)
+		}
+		return orderExchange{
+			VerifyingContract: contracts.NegRiskExchange,
+			Version:           protocolVersion,
+		}, nil
 	}
-	if verifyingContract == "" {
+	if contracts.Exchange == "" {
 		return orderExchange{}, fmt.Errorf(
 			"exchange contract not configured for chain %d", c.chainID,
 		)
 	}
+	// Token orders follow the server's current protocol version. A server
+	// reporting version 3 requires Exchange V3 signatures for token orders.
+	serverVersion, err := c.resolveServerVersion(ctx, false)
+	if err != nil {
+		return orderExchange{}, err
+	}
+	if serverVersion >= 3 {
+		if contracts.ExchangeV3 == "" {
+			return orderExchange{}, fmt.Errorf(
+				"exchange v3 contract not configured for chain %d", c.chainID,
+			)
+		}
+		return orderExchange{
+			VerifyingContract: contracts.ExchangeV3,
+			Version:           "3",
+		}, nil
+	}
 	return orderExchange{
-		VerifyingContract: verifyingContract,
+		VerifyingContract: contracts.Exchange,
 		Version:           protocolVersion,
 	}, nil
 }
@@ -653,7 +738,7 @@ func (c *SignerClient) signOrder(ctx context.Context, input orderBuildInput) (*S
 		return nil, fmt.Errorf("generate order salt: %w", err)
 	}
 
-	exchange, err := c.resolveOrderExchange(input, contracts)
+	exchange, err := c.resolveOrderExchange(ctx, input, contracts)
 	if err != nil {
 		return nil, err
 	}

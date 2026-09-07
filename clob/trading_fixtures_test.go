@@ -1,11 +1,15 @@
 package clob
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/nijaru/go-clob-client/internal/polyhttp"
 	"github.com/quagmt/udecimal"
 )
 
@@ -70,6 +74,8 @@ func newTradingFixtureServer(t *testing.T) *httptest.Server {
 		w.Header().Set("Content-Type", "application/json")
 
 		switch r.URL.Path {
+		case versionEndpoint:
+			_, _ = w.Write([]byte(`{"version":2}`))
 		case tickSizeEndpoint:
 			_, _ = w.Write([]byte(`{"minimum_tick_size":"0.001"}`))
 		case negRiskEndpoint:
@@ -429,7 +435,6 @@ func TestV3PositionRoutingUsesExchangeV3Domain(t *testing.T) {
 
 	server := newTradingFixtureServer(t)
 	defer server.Close()
-
 	client, err := NewSignerClient(Config{
 		Host:       server.URL,
 		PrivateKey: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
@@ -491,5 +496,288 @@ func TestOrderAssetExactlyOneIdentifier(t *testing.T) {
 		Side:       SideBuy,
 	}, &CreateOrderOptions{}); err == nil {
 		t.Fatal("expected error for order with both identifiers")
+	}
+}
+
+// newVersionedTradingFixtureServer is a trading fixture server whose /version
+// endpoint reports the given protocol version.
+func newVersionedTradingFixtureServer(t *testing.T, version uint32) *httptest.Server {
+	t.Helper()
+
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		switch r.URL.Path {
+		case versionEndpoint:
+			_, _ = w.Write([]byte(fmt.Sprintf(`{"version":%d}`, version)))
+		case tickSizeEndpoint:
+			_, _ = w.Write([]byte(`{"minimum_tick_size":"0.001"}`))
+		case negRiskEndpoint:
+			_, _ = w.Write([]byte(`{"neg_risk":false}`))
+		case orderBookEndpoint:
+			_, _ = w.Write(
+				[]byte(
+					`{"market":"m","asset_id":"123","timestamp":"1","bids":[{"price":"0.44","size":"10"}],"asks":[{"price":"0.46","size":"10"}],"min_order_size":"1","tick_size":"0.01","neg_risk":false,"last_trade_price":"0.45","hash":"h"}`,
+				),
+			)
+		default:
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+}
+
+// newVersionFlippingTradingServer simulates a CLOB server that starts at
+// protocol version 2 and flips to newVersion after the first order post is
+// rejected with order_version_mismatch. shouldSucceed reports whether the
+// current POST /order attempt should succeed.
+func newVersionFlippingTradingServer(
+	t *testing.T,
+	newVersion uint32,
+	shouldSucceed func() bool,
+) *httptest.Server {
+	t.Helper()
+
+	var version atomic.Uint32
+	version.Store(2)
+
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		switch r.URL.Path {
+		case versionEndpoint:
+			_, _ = w.Write([]byte(fmt.Sprintf(`{"version":%d}`, version.Load())))
+		case tickSizeEndpoint:
+			_, _ = w.Write([]byte(`{"minimum_tick_size":"0.001"}`))
+		case negRiskEndpoint:
+			_, _ = w.Write([]byte(`{"neg_risk":false}`))
+		case orderBookEndpoint:
+			_, _ = w.Write(
+				[]byte(
+					`{"market":"m","asset_id":"123","timestamp":"1","bids":[{"price":"0.44","size":"10"}],"asks":[{"price":"0.46","size":"10"}],"min_order_size":"1","tick_size":"0.01","neg_risk":false,"last_trade_price":"0.45","hash":"h"}`,
+				),
+			)
+		case postOrderEndpoint:
+			if shouldSucceed() {
+				_, _ = w.Write([]byte(`{"success":true,"orderID":"ok"}`))
+				return
+			}
+			// First post rejects; then the server upgrades its protocol version
+			// so the invalidated cache resolves to the new one on retry.
+			version.Store(newVersion)
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte("order_version_mismatch"))
+		default:
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+}
+
+// TestServerVersion3TokenOrderSignsAgainstExchangeV3 mirrors the Rust
+// anchor: a server reporting protocol version 3 on /version requires token
+// orders to sign against Exchange V3 with domain version "3".
+func TestServerVersion3TokenOrderSignsAgainstExchangeV3(t *testing.T) {
+	t.Parallel()
+
+	server := newVersionedTradingFixtureServer(t, 3)
+	t.Cleanup(server.Close)
+
+	client, err := NewSignerClient(Config{
+		Host:       server.URL,
+		PrivateKey: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	client.saltGenerator = func() (uint64, error) { return 1, nil }
+
+	tokenOrder, err := client.CreateOrder(t.Context(), OrderArgs{
+		TokenID: "123",
+		Price:   udecimal.MustParse("0.5"),
+		Size:    udecimal.MustParse("100"),
+		Side:    SideBuy,
+	}, &CreateOrderOptions{TickSize: TickSizeTenth, NegRisk: new(false)})
+	if err != nil {
+		t.Fatalf("create token order: %v", err)
+	}
+
+	contracts, err := getContractConfig(client.chainID)
+	if err != nil {
+		t.Fatalf("get contract config: %v", err)
+	}
+	if !signatureUsesDomain(tokenOrder, client.chainID, "3", contracts.ExchangeV3) {
+		t.Fatal("token order did not sign against Exchange V3 with domain version 3")
+	}
+	if signatureUsesDomain(tokenOrder, client.chainID, "2", contracts.Exchange) {
+		t.Fatal("token order unexpectedly signed against the CTF Exchange")
+	}
+}
+
+// TestServerVersion2TokenOrderSignsAgainstCTFExchange pins the current
+// behavior: a server reporting version 2 keeps token orders on the CTF
+// Exchange with domain version "2".
+func TestServerVersion2TokenOrderSignsAgainstCTFExchange(t *testing.T) {
+	t.Parallel()
+
+	server := newVersionedTradingFixtureServer(t, 2)
+	t.Cleanup(server.Close)
+
+	client, err := NewSignerClient(Config{
+		Host:       server.URL,
+		PrivateKey: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	client.saltGenerator = func() (uint64, error) { return 1, nil }
+
+	tokenOrder, err := client.CreateOrder(t.Context(), OrderArgs{
+		TokenID: "123",
+		Price:   udecimal.MustParse("0.5"),
+		Size:    udecimal.MustParse("100"),
+		Side:    SideBuy,
+	}, &CreateOrderOptions{TickSize: TickSizeTenth, NegRisk: new(false)})
+	if err != nil {
+		t.Fatalf("create token order: %v", err)
+	}
+
+	contracts, err := getContractConfig(client.chainID)
+	if err != nil {
+		t.Fatalf("get contract config: %v", err)
+	}
+	if !signatureUsesDomain(tokenOrder, client.chainID, "2", contracts.Exchange) {
+		t.Fatal("token order did not sign against the CTF Exchange with domain version 2")
+	}
+}
+
+// TestBuildAndPostOrderRetriesOnVersionMismatch mirrors the Rust anchor's
+// build_sign_and_post: a version-mismatch rejection invalidates the cached
+// server version, and when the fresh version differs the order is rebuilt,
+// re-signed, and posted once more.
+func TestBuildAndPostOrderRetriesOnVersionMismatch(t *testing.T) {
+	t.Parallel()
+
+	var postCalls atomic.Int32
+	server := newVersionFlippingTradingServer(t, 3, func() bool {
+		return postCalls.Add(1) > 1
+	})
+	t.Cleanup(server.Close)
+
+	client, err := NewAuthenticatedClient(Config{
+		Host:       server.URL,
+		PrivateKey: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+		Credentials: &Credentials{
+			Key:        "api-key",
+			Secret:     "c2VjcmV0",
+			Passphrase: "pass",
+		},
+		RetryMax: 0,
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	client.saltGenerator = func() (uint64, error) { return 42, nil }
+
+	resp, err := client.BuildAndPostOrder(t.Context(), OrderArgs{
+		TokenID: "123",
+		Price:   udecimal.MustParse("0.5"),
+		Size:    udecimal.MustParse("10"),
+		Side:    SideBuy,
+	}, &CreateOrderOptions{TickSize: TickSizeTenth, NegRisk: new(false)}, OrderTypeGTC, false)
+	if err != nil {
+		t.Fatalf("build and post order: %v", err)
+	}
+	if !resp.Success {
+		t.Fatal("expected successful response after retry")
+	}
+	if got := postCalls.Load(); got != 2 {
+		t.Fatalf("post calls = %d, want 2", got)
+	}
+}
+
+// TestBuildAndPostOrderDoesNotRetryWhenVersionUnchanged verifies the retry
+// only fires when the server's protocol version actually changed; a mismatch
+// error with a stable version surfaces to the caller without a second post.
+func TestBuildAndPostOrderDoesNotRetryWhenVersionUnchanged(t *testing.T) {
+	t.Parallel()
+
+	var postCalls atomic.Int32
+	server := newVersionFlippingTradingServer(t, 2, func() bool {
+		return postCalls.Add(1) > 1
+	})
+	t.Cleanup(server.Close)
+
+	client, err := NewAuthenticatedClient(Config{
+		Host:       server.URL,
+		PrivateKey: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+		Credentials: &Credentials{
+			Key:        "api-key",
+			Secret:     "c2VjcmV0",
+			Passphrase: "pass",
+		},
+		RetryMax: 0,
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	client.saltGenerator = func() (uint64, error) { return 42, nil }
+
+	_, err = client.BuildAndPostOrder(t.Context(), OrderArgs{
+		TokenID: "123",
+		Price:   udecimal.MustParse("0.5"),
+		Size:    udecimal.MustParse("10"),
+		Side:    SideBuy,
+	}, &CreateOrderOptions{TickSize: TickSizeTenth, NegRisk: new(false)}, OrderTypeGTC, false)
+	if err == nil {
+		t.Fatal("expected the mismatch error to surface")
+	}
+	if !isOrderVersionMismatch(err) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := postCalls.Load(); got != 1 {
+		t.Fatalf("post calls = %d, want 1", got)
+	}
+}
+
+// TestPostOrderInvalidatesVersionCacheOnMismatch verifies the mismatch
+// detector and cache invalidation helpers used by the PostOrder paths,
+// mirroring the Rust anchor's invalidate_version_if_mismatch.
+func TestPostOrderInvalidatesVersionCacheOnMismatch(t *testing.T) {
+	t.Parallel()
+
+	apiErr := &polyhttp.APIError{
+		StatusCode: http.StatusBadRequest,
+		Message:    "order rejected: order_version_mismatch",
+	}
+	if !isOrderVersionMismatch(apiErr) {
+		t.Fatal("expected mismatch error to be detected")
+	}
+	if isOrderVersionMismatch(errors.New("some other failure")) {
+		t.Fatal("non-API error must not be treated as a version mismatch")
+	}
+	if isOrderVersionMismatch(&polyhttp.APIError{
+		StatusCode: http.StatusBadRequest,
+		Message:    "invalid price",
+	}) {
+		t.Fatal("unrelated API error must not be treated as a version mismatch")
+	}
+
+	client, err := NewSignerClient(Config{
+		Host:       "https://example.invalid",
+		PrivateKey: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+
+	client.versionMu.Lock()
+	client.cachedVersion = 2
+	client.versionMu.Unlock()
+	client.invalidateServerVersion()
+
+	client.versionMu.RLock()
+	cached := client.cachedVersion
+	client.versionMu.RUnlock()
+	if cached != 0 {
+		t.Fatalf("cached version = %d, want 0 after invalidation", cached)
 	}
 }

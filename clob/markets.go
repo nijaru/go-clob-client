@@ -2,11 +2,13 @@ package clob
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"iter"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
 )
@@ -529,6 +531,52 @@ func (c *Client) GetVersion(ctx context.Context) (uint32, error) {
 		return 0, err
 	}
 	return out.Version, nil
+}
+
+// resolveServerVersion returns the cached CLOB server protocol version,
+// fetching /version on a cache miss. force bypasses and refreshes the cache.
+// It mirrors the Rust SDK's resolve_version.
+func (c *Client) resolveServerVersion(ctx context.Context, force bool) (uint32, error) {
+	if !force {
+		c.versionMu.RLock()
+		cached := c.cachedVersion
+		c.versionMu.RUnlock()
+		if cached != 0 {
+			return cached, nil
+		}
+	}
+
+	version, err := c.GetVersion(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	c.versionMu.Lock()
+	c.cachedVersion = version
+	c.versionMu.Unlock()
+	return version, nil
+}
+
+// invalidateServerVersion clears the cached server protocol version so the
+// next resolveServerVersion fetches /version again.
+func (c *Client) invalidateServerVersion() {
+	c.versionMu.Lock()
+	c.cachedVersion = 0
+	c.versionMu.Unlock()
+}
+
+// orderVersionMismatchError is the error string the CLOB API returns when an
+// order was signed against a protocol version the server no longer accepts.
+const orderVersionMismatchError = "order_version_mismatch"
+
+// isOrderVersionMismatch reports whether err is an order_version_mismatch
+// API rejection.
+func isOrderVersionMismatch(err error) bool {
+	var apiErr *polyhttp.APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	return strings.Contains(apiErr.Message, orderVersionMismatchError)
 }
 
 // GetFeeRate returns the base fee rate in BPS for a token from the /fee-rate endpoint.

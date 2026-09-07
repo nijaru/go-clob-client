@@ -250,6 +250,9 @@ func (c *AuthenticatedClient) PostOrder(
 ) (*PostOrderResponse, error) {
 	var out PostOrderResponse
 	err := c.postJSON(ctx, postOrderEndpoint, request, polyhttp.AuthL2Builder, &out)
+	if isOrderVersionMismatch(err) {
+		c.invalidateServerVersion()
+	}
 	if err == nil && shouldResolvePostOrder(request, out) {
 		hashes := transactionHashesForTradeIDs(
 			out.TradeIDs,
@@ -275,6 +278,9 @@ func (c *AuthenticatedClient) PostOrders(
 	}
 	var out []PostOrderResponse
 	err := c.postJSON(ctx, postOrdersEndpoint, requests, polyhttp.AuthL2Builder, &out)
+	if isOrderVersionMismatch(err) {
+		c.invalidateServerVersion()
+	}
 	if err == nil {
 		var tradeIDs []string
 		pending := make([]int, 0, len(out))

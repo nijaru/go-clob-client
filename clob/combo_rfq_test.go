@@ -117,7 +117,11 @@ func TestRequestComboQuoteReturnsQuote(t *testing.T) {
 		t.Fatalf("blended price = %s, want 0.5", result.Quote.BlendedPrice)
 	}
 	if result.Quote.MakerAmount != "100" || result.Quote.TakerAmount != "200" {
-		t.Fatalf("amounts = %s/%s, want 100/200", result.Quote.MakerAmount, result.Quote.TakerAmount)
+		t.Fatalf(
+			"amounts = %s/%s, want 100/200",
+			result.Quote.MakerAmount,
+			result.Quote.TakerAmount,
+		)
 	}
 	if result.Quote.TotalRequired != "100.5" {
 		t.Fatalf("total required = %s, want 100.5", result.Quote.TotalRequired)

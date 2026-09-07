@@ -41,6 +41,7 @@ var contractConfigs = map[int64]contractConfig{
 		NegRiskAdapter:  "0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296",
 		Collateral:      "0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB",
 		Conditional:     "0x69308FB512518e39F9b16112fA8d994F4e2Bf8bB",
+		ExchangeV3:      "0x9fE6e61422AdB6F610d8597F9684b16912D50C3D",
 	},
 }
 
