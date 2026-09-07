@@ -8,68 +8,95 @@ import (
 	"time"
 )
 
+// ProtocolVersion is the market protocol version a market trades under.
+// Known values are v1 (CTF tokens) and v2 (Poly positions). Unknown values
+// pass through as-is so newer server versions do not fail decoding.
+type ProtocolVersion string
+
+const (
+	// ProtocolVersionV1 is the CTF-token market protocol.
+	ProtocolVersionV1 ProtocolVersion = "v1"
+	// ProtocolVersionV2 is the Polymarket V2 position protocol.
+	ProtocolVersionV2 ProtocolVersion = "v2"
+)
+
+// ComboStatus is a market's combo eligibility state. Known values are
+// pending, enabled, and disabled. Unknown values pass through as-is.
+type ComboStatus string
+
+const (
+	// ComboStatusPending is a combo-eligible market awaiting enablement.
+	ComboStatusPending ComboStatus = "pending"
+	// ComboStatusEnabled marks a market available for combo bets.
+	ComboStatusEnabled ComboStatus = "enabled"
+	// ComboStatusDisabled marks a market withdrawn from combo betting.
+	ComboStatusDisabled ComboStatus = "disabled"
+)
+
 // Market represents a single Polymarket market outcome.
 type Market struct {
-	ID                          string    `json:"id"`
-	Question                    string    `json:"question,omitzero"`
-	ConditionID                 string    `json:"conditionId,omitzero"`
-	Slug                        string    `json:"slug,omitzero"`
-	TwitterCardImage            string    `json:"twitterCardImage,omitzero"`
-	ResolutionSource            string    `json:"resolutionSource,omitzero"`
-	EndDate                     string    `json:"endDate,omitzero"`
-	Category                    string    `json:"category,omitzero"`
-	AmmType                     string    `json:"ammType,omitzero"`
-	Liquidity                   string    `json:"liquidity,omitzero"`
-	SponsorName                 string    `json:"sponsorName,omitzero"`
-	SponsorImage                string    `json:"sponsorImage,omitzero"`
-	BestBid                     string    `json:"bestBid,omitzero"`
-	BestAsk                     string    `json:"bestAsk,omitzero"`
-	LastTradePrice              string    `json:"lastTradePrice,omitzero"`
-	Volume                      string    `json:"volume,omitzero"`
-	Volume24h                   string    `json:"volume24h,omitzero"`
-	OutcomePrices               []string  `json:"outcomePrices,omitzero"`
-	Outcomes                    []string  `json:"outcomes,omitzero"`
-	CLOBTokenIDs                []string  `json:"clobTokenIds,omitzero"`
-	DescriptivePricing          []string  `json:"descriptivePricing,omitzero"`
-	DayPercentChange            float64   `json:"dayPercentChange,omitzero"`
-	ResolutionRules             string    `json:"resolutionRules,omitzero"`
-	Description                 string    `json:"description,omitzero"`
-	MarketType                  string    `json:"marketType,omitzero"`
-	Active                      bool      `json:"active"`
-	Closed                      bool      `json:"closed"`
-	Archived                    bool      `json:"archived"`
-	Resolved                    bool      `json:"resolved"`
-	Restricted                  bool      `json:"restricted"`
-	GroupWinner                 bool      `json:"groupWinner"`
-	Tracking                    bool      `json:"tracking"`
-	Hedge                       bool      `json:"hedge"`
-	OneToTwo                    bool      `json:"oneToTwo"`
-	Ready                       bool      `json:"ready"`
-	AcceptingOrders             bool      `json:"acceptingOrders"`
-	NegativeRisk                bool      `json:"negativeRisk"`
-	NegRiskMarketID             string    `json:"negRiskMarketId,omitzero"`
-	NegRiskRequestID            string    `json:"negRiskRequestId,omitzero"`
-	ProxyAddress                string    `json:"proxyAddress,omitzero"`
-	OrderPriceMinTickSize       float64   `json:"orderPriceMinTickSize,omitzero"`
-	OrderMinSize                float64   `json:"orderMinSize,omitzero"`
-	MaxOrderSize                float64   `json:"maxOrderSize,omitzero"`
-	RewardsMinSize              float64   `json:"rewardsMinSize,omitzero"`
-	RewardsMaxSpread            float64   `json:"rewardsMaxSpread,omitzero"`
-	Spread                      float64   `json:"spread,omitzero"`
-	GqlID                       string    `json:"gqlId,omitzero"`
-	EventID                     string    `json:"eventId,omitzero"`
-	CreatedAt                   time.Time `json:"createdAt"`
-	UpdatedAt                   time.Time `json:"updatedAt"`
-	Competitive                 float64   `json:"competitive,omitzero"`
-	PagerDutyService            string    `json:"pagerDutyService,omitzero"`
-	ApproveCurrentWorker        string    `json:"approveCurrentWorker,omitzero"`
-	ResolutionServiceWorker     string    `json:"resolutionServiceWorker,omitzero"`
-	Fee                         string    `json:"fee,omitzero"`
-	Fpmm                        string    `json:"fpmm,omitzero"`
-	OutcomeAssets               []string  `json:"outcomeAssets,omitzero"`
-	QuoterAddress               string    `json:"quoterAddress,omitzero"`
-	MinimumOrderSize            float64   `json:"minimumOrderSize,omitzero"`
-	MinimumBaseWithdrawalAmount float64   `json:"minimumBaseWithdrawalAmount,omitzero"`
+	ID                          string          `json:"id"`
+	Version                     ProtocolVersion `json:"version,omitzero"`
+	ComboStatus                 ComboStatus     `json:"comboStatus,omitzero"`
+	Question                    string          `json:"question,omitzero"`
+	ConditionID                 string          `json:"conditionId,omitzero"`
+	Slug                        string          `json:"slug,omitzero"`
+	TwitterCardImage            string          `json:"twitterCardImage,omitzero"`
+	ResolutionSource            string          `json:"resolutionSource,omitzero"`
+	EndDate                     string          `json:"endDate,omitzero"`
+	Category                    string          `json:"category,omitzero"`
+	AmmType                     string          `json:"ammType,omitzero"`
+	Liquidity                   string          `json:"liquidity,omitzero"`
+	SponsorName                 string          `json:"sponsorName,omitzero"`
+	SponsorImage                string          `json:"sponsorImage,omitzero"`
+	BestBid                     string          `json:"bestBid,omitzero"`
+	BestAsk                     string          `json:"bestAsk,omitzero"`
+	LastTradePrice              string          `json:"lastTradePrice,omitzero"`
+	Volume                      string          `json:"volume,omitzero"`
+	Volume24h                   string          `json:"volume24h,omitzero"`
+	OutcomePrices               []string        `json:"outcomePrices,omitzero"`
+	Outcomes                    []string        `json:"outcomes,omitzero"`
+	CLOBTokenIDs                []string        `json:"clobTokenIds,omitzero"`
+	DescriptivePricing          []string        `json:"descriptivePricing,omitzero"`
+	DayPercentChange            float64         `json:"dayPercentChange,omitzero"`
+	ResolutionRules             string          `json:"resolutionRules,omitzero"`
+	Description                 string          `json:"description,omitzero"`
+	MarketType                  string          `json:"marketType,omitzero"`
+	Active                      bool            `json:"active"`
+	Closed                      bool            `json:"closed"`
+	Archived                    bool            `json:"archived"`
+	Resolved                    bool            `json:"resolved"`
+	Restricted                  bool            `json:"restricted"`
+	GroupWinner                 bool            `json:"groupWinner"`
+	Tracking                    bool            `json:"tracking"`
+	Hedge                       bool            `json:"hedge"`
+	OneToTwo                    bool            `json:"oneToTwo"`
+	Ready                       bool            `json:"ready"`
+	AcceptingOrders             bool            `json:"acceptingOrders"`
+	NegativeRisk                bool            `json:"negativeRisk"`
+	NegRiskMarketID             string          `json:"negRiskMarketId,omitzero"`
+	NegRiskRequestID            string          `json:"negRiskRequestId,omitzero"`
+	ProxyAddress                string          `json:"proxyAddress,omitzero"`
+	OrderPriceMinTickSize       float64         `json:"orderPriceMinTickSize,omitzero"`
+	OrderMinSize                float64         `json:"orderMinSize,omitzero"`
+	MaxOrderSize                float64         `json:"maxOrderSize,omitzero"`
+	RewardsMinSize              float64         `json:"rewardsMinSize,omitzero"`
+	RewardsMaxSpread            float64         `json:"rewardsMaxSpread,omitzero"`
+	Spread                      float64         `json:"spread,omitzero"`
+	GqlID                       string          `json:"gqlId,omitzero"`
+	EventID                     string          `json:"eventId,omitzero"`
+	CreatedAt                   time.Time       `json:"createdAt"`
+	UpdatedAt                   time.Time       `json:"updatedAt"`
+	Competitive                 float64         `json:"competitive,omitzero"`
+	PagerDutyService            string          `json:"pagerDutyService,omitzero"`
+	ApproveCurrentWorker        string          `json:"approveCurrentWorker,omitzero"`
+	ResolutionServiceWorker     string          `json:"resolutionServiceWorker,omitzero"`
+	Fee                         string          `json:"fee,omitzero"`
+	Fpmm                        string          `json:"fpmm,omitzero"`
+	OutcomeAssets               []string        `json:"outcomeAssets,omitzero"`
+	QuoterAddress               string          `json:"quoterAddress,omitzero"`
+	MinimumOrderSize            float64         `json:"minimumOrderSize,omitzero"`
+	MinimumBaseWithdrawalAmount float64         `json:"minimumBaseWithdrawalAmount,omitzero"`
 
 	// Extended fields for parity
 	FormatType              string       `json:"formatType,omitzero"`
@@ -454,15 +481,18 @@ type Sport struct {
 
 // Team represents a sports team.
 type Team struct {
-	ID           int       `json:"id"`
-	Name         string    `json:"name,omitzero"`
-	League       string    `json:"league,omitzero"`
-	Record       string    `json:"record,omitzero"`
-	Logo         string    `json:"logo,omitzero"`
-	Abbreviation string    `json:"abbreviation,omitzero"`
-	Alias        string    `json:"alias,omitzero"`
-	CreatedAt    time.Time `json:"createdAt"`
-	UpdatedAt    time.Time `json:"updatedAt"`
+	ID           int    `json:"id"`
+	Name         string `json:"name,omitzero"`
+	League       string `json:"league,omitzero"`
+	Record       string `json:"record,omitzero"`
+	Logo         string `json:"logo,omitzero"`
+	Abbreviation string `json:"abbreviation,omitzero"`
+	Alias        string `json:"alias,omitzero"`
+	// Ordering is the team's home/away ordering within its event
+	// (py-sdk "home"/"away" passthrough).
+	Ordering  string    `json:"ordering,omitzero"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // Pagination describes offset-based pagination metadata in list/search responses.
