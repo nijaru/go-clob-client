@@ -23,7 +23,7 @@
 > lifecycle, session-key management, other collateral mutations, TP/SL orchestration, and public
 > BBO streams remain
 > separate follow-ups. Parity here means contract-level capability with idiomatic Go APIs, not a
-> drop-in copy of TypeScript or Python method names. See `ai/ROADMAP.md`.
+> drop-in copy of TypeScript or Python method names.
 
 Go SDK for the [Polymarket](https://polymarket.com) CLOB and adjacent APIs. Tracks stable capability
 parity with the official [Rust V2](https://github.com/Polymarket/rs-clob-client-v2),
