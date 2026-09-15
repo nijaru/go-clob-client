@@ -104,7 +104,12 @@ Commands that should pass before shipping:
 
 ## Development Workflow
 
-1. Compare behavior against the reference SDKs using the tiered oracle model: Rust v2 for core mechanics + non-perps surface, TS for perps, py for surface breadth.
+1. Track the reference SDKs using the tiered oracle model (Rust v2 for core mechanics +
+   non-perps surface, TS for perps, py for surface breadth): pull the checkouts under
+   `~/github/Polymarket/`, record pins and drift in
+   `~/github/nijaru/knowledge/projects/go-clob-client/upstream.md`, and deep-compare
+   only drift inside already-covered surfaces. Adopt nothing without an evidenced wire
+   contract and a consumer.
 2. Record consequential design decisions in `~/github/nijaru/knowledge/projects/go-clob-client/decisions/` before broadening the surface.
 3. Implement one coherent API slice at a time with tests and an example.
 4. Keep `README.md` up to date as public capabilities, examples, status, or limitations change.
@@ -113,5 +118,6 @@ Commands that should pass before shipping:
 
 ## Current Focus
 
-Active work lives in the session. Deferred follow-ups, orientation, and history
-pointers are in `~/github/nijaru/knowledge/projects/go-clob-client/README.md`.
+Maintenance mode: no active surface work. Upstream drift, parked follow-ups,
+orientation, and history pointers live in
+`~/github/nijaru/knowledge/projects/go-clob-client/`.

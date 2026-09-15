@@ -8,22 +8,11 @@
 > Unofficial, community-maintained SDK. Not extensively tested in production trading environments. Use at your own risk.
 
 > [!NOTE]
-> **Parity status (2026-09-07):** Core mechanics and the non-perps CLOB/Data/Gamma/Bridge/CTF/
-> RTDS/RFQ surfaces are tracked against the current official Rust, TypeScript, and Python SDKs,
-> with current combo pagination, Gamma discovery endpoints, and full CLOB WebSocket event fields.
-> Token-backed orders sign against the exchange the server's current protocol version selects
-> (version 3 → Exchange V3, with automatic recovery from `order_version_mismatch` rejections),
-> and all asset-identifier decode sites accept both the `asset_id` and legacy `token_id` wire
-> spellings for Poly V2 compatibility. **Perps** remains a separate package: public market-data REST,
-> authenticated account reads,
-> notification pages/read operations, fills cursor/sort pagination, delegated account sessions
-> (including heartbeat/reconnect and typed notification resync events), and signed entry-order
-> placement/cancel/leverage commands are wire-compatible with the current TS SDK. Smart-wallet
-> collateral return is available through the authenticated CLOB client; owner-signed credential
-> lifecycle, session-key management, other collateral mutations, TP/SL orchestration, and public
-> BBO streams remain
-> separate follow-ups. Parity here means contract-level capability with idiomatic Go APIs, not a
-> drop-in copy of TypeScript or Python method names.
+> Community project in maintenance mode. Stable wire-contract parity with the official
+> [Rust](https://github.com/Polymarket/rs-clob-client-v2), [TypeScript](https://github.com/Polymarket/ts-sdk),
+> and [Python](https://github.com/Polymarket/py-sdk) SDKs is tracked, and new upstream surfaces
+> are adopted selectively. Trading and wallet flows are implemented against official fixtures,
+> not production use — validate with tiny sizes before risking funds.
 
 Go SDK for the [Polymarket](https://polymarket.com) CLOB and adjacent APIs. Tracks stable capability
 parity with the official [Rust V2](https://github.com/Polymarket/rs-clob-client-v2),
