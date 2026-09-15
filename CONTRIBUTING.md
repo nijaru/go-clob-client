@@ -7,10 +7,14 @@ Contributions are welcome. Please follow these guidelines:
 1. Fork the repository and create a branch from `main`.
 2. Install Go 1.26.1+ and the formatting tools:
    ```bash
-   go install golang.org/x/tools/cmd/goimports@latest
+   go install golang.org/x/tools/cmd/goimports@v0.50.0
    go install github.com/segmentio/golines@v0.13.0
-   go install mvdan.cc/gofumpt@v0.9.2
+   go install mvdan.cc/gofumpt@v0.12.0
    ```
+
+   These pins must match `.github/workflows/ci.yml`; CI installs the same versions so
+   `make fmt` is deterministic. Do not use `@latest` — formatter releases have
+   retroactively broken the format check.
 3. Make your changes, then run:
    ```bash
    make fmt    # format code

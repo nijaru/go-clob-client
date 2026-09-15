@@ -14,9 +14,21 @@ func TestPositionModelsAcceptAssetIDKeySpellings(t *testing.T) {
 		payload string
 		want    string
 	}{
-		{"asset primary key", `{"proxyWallet":"0xabc","asset":"70","conditionId":"0xc","size":"1","avgPrice":"0.5","currentValue":"0.5"}`, "70"},
-		{"asset_id alias", `{"proxyWallet":"0xabc","asset_id":"71","conditionId":"0xc","size":"1","avgPrice":"0.5","currentValue":"0.5"}`, "71"},
-		{"token_id alias", `{"proxyWallet":"0xabc","token_id":"72","conditionId":"0xc","size":"1","avgPrice":"0.5","currentValue":"0.5"}`, "72"},
+		{
+			"asset primary key",
+			`{"proxyWallet":"0xabc","asset":"70","conditionId":"0xc","size":"1","avgPrice":"0.5","currentValue":"0.5"}`,
+			"70",
+		},
+		{
+			"asset_id alias",
+			`{"proxyWallet":"0xabc","asset_id":"71","conditionId":"0xc","size":"1","avgPrice":"0.5","currentValue":"0.5"}`,
+			"71",
+		},
+		{
+			"token_id alias",
+			`{"proxyWallet":"0xabc","token_id":"72","conditionId":"0xc","size":"1","avgPrice":"0.5","currentValue":"0.5"}`,
+			"72",
+		},
 	}
 	for _, tc := range cases {
 		t.Run("position "+tc.name, func(t *testing.T) {
