@@ -26,16 +26,12 @@ Go SDK for the Polymarket CLOB. **Reference SDKs (tiered oracle model):**
 ### Working state (local-only)
 
 **Purpose:** Keep execution state out of public git history. The session is the default
-working memory; these paths are excluded via `.git/info/exclude`.
-
-- `.tasks/` - deferred/live-validation backlog in the original `tk` v0 JSON layout
-  (one file per task). Current `tk` (0.2.x, format-3 reader) cannot parse it, so use
-  `tk ready` only after a deliberate store migration; until then inspect the task
-  files directly. Do not bulk-convert or close tasks as incidental cleanup.
-- Prior `ai/` session files were removed from tracking and are not recreated here.
-  Durable private context lives in knowledge at
-  `~/github/nijaru/knowledge/projects/go-clob-client/`; older history is preserved
-  under `~/github/nijaru/agent-context/projects/github.com/nijaru/go-clob-client/`.
+working memory; durable private context (including deferred follow-ups) lives in
+knowledge at `~/github/nijaru/knowledge/projects/go-clob-client/`. No local task
+store is kept: the retired `tk` backlog's remaining items were carried into the
+knowledge README on 2026-09-15 and `.tasks/` was removed. Older history is preserved
+under `~/github/nijaru/agent-context/projects/github.com/nijaru/go-clob-client/`;
+do not recreate `ai/` session files here.
 
 ## Technology Stack
 
@@ -113,10 +109,9 @@ Commands that should pass before shipping:
 3. Implement one coherent API slice at a time with tests and an example.
 4. Keep `README.md` up to date as public capabilities, examples, status, or limitations change.
 5. Run `make fmt`, `make test`, and `make build`.
-6. Note deferred follow-ups in `.tasks/`; keep the session record current within the session.
+6. Note deferred follow-ups in `~/github/nijaru/knowledge/projects/go-clob-client/README.md`; keep the session record current within the session.
 
 ## Current Focus
 
-Active work lives in the session. Deferred follow-ups are tracked in local `.tasks/`;
-orientation and history pointers are in
-`~/github/nijaru/knowledge/projects/go-clob-client/README.md`.
+Active work lives in the session. Deferred follow-ups, orientation, and history
+pointers are in `~/github/nijaru/knowledge/projects/go-clob-client/README.md`.
