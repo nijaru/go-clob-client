@@ -397,6 +397,11 @@ func TestPoolCapacityProviderIsolationAndReconnect(t *testing.T) {
 		symbols[i] = fmt.Sprintf("asset%dusd", i)
 	}
 	many := subscribe(t, c, t.Context(), Request{Channel: Crypto, Symbols: symbols})
+	generations := make(map[string]uint64)
+	for range len(symbols) {
+		confirmation := receive(t, many.Events())
+		generations[confirmation.Symbol] = confirmation.ConnectionID
+	}
 	a, b := f.next(t, "subscribe"), f.next(t, "subscribe")
 	if a.peer == b.peer || len(a.frame.Subscriptions)+len(b.frame.Subscriptions) != 65 ||
 		len(a.frame.Subscriptions) > 64 ||
@@ -442,6 +447,16 @@ func TestPoolCapacityProviderIsolationAndReconnect(t *testing.T) {
 		if !want[sub.Filter["symbol"].(string)] {
 			t.Fatal("wrong replayed filter")
 		}
+	}
+	// Observing the request does not prove replay acceptance. Wait for every
+	// reply before closing the socket while the fixture is still writing acks.
+	for range len(replay.frame.Subscriptions) {
+		confirmation := receive(t, many.Events())
+		if confirmation.Type != Accepted || !want[confirmation.Symbol] ||
+			confirmation.ConnectionID == generations[confirmation.Symbol] {
+			t.Fatal("replay did not produce fresh acceptance")
+		}
+		delete(want, confirmation.Symbol)
 	}
 	many.Close()
 	pinned.Close()

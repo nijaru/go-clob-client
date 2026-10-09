@@ -20,6 +20,7 @@ func TestEnvelopeValidation(t *testing.T) {
 		{"numeric exact", `"full_accuracy_value":"123.450000000000000002"`, `"full_accuracy_value":123.45`},
 		{"boolean approximate", `"value":123.45`, `"value":true`},
 		{"nonfinite approximate", `"value":123.45`, `"value":"Infinity"`},
+		{"overflowing numeric approximate", `"value":123.45`, `"value":1e400`},
 		{"negative dropped", `"dropped":3`, `"dropped":-1`},
 		{"null dropped", `"dropped":3`, `"dropped":null`},
 		{"invalid carry", `"is_carried_forward":false`, `"is_carried_forward":"false"`},

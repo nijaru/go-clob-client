@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -105,6 +106,11 @@ func (p wirePoint) point() (Point, bool) {
 	var approximate string
 	if json.Unmarshal(p.Value, &approximate) != nil {
 		approximate = string(p.Value)
+		// Numeric approximate values follow the references' finite float wire
+		// contract. Strings and exact values retain arbitrary decimal precision.
+		if _, err := strconv.ParseFloat(approximate, 64); err != nil {
+			return Point{}, false
+		}
 	}
 	if !decimal.MatchString(approximate) {
 		return Point{}, false
@@ -130,17 +136,18 @@ func parseEvent(data []byte) (Event, bool) {
 		return Event{}, false
 	}
 	var p struct {
-		wirePoint
-		Symbol     *string      `json:"symbol"`
-		Source     *Source      `json:"source"`
-		Data       *[]wirePoint `json:"data"`
-		Window     int          `json:"window_seconds"`
-		ReceivedAt *int64       `json:"received_at"`
-		Carried    *bool        `json:"is_carried_forward"`
+		Symbol *string         `json:"symbol"`
+		Source *Source         `json:"source"`
+		Window json.RawMessage `json:"window_seconds"`
 	}
-	if json.Unmarshal(w.Payload, &p) != nil || p.Symbol == nil || p.Source == nil ||
-		(w.Channel.twap() && p.Window != 60) {
+	if json.Unmarshal(w.Payload, &p) != nil || p.Symbol == nil || p.Source == nil {
 		return Event{}, false
+	}
+	if w.Channel.twap() {
+		var window int
+		if json.Unmarshal(p.Window, &window) != nil || window != 60 {
+			return Event{}, false
+		}
 	}
 	e := Event{
 		Channel:   w.Channel,
@@ -153,12 +160,18 @@ func parseEvent(data []byte) (Event, bool) {
 	if w.Channel.twap() {
 		e.WindowSeconds = 60
 	}
+	// Validate only fields belonging to this event kind. The reference schemas
+	// ignore extension fields, including spot metadata on TWAP and update fields
+	// on snapshots; unrelated fields must not invalidate a supported payload.
 	if w.Snapshot {
-		if p.Data == nil {
+		var snapshot struct {
+			Data *[]wirePoint `json:"data"`
+		}
+		if json.Unmarshal(w.Payload, &snapshot) != nil || snapshot.Data == nil {
 			return Event{}, false
 		}
-		points := make([]Point, 0, len(*p.Data))
-		for _, raw := range *p.Data {
+		points := make([]Point, 0, len(*snapshot.Data))
+		for _, raw := range *snapshot.Data {
 			point, ok := raw.point()
 			if !ok {
 				return Event{}, false
@@ -168,16 +181,27 @@ func parseEvent(data []byte) (Event, bool) {
 		e.Type = SnapshotEvent
 		e.Snapshot = &Snapshot{points}
 	} else {
-		point, ok := p.wirePoint.point()
-		if !ok || hasNull(w.Payload, "received_at", "is_carried_forward") {
+		var raw wirePoint
+		if json.Unmarshal(w.Payload, &raw) != nil {
+			return Event{}, false
+		}
+		point, ok := raw.point()
+		if !ok {
 			return Event{}, false
 		}
 		e.Type = UpdateEvent
 		e.Update = &Update{Point: point}
 		if !w.Channel.twap() {
-			e.Update.IsCarriedForward = p.Carried
-			if p.ReceivedAt != nil {
-				t := time.UnixMilli(*p.ReceivedAt).UTC()
+			var receipt struct {
+				ReceivedAt *int64 `json:"received_at"`
+				Carried    *bool  `json:"is_carried_forward"`
+			}
+			if json.Unmarshal(w.Payload, &receipt) != nil || hasNull(w.Payload, "received_at", "is_carried_forward") {
+				return Event{}, false
+			}
+			e.Update.IsCarriedForward = receipt.Carried
+			if receipt.ReceivedAt != nil {
+				t := time.UnixMilli(*receipt.ReceivedAt).UTC()
 				e.Update.ReceivedAt = &t
 			}
 		}

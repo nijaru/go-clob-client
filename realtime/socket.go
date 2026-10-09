@@ -118,6 +118,7 @@ type transport struct {
 	cancel     context.CancelFunc
 	ping       *time.Ticker
 	stale      *time.Timer
+	filters    map[priceKey]*keyState // Worker-owned wire incarnations, including pending subscribes.
 }
 
 func (s *session) connected() error {
@@ -151,6 +152,7 @@ func (s *session) connected() error {
 		cancel:     stop,
 		ping:       time.NewTicker(cfg.PingInterval),
 		stale:      time.NewTimer(cfg.StaleTimeout),
+		filters:    make(map[priceKey]*keyState),
 	}
 	s.client.mu.Lock()
 	s.client.nextConnectionID++
@@ -180,7 +182,6 @@ func (s *session) connected() error {
 	if _, err := t.request(operation{Op: "auth", Auth: &cfg.Credentials}, nil); err != nil {
 		return &authFailure{err}
 	}
-	actual := make(map[priceKey]*keyState)
 	for s.ctx.Err() == nil {
 		desired := s.states()
 		wanted := make(map[priceKey]*keyState, len(desired))
@@ -188,13 +189,13 @@ func (s *session) connected() error {
 			wanted[state.key] = state
 		}
 		var removes, adds []*keyState
-		for key, state := range actual {
+		for key, state := range t.filters {
 			if wanted[key] != state {
 				removes = append(removes, state)
 			}
 		}
 		for key, state := range wanted {
-			if actual[key] != state {
+			if t.filters[key] != state {
 				adds = append(adds, state)
 			}
 		}
@@ -203,7 +204,7 @@ func (s *session) connected() error {
 				return err
 			}
 			for _, state := range removes {
-				delete(actual, state.key)
+				delete(t.filters, state.key)
 			}
 			continue
 		}
@@ -217,8 +218,9 @@ func (s *session) connected() error {
 			}
 			for i, state := range adds {
 				if accepted[i] {
-					actual[state.key] = state
 					s.established = true
+				} else {
+					delete(t.filters, state.key)
 				}
 			}
 			continue
@@ -282,8 +284,11 @@ func (t *transport) handle(frame readResult) error {
 		s.target = max(1, s.target/2)
 		s.lastDrop = time.Now()
 	}
-	state := s.keys[priceKey{event.Channel, event.Symbol, s.provider}]
-	if state == nil {
+	key := priceKey{event.Channel, event.Symbol, s.provider}
+	state := t.filters[key]
+	// An old upstream filter may emit while removal is in flight. Its frames
+	// must not reach a replacement that has not sent its own subscribe yet.
+	if state == nil || s.keys[key] != state {
 		return nil
 	}
 	snapshot := refreshSnapshot(state.snapshot, event)
@@ -336,6 +341,13 @@ func (t *transport) request(frame operation, states []*keyState) ([]bool, error)
 	s.lastSent = time.Now()
 	if err := t.send(frame); err != nil {
 		return nil, err
+	}
+	if frame.Op == "subscribe" {
+		// Track the sent incarnation before reading any replies. This also
+		// permits price frames arriving before their acceptance acknowledgment.
+		for _, state := range states {
+			t.filters[state.key] = state
+		}
 	}
 	expected := map[string]string{"auth": "authed", "subscribe": "subscribed", "unsubscribe": "unsubscribed"}[frame.Op]
 	timer := time.NewTimer(s.client.config.AckTimeout)

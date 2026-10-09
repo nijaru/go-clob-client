@@ -180,6 +180,11 @@ func (c *Client) Subscribe(ctx context.Context, request Request) (*Subscription,
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	// Readiness and cancellation can both be selected before AfterFunc acquires
+	// the lock. Never return a live handle for an already-canceled context.
+	if err := ctx.Err(); err != nil {
+		c.end(s, err)
+	}
 	if s.ended {
 		if s.err != nil {
 			return nil, s.err
