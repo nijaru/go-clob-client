@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+
+	"github.com/nijaru/go-clob-client/internal/polyjson"
 )
 
 // UnmarshalJSON decodes Gamma's direct or JSON-encoded outcome/asset arrays.
@@ -42,7 +44,7 @@ func (m *Market) UnmarshalJSON(data []byte) error {
 		}
 		if field.key == "outcomePrices" {
 			for i, price := range items {
-				if !decimalPattern.MatchString(price) {
+				if !polyjson.ValidDecimal(price) {
 					return fmt.Errorf("gamma market outcomePrices: item %d is not a decimal", i)
 				}
 			}

@@ -54,7 +54,7 @@ type Event struct {
 	OpenInterest                 Decimal                       `json:"openInterest,omitzero"`
 	LiquidityAmm                 Decimal                       `json:"liquidityAmm,omitzero"`
 	LiquidityClob                Decimal                       `json:"liquidityClob,omitzero"`
-	NegRiskFeeBips               float64                       `json:"negRiskFeeBips,omitzero"`
+	NegRiskFeeBips               Decimal                       `json:"negRiskFeeBips,omitzero"`
 	SubEvents                    []string                      `json:"subEvents,omitzero"`
 	Series                       []Series                      `json:"series,omitzero"`
 	Categories                   []Category                    `json:"categories,omitzero"`

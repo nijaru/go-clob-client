@@ -5,7 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
-	"regexp"
+
+	"github.com/nijaru/go-clob-client/internal/polyjson"
 )
 
 // Decimal preserves the exact text of Gamma's string-or-number decimal values.
@@ -13,25 +14,14 @@ import (
 // uses a string, as with Gamma's volume and liquidity fields.
 type Decimal string
 
-var decimalPattern = regexp.MustCompile(
-	`^[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?$`,
-)
-
 func (d *Decimal) UnmarshalJSON(data []byte) error {
 	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
 		*d = ""
 		return nil
 	}
-	var value string
+	var value polyjson.Decimal
 	if err := json.Unmarshal(data, &value); err != nil {
-		var n json.Number
-		if err := json.Unmarshal(data, &n); err != nil {
-			return fmt.Errorf("gamma decimal: %w", err)
-		}
-		value = n.String()
-	}
-	if !decimalPattern.MatchString(value) {
-		return fmt.Errorf("gamma decimal: invalid value %q", value)
+		return fmt.Errorf("gamma decimal: %w", err)
 	}
 	*d = Decimal(value)
 	return nil
@@ -39,7 +29,7 @@ func (d *Decimal) UnmarshalJSON(data []byte) error {
 
 // Rat returns an exact rational value without rounding through float64.
 func (d Decimal) Rat() (*big.Rat, error) {
-	if !decimalPattern.MatchString(string(d)) {
+	if !polyjson.ValidDecimal(string(d)) {
 		return nil, fmt.Errorf("gamma decimal: invalid value %q", d)
 	}
 	value, ok := new(big.Rat).SetString(string(d))
