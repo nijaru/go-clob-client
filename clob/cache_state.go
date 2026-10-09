@@ -8,6 +8,9 @@ import (
 // clientCacheState has one owner shared by read-only, signer, and authenticated
 // views. Copying a view never copies a mutex or forks scalar cache state.
 type clientCacheState struct {
+	feeRateMu               sync.RWMutex
+	feeRateGeneration       uint64
+	feeRateCache            map[string]FeeRateResponse
 	tickSizeMu              sync.RWMutex
 	tickSizeGeneration      uint64
 	tickSizeCache           map[string]TickSize
@@ -34,6 +37,7 @@ type clientCacheState struct {
 
 func newClientCacheState() *clientCacheState {
 	return &clientCacheState{
+		feeRateCache:        make(map[string]FeeRateResponse),
 		tickSizeCache:       make(map[string]TickSize),
 		tickSizeTimestamps:  make(map[string]time.Time),
 		negRiskCache:        make(map[string]bool),

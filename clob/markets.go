@@ -579,15 +579,29 @@ func isOrderVersionMismatch(err error) bool {
 	return strings.Contains(apiErr.Message, orderVersionMismatchError)
 }
 
-// GetFeeRate returns the base fee rate in BPS for a token from the /fee-rate endpoint.
+// GetFeeRate returns cached legacy base fees or fetches /fee-rate. V2/V3 order
+// construction uses the separate market FeeInfo snapshot, not this legacy fee.
 func (c *Client) GetFeeRate(ctx context.Context, tokenID string) (*FeeRateResponse, error) {
-	var out FeeRateResponse
-	query := url.Values{}
-	query.Set("token_id", tokenID)
-	err := c.getJSON(ctx, feeRateEndpoint, query, polyhttp.AuthNone, &out)
-	if err != nil {
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	c.feeRateMu.RLock()
+	cached, ok := c.feeRateCache[tokenID]
+	generation := c.feeRateGeneration
+	c.feeRateMu.RUnlock()
+	if ok {
+		return &cached, nil
+	}
+	var out FeeRateResponse
+	query := url.Values{"token_id": {tokenID}}
+	if err := c.getJSON(ctx, feeRateEndpoint, query, polyhttp.AuthNone, &out); err != nil {
+		return nil, err
+	}
+	c.feeRateMu.Lock()
+	if generation == c.feeRateGeneration {
+		c.feeRateCache[tokenID] = out
+	}
+	c.feeRateMu.Unlock()
 	return &out, nil
 }
 

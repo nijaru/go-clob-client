@@ -331,9 +331,13 @@ func (c *Client) SetNegRisk(tokenID string, negRisk bool) {
 	c.negRiskMu.Unlock()
 }
 
-// InvalidateCaches clears all internal caches (tick size, neg risk, order
-// market metadata, and builder fee rates).
+// InvalidateCaches clears all internal caches (tick size, neg risk, legacy fee
+// rates, order market metadata, builder fee rates, and server version).
 func (c *Client) InvalidateCaches() {
+	c.feeRateMu.Lock()
+	c.feeRateGeneration++
+	clear(c.feeRateCache)
+	c.feeRateMu.Unlock()
 	c.tickSizeMu.Lock()
 	c.tickSizeGeneration++
 	clear(c.tickSizeCache)
