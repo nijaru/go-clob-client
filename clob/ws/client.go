@@ -161,8 +161,19 @@ func (c *Client) connect(ctx context.Context) error {
 	loopCtx, cancel := context.WithCancel(c.ctx)
 
 	c.mu.Lock()
+	if c.closed || c.conn != nil {
+		closed := c.closed
+		c.mu.Unlock()
+		cancel()
+		_ = conn.CloseNow()
+		if closed {
+			return fmt.Errorf("client closed")
+		}
+		return fmt.Errorf("client already connected")
+	}
+	done := make(chan struct{})
 	c.conn = conn
-	c.connDone = make(chan struct{})
+	c.connDone = done
 	oldCancel := c.connCancel
 	c.connCancel = cancel
 	c.mu.Unlock()
@@ -172,7 +183,7 @@ func (c *Client) connect(ctx context.Context) error {
 	}
 
 	pongs := make(chan time.Time, 1)
-	go c.readLoop(loopCtx, conn, c.connDone, pongs)
+	go c.readLoop(loopCtx, conn, done, pongs)
 	go c.heartbeatLoop(loopCtx, conn, pongs)
 
 	c.replayTrackedSubscriptions(ctx)

@@ -28,7 +28,7 @@ func main() {
 		log.Fatal(err)
 	}
 	client, err := clob.NewAuthenticatedClient(clob.Config{
-		ChainID: clob.PolygonChainID, PrivateKey: os.Getenv("POLYMARKET_PRIVATE_KEY"), SignatureType: clob.SignatureTypePoly1271, FunderAddress: os.Getenv("POLYMARKET_FUNDER"), BuilderAuth: builder, DisableAutoHeartbeat: true,
+		ChainID: clob.PolygonChainID, PrivateKey: os.Getenv("POLYMARKET_PRIVATE_KEY"), SignatureType: clob.SignatureTypePoly1271, FunderAddress: os.Getenv("POLYMARKET_FUNDER"), BuilderAuth: builder,
 		Credentials: &clob.Credentials{
 			Key:        os.Getenv("POLYMARKET_API_KEY"),
 			Secret:     os.Getenv("POLYMARKET_API_SECRET"),

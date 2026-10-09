@@ -10,6 +10,21 @@ import (
 	"time"
 )
 
+func TestSignerPromotionRejectsUnsupportedChain(t *testing.T) {
+	t.Parallel()
+	const key = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+	base, err := NewClient(Config{ChainID: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := base.AsSigner(key, SignatureTypeEOA, ""); err == nil {
+		t.Fatal("signer promotion bypassed the supported-chain boundary")
+	}
+	if _, err := NewSignerClient(Config{ChainID: 1, PrivateKey: key}); err == nil {
+		t.Fatal("signer constructor accepted unsupported chain")
+	}
+}
+
 func TestAsAuthenticated(t *testing.T) {
 	t.Parallel()
 

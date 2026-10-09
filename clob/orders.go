@@ -364,9 +364,6 @@ func (c *AuthenticatedClient) GetBuilderAPIKeys(ctx context.Context) ([]BuilderA
 
 // RevokeBuilderAPIKey revokes the currently configured builder API key.
 func (c *AuthenticatedClient) RevokeBuilderAPIKey(ctx context.Context) error {
-	if c.builderAuth == nil {
-		return fmt.Errorf("builder auth not configured")
-	}
 	headers, err := c.builderOnlyHeaders(ctx, http.MethodDelete, revokeBuilderAPIKeyEndpoint, nil)
 	if err != nil {
 		return err

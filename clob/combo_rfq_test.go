@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/quagmt/udecimal"
 )
@@ -95,7 +96,7 @@ func TestRequestComboQuoteReturnsQuote(t *testing.T) {
 	client := newComboTestClient(t, mock.server.URL)
 
 	result, err := client.RequestComboQuote(t.Context(), RequestComboQuoteParams{
-		LegPositionIDs: []string{"111", "222"},
+		LegPositionIDs: []string{"00222", "111"},
 		Direction:      RFQDirectionBuy,
 		Amount:         mustDecimal(t, "100"),
 	})
@@ -193,6 +194,15 @@ func TestRequestComboQuoteValidation(t *testing.T) {
 	client := newComboTestClient(t, mock.server.URL)
 	ctx := t.Context()
 
+	for _, legs := range [][]string{{"1", "01"}, {"1", "abc"}, {"1", "-2"}, {"1", "115792089237316195423570985008687907853269984665640564039457584007913129639936"}} {
+		if _, err := client.RequestComboQuote(ctx, RequestComboQuoteParams{LegPositionIDs: legs, Direction: RFQDirectionBuy, Amount: MustDec("1")}); err == nil {
+			t.Fatalf("accepted malformed or numerically duplicate legs %v", legs)
+		}
+	}
+	if _, err := client.RequestComboQuote(ctx, RequestComboQuoteParams{LegPositionIDs: []string{"1", "2"}, Direction: RFQDirectionBuy, Amount: MustDec("0.0000001")}); err == nil {
+		t.Fatal("accepted an amount that truncates to zero base units")
+	}
+
 	if _, err := client.RequestComboQuote(ctx, RequestComboQuoteParams{
 		LegPositionIDs: []string{"111"},
 		Direction:      RFQDirectionBuy,
@@ -246,11 +256,13 @@ func TestAcceptComboQuoteExecuting(t *testing.T) {
 
 	mock := newComboGatewayMock(t, func(path string) (int, string) {
 		if strings.HasSuffix(path, "/accept") {
+			time.Sleep(20 * time.Millisecond)
 			return http.StatusOK, `{"rfq_id":"rfq-1","status":"EXECUTING","taker_order_hash":"0xabc"}`
 		}
 		return http.StatusOK, `{"rfq_id":"rfq-1","status":"EXECUTING"}`
 	})
 	client := newComboTestClient(t, mock.server.URL)
+	client.gatewayHTTP.HTTPClient = &http.Client{Timeout: 5 * time.Millisecond}
 
 	result, err := client.AcceptComboQuote(t.Context(), AcceptComboQuoteParams{
 		RFQID:       "rfq-1",
@@ -288,7 +300,7 @@ func TestAcceptComboQuoteMakerDeclined(t *testing.T) {
 	t.Parallel()
 
 	mock := newComboGatewayMock(t, func(path string) (int, string) {
-		return http.StatusOK, `{"rfq_id":"rfq-1","status":"CANCELED"}`
+		return http.StatusOK, `{"rfq_id":"rfq-1","status":"FAILED","error":{"code":"MAKER_DECLINED","message":"declined"}}`
 	})
 	client := newComboTestClient(t, mock.server.URL)
 
@@ -306,7 +318,7 @@ func TestAcceptComboQuoteMakerDeclined(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AcceptComboQuote: %v", err)
 	}
-	if result.Status != ComboRFQCanceled || result.Reason != ComboAcceptMakerDeclined {
+	if result.Status != ComboRFQFailed || result.Reason != ComboAcceptMakerDeclined {
 		t.Fatalf("unexpected declined outcome: %+v", result)
 	}
 }
@@ -374,10 +386,12 @@ func TestAcceptComboQuoteValidation(t *testing.T) {
 		t.Fatal("expected error for short builderCode")
 	}
 
-	badAmount := valid
-	badAmount.Quote.MakerAmount = "0"
-	if _, err := client.AcceptComboQuote(t.Context(), badAmount); err == nil {
-		t.Fatal("expected error for non-positive maker amount")
+	for _, amount := range []string{"0", "0.0000001"} {
+		badAmount := valid
+		badAmount.Quote.MakerAmount = amount
+		if _, err := client.AcceptComboQuote(t.Context(), badAmount); err == nil {
+			t.Fatalf("accepted non-positive or sub-base-unit maker amount %s", amount)
+		}
 	}
 }
 

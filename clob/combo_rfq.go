@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -296,10 +298,14 @@ func (c *AuthenticatedClient) RequestComboQuote(
 	ctx context.Context,
 	params RequestComboQuoteParams,
 ) (*RequestComboQuoteResult, error) {
-	if err := validateComboQuoteRequest(params); err != nil {
+	params, err := normalizeComboQuoteRequest(params)
+	if err != nil {
 		return nil, err
 	}
-	if c.builderAuth == nil {
+	if err := c.requireComboAccount(); err != nil {
+		return nil, err
+	}
+	if c.getBuilderAuth() == nil {
 		return nil, fmt.Errorf("combo RFQ requires builder authorization")
 	}
 
@@ -329,11 +335,10 @@ func (c *AuthenticatedClient) RequestComboQuote(
 	}
 
 	var wire builderRfqCreateResponseWire
-	if err := c.gatewayHTTP.PostJSON(
+	if err := c.postComboJSON(
 		ctx,
 		builderRFQRequestsEndpoint,
 		request,
-		polyhttp.AuthL2Builder,
 		&wire,
 	); err != nil {
 		return nil, err
@@ -385,7 +390,10 @@ func (c *AuthenticatedClient) AcceptComboQuote(
 	if err := validateComboAcceptRequest(params); err != nil {
 		return nil, err
 	}
-	if c.builderAuth == nil {
+	if err := c.requireComboAccount(); err != nil {
+		return nil, err
+	}
+	if c.getBuilderAuth() == nil {
 		return nil, fmt.Errorf("combo RFQ requires builder authorization")
 	}
 
@@ -426,6 +434,9 @@ func (c *AuthenticatedClient) AcceptComboQuote(
 		Metadata:      zeroBytes32,
 	}
 
+	if c.signatureType == SignatureTypePoly1271 {
+		order.Signer = order.Maker
+	}
 	typedData := buildOrderTypedData(
 		c.chainID,
 		comboProtocolVersion,
@@ -443,11 +454,10 @@ func (c *AuthenticatedClient) AcceptComboQuote(
 
 	var wire builderRfqStatusWire
 	acceptPath := builderRFQRequestsEndpoint + "/" + url.PathEscape(params.RFQID) + "/accept"
-	acceptErr := c.gatewayHTTP.PostJSON(
+	acceptErr := c.postComboJSON(
 		ctx,
 		acceptPath,
 		builderRfqAcceptRequest{QuoteID: params.Quote.QuoteID, SignedOrder: order},
-		polyhttp.AuthL2Builder,
 		&wire,
 	)
 	if acceptErr != nil {
@@ -517,6 +527,9 @@ func (c *AuthenticatedClient) GetComboRFQStatus(
 	ctx context.Context,
 	rfqID string,
 ) (*ComboRFQStatusResult, error) {
+	if err := c.requireComboAccount(); err != nil {
+		return nil, err
+	}
 	if rfqID == "" {
 		return nil, fmt.Errorf("combo rfq status: rfqId is required")
 	}
@@ -537,6 +550,39 @@ func (c *AuthenticatedClient) GetComboRFQStatus(
 		TxHash:         wire.TxHash,
 		Error:          wire.Error,
 	}, nil
+}
+
+// ErrComboSessionKeyUnsupported rejects the session-key identity on the
+// builder combo service, which currently accepts owners only.
+var ErrComboSessionKeyUnsupported = errors.New("combo RFQ does not support session keys")
+
+// The gateway holds both POSTs through competition/last look. Give these
+// service-specific requests the stable SDK's 30-second timeout, without
+// changing the caller's shared HTTP client or extending its context deadline.
+func (c *AuthenticatedClient) postComboJSON(ctx context.Context, path string, body, out any) error {
+	requestCtx, cancel := context.WithTimeout(ctx, comboAcceptOutcomeTimeout)
+	defer cancel()
+	httpClient := *c.gatewayHTTP.HTTPClient
+	if httpClient.Timeout > 0 && httpClient.Timeout < comboAcceptOutcomeTimeout {
+		httpClient.Timeout = comboAcceptOutcomeTimeout
+	}
+	transport := *c.gatewayHTTP
+	transport.HTTPClient = &httpClient
+	return transport.PostJSON(requestCtx, path, body, polyhttp.AuthL2Builder, out)
+}
+
+func (c *SignerClient) requireComboAccount() error {
+	if c.signatureType != SignatureTypePoly1271 {
+		return nil
+	}
+	owner, err := c.isDepositWalletOwner()
+	if err != nil {
+		return err
+	}
+	if !owner {
+		return ErrComboSessionKeyUnsupported
+	}
+	return nil
 }
 
 func comboQuoteFromWire(wire *builderRfqQuoteWire, expiresAt int64) (*ComboQuote, error) {
@@ -627,52 +673,55 @@ func comboAcceptFailureReason(
 	status ComboRFQStatus,
 	gatewayErr *BuilderRfqError,
 ) ComboAcceptFailureReason {
-	switch status {
-	case ComboRFQExpired:
+	if status == ComboRFQExpired || (gatewayErr != nil && gatewayErr.Code == "EXPIRED_RFQ") {
 		return ComboAcceptWindowExpired
-	case ComboRFQCanceled:
-		return ComboAcceptMakerDeclined
-	case ComboRFQFailed:
-		if gatewayErr != nil && gatewayErr.Code == "EXPIRED_RFQ" {
-			return ComboAcceptWindowExpired
-		}
-		return ComboAcceptExecutionFailed
-	default:
-		return ComboAcceptExecutionFailed
 	}
+	if gatewayErr != nil && gatewayErr.Code == "MAKER_DECLINED" {
+		return ComboAcceptMakerDeclined
+	}
+	return ComboAcceptExecutionFailed
 }
 
-func validateComboQuoteRequest(params RequestComboQuoteParams) error {
+func normalizeComboQuoteRequest(params RequestComboQuoteParams) (RequestComboQuoteParams, error) {
 	if len(params.LegPositionIDs) < comboMinLegPositionIDs ||
 		len(params.LegPositionIDs) > comboMaxLegPositionIDs {
-		return fmt.Errorf(
-			"combo RFQ requires between %d and %d leg position IDs, got %d",
-			comboMinLegPositionIDs, comboMaxLegPositionIDs, len(params.LegPositionIDs),
-		)
+		return params, fmt.Errorf("combo RFQ requires between %d and %d leg position IDs, got %d",
+			comboMinLegPositionIDs, comboMaxLegPositionIDs, len(params.LegPositionIDs))
 	}
-	seen := make(map[string]bool, len(params.LegPositionIDs))
-	for _, id := range params.LegPositionIDs {
-		if id == "" {
-			return fmt.Errorf("combo RFQ leg position ID must not be empty")
+	legs := make([]*big.Int, len(params.LegPositionIDs))
+	seen := make(map[string]bool, len(legs))
+	for i, id := range params.LegPositionIDs {
+		leg, ok := new(big.Int).SetString(id, 10)
+		if !ok || !isNumericString(id) || validateUint256(leg, "leg position ID") != nil {
+			return params, fmt.Errorf("combo RFQ leg position ID must be a uint256 numeric string")
 		}
-		if seen[id] {
-			return fmt.Errorf("combo RFQ duplicate leg position ID %q", id)
+		if seen[leg.String()] {
+			return params, fmt.Errorf("combo RFQ duplicate leg position ID %q", id)
 		}
-		seen[id] = true
+		seen[leg.String()] = true
+		legs[i] = leg
 	}
+	slices.SortFunc(legs, func(a, b *big.Int) int { return a.Cmp(b) })
+	params.LegPositionIDs = make([]string, len(legs))
+	for i, leg := range legs {
+		params.LegPositionIDs[i] = leg.String()
+	}
+	var amount udecimal.Decimal
 	switch params.Direction {
 	case RFQDirectionBuy:
-		if params.Amount.Cmp(udecimal.Zero) <= 0 {
-			return fmt.Errorf("combo RFQ buy amount must be positive")
-		}
+		amount = params.Amount
 	case RFQDirectionSell:
-		if params.Size.Cmp(udecimal.Zero) <= 0 {
-			return fmt.Errorf("combo RFQ sell size must be positive")
-		}
+		amount = params.Size
 	default:
-		return fmt.Errorf("combo RFQ direction must be BUY or SELL, got %q", params.Direction)
+		return params, fmt.Errorf(
+			"combo RFQ direction must be BUY or SELL, got %q",
+			params.Direction,
+		)
 	}
-	return nil
+	if amount.Cmp(udecimal.Zero) <= 0 || decimalPlaces(amount) > 6 {
+		return params, fmt.Errorf("combo RFQ amount must be positive with at most 6 decimal places")
+	}
+	return params, nil
 }
 
 func validateComboAcceptRequest(params AcceptComboQuoteParams) error {
@@ -685,13 +734,10 @@ func validateComboAcceptRequest(params AcceptComboQuoteParams) error {
 	if params.PositionID == "" {
 		return fmt.Errorf("combo accept: positionId is required")
 	}
-	if _, err := strconv.ParseUint(
-		params.PositionID,
-		10,
-		64,
-	); err != nil ||
-		!isNumericString(params.PositionID) {
-		return fmt.Errorf("combo accept: positionId must be a numeric string")
+	position, ok := new(big.Int).SetString(params.PositionID, 10)
+	if !ok || !isNumericString(params.PositionID) ||
+		validateUint256(position, "position ID") != nil {
+		return fmt.Errorf("combo accept: positionId must be a uint256 numeric string")
 	}
 	if params.Quote.QuoteID == "" {
 		return fmt.Errorf("combo accept: quoteId is required")
@@ -752,8 +798,8 @@ func decimalToE6String(value string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("parse decimal %q: %w", value, err)
 	}
-	if parsed.Cmp(udecimal.Zero) <= 0 {
-		return "", fmt.Errorf("amount %q must be positive", value)
+	if parsed.Cmp(udecimal.Zero) <= 0 || decimalPlaces(parsed) > 6 {
+		return "", fmt.Errorf("amount %q must be positive with at most 6 decimal places", value)
 	}
 	return decimalToE6(parsed), nil
 }

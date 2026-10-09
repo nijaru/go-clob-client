@@ -24,7 +24,13 @@ func main() {
 	}
 	defer client.Close()
 
-	response, err := client.CreateAndPostOrder(context.Background(), clob.OrderArgs{
+	ctx := context.Background()
+	// Constructors do not start background work. Opt in to order-liveness
+	// heartbeats while this program is running; Close joins the loop on exit.
+	if err := client.StartHeartbeats(ctx); err != nil {
+		log.Fatal(err)
+	}
+	response, err := client.CreateAndPostOrder(ctx, clob.OrderArgs{
 		TokenID: os.Getenv("POLYMARKET_TOKEN_ID"),
 		Price:   udecimal.MustParse("0.45"),
 		Size:    udecimal.MustParse("5"),

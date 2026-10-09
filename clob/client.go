@@ -203,6 +203,9 @@ func (c *Client) AsSigner(
 	sigType SignatureType,
 	funder string,
 ) (*SignerClient, error) {
+	if _, err := getContractConfig(c.chainID); err != nil {
+		return nil, err
+	}
 	signer, err := polyauth.ParsePrivateKey(privateKey)
 	if err != nil {
 		return nil, err

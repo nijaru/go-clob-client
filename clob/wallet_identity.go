@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/nijaru/go-clob-client/internal/polyrelay"
@@ -50,6 +51,24 @@ func (c *SignerClient) isDepositWalletOwner() (bool, error) {
 // session signer identity when building the inner signed message.
 func WrapDepositWalletSessionSignature(signer common.Address, signature []byte) ([]byte, error) {
 	return polyrelay.WrapSessionSignature(signer, signature)
+}
+
+// wrapDepositWalletSignature preserves owner signatures and adds the session
+// envelope outside the complete Solady order signature, as in TS/Python.
+func (c *SignerClient) wrapDepositWalletSignature(signature string) (string, error) {
+	owner, err := c.isDepositWalletOwner()
+	if err != nil || owner {
+		return signature, err
+	}
+	inner, err := hexutil.Decode(signature)
+	if err != nil {
+		return "", err
+	}
+	wrapped, err := polyrelay.WrapSessionSignature(c.signer.Address(), inner)
+	if err != nil {
+		return "", err
+	}
+	return hexutil.Encode(wrapped), nil
 }
 
 // DeriveCurrentDepositWallet reads the factory's beacon selector. Only an EVM

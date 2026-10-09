@@ -156,6 +156,40 @@ func TestAuthPromotionSharesCacheAndPreservesResponseCallbacks(t *testing.T) {
 	}
 }
 
+func TestBuilderAuthRotationConcurrentWithRevoke(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Poly-Builder-Key") != "test" {
+			t.Error("missing builder authorization")
+		}
+		_, _ = w.Write([]byte(`"OK"`))
+	}))
+	defer server.Close()
+	client := newComboTestClient(t, server.URL)
+	client.http.BaseURL = server.URL
+	client.rateLimiter = nil
+	done := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				client.PromoteToBuilder(staticBuilderAuth{})
+			}
+		}
+	})
+	for range 20 {
+		if err := client.RevokeBuilderAPIKey(t.Context()); err != nil {
+			t.Error(err)
+			break
+		}
+	}
+	close(done)
+	wg.Wait()
+}
+
 func TestCanceledContextDoesNotStartHeartbeatLoop(t *testing.T) {
 	t.Parallel()
 	client, err := NewAuthenticatedClient(

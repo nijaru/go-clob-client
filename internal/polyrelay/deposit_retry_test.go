@@ -9,7 +9,35 @@ import (
 	"reflect"
 	"sync/atomic"
 	"testing"
+
+	"github.com/nijaru/go-clob-client/internal/polyhttp"
 )
+
+func TestDepositNonceCorrectionRejectsNonStaleOrUnrelatedNonce(t *testing.T) {
+	t.Parallel()
+	for _, message := range []string{
+		"batch nonce 5 does not match on-chain nonce 4",
+		"batch nonce 5 does not match on-chain nonce 5",
+		"batch nonce 3 does not match on-chain nonce 6",
+	} {
+		payload := &SubmitRequest{
+			Type: string(TransactionTypeWallet), Nonce: "5",
+			DepositWallet: &DepositWalletParams{
+				Deadline: "1700000000",
+				Calls:    []DepositCall{{Target: addrRepeat(0x20).Hex(), Value: "0", Data: "0x01"}},
+			},
+		}
+		corrected, err := CorrectDepositNonce(
+			testGaslessConfig(TransactionTypeWallet),
+			mustKey(t),
+			payload,
+			&polyhttp.APIError{StatusCode: 400, Message: message},
+		)
+		if err != nil || corrected != nil {
+			t.Fatalf("unexpected correction for %q: %+v %v", message, corrected, err)
+		}
+	}
+}
 
 func TestDepositNonceCorrectionPreservesBatch(t *testing.T) {
 	t.Parallel()

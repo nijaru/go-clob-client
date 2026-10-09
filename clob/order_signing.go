@@ -188,6 +188,12 @@ func (c *SignerClient) signOrder(ctx context.Context, input orderBuildInput) (*S
 	if err != nil {
 		return nil, err
 	}
+	if input.SignatureType == SignatureTypePoly1271 {
+		signature, err = c.wrapDepositWalletSignature(signature)
+		if err != nil {
+			return nil, err
+		}
+	}
 	order.Signature = signature
 
 	return &order, nil

@@ -7,14 +7,15 @@ import (
 	"time"
 )
 
-// Close stops any background tasks (like heartbeats) and cleans up resources.
-// It blocks until the heartbeat loop exits.
+// Close permanently stops and joins the heartbeat lifecycle. It does not
+// revoke credentials or disable foreground API requests.
 func (c *AuthenticatedClient) Close() error {
 	return c.closeHeartbeats(context.Background())
 }
 
-// Shutdown gracefully stops background tasks with a context deadline. It
-// returns ctx.Err() if the heartbeat loop does not stop before the deadline.
+// Shutdown permanently stops the heartbeat lifecycle with a context deadline.
+// It returns ctx.Err() if the loop does not stop before the deadline. Like Close,
+// it does not revoke credentials or disable foreground API requests.
 func (c *AuthenticatedClient) Shutdown(ctx context.Context) error {
 	return c.closeHeartbeats(ctx)
 }

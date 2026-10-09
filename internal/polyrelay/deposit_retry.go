@@ -32,9 +32,18 @@ func CorrectDepositNonce(
 	if match == nil {
 		return nil, nil
 	}
+	submitted, ok := new(big.Int).SetString(match[1], 10)
+	if !ok {
+		return nil, fmt.Errorf("polyrelay: invalid submitted nonce")
+	}
 	nonce, ok := new(big.Int).SetString(match[2], 10)
 	if !ok {
 		return nil, fmt.Errorf("polyrelay: invalid corrected nonce")
+	}
+	// Only stale nonces are retryable. A future/equal nonce must not be
+	// silently replaced, nor may an error for another batch change this one.
+	if submitted.String() != payload.Nonce || submitted.Cmp(nonce) >= 0 {
+		return nil, nil
 	}
 	if _, err := pad32(nonce); err != nil {
 		return nil, err
