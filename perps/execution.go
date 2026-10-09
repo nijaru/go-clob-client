@@ -99,6 +99,7 @@ func (c *AuthenticatedClient) signedREST(
 		return err
 	}
 	body, err := makePerpsSignedCommand(
+		ctx,
 		signer,
 		c.chainID,
 		[]any{name, raw},

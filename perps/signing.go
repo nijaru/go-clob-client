@@ -2,6 +2,7 @@ package perps
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
@@ -81,6 +82,7 @@ func randomPerpsSalt() (uint64, error) {
 }
 
 func signPerpsOperation(
+	ctx context.Context,
 	signer *polyauth.Signer,
 	chainID int64,
 	op []any,
@@ -91,10 +93,11 @@ func signPerpsOperation(
 	if err != nil {
 		return "", err
 	}
-	return polyauth.SignTypedData(signer, data)
+	return polyauth.SignTypedData(ctx, signer, data)
 }
 
 func makePerpsSignedCommand(
+	ctx context.Context,
 	signer *polyauth.Signer,
 	chainID int64,
 	op []any,
@@ -112,7 +115,7 @@ func makePerpsSignedCommand(
 		return nil, err
 	}
 	timestamp := time.Now().UnixMilli()
-	signature, err := signPerpsOperation(signer, chainID, op, salt, timestamp)
+	signature, err := signPerpsOperation(ctx, signer, chainID, op, salt, timestamp)
 	if err != nil {
 		return nil, fmt.Errorf("perps: sign session command: %w", err)
 	}

@@ -31,10 +31,9 @@ func ParsePrivateKey(raw string) (*Signer, error) {
 	return signing.NewWallet(local)
 }
 
-// SignTypedData is used by the separately owned perps signing surface, whose
-// context-aware migration must be completed there. CLOB uses Wallet directly.
-func SignTypedData(signer *Signer, data apitypes.TypedData) (string, error) {
-	sig, err := signer.SignTypedData(context.Background(), data)
+// SignTypedData returns the verified Ethereum signature in wire hex format.
+func SignTypedData(ctx context.Context, signer *Signer, data apitypes.TypedData) (string, error) {
+	sig, err := signer.SignTypedData(ctx, data)
 	if err != nil {
 		return "", err
 	}

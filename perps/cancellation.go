@@ -35,6 +35,7 @@ func (c *AuthenticatedClient) CancelAllOrders(
 		return err
 	}
 	command, err := makePerpsSignedCommand(
+		ctx,
 		signer,
 		c.chainID,
 		[]any{"cancelAll", rawArgs},

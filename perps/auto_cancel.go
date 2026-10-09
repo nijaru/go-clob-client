@@ -57,6 +57,7 @@ func (s *Session) updateAutoCancel(
 	}
 	op := []any{"autoCancel", []any{deadline}}
 	body, err := makePerpsSignedCommand(
+		ctx,
 		s.signer,
 		s.chainID,
 		op,

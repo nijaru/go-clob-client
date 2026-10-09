@@ -416,7 +416,7 @@ func (s *Session) sendSignedCommand(
 	if len(expiresAt) > 0 {
 		expiry = expiresAt[0]
 	}
-	body, err := makePerpsSignedCommand(s.signer, s.chainID, op, bodyOp, expiry)
+	body, err := makePerpsSignedCommand(ctx, s.signer, s.chainID, op, bodyOp, expiry)
 	if err != nil {
 		return nil, err
 	}

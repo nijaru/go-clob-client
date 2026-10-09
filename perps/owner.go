@@ -35,7 +35,7 @@ func (s localOwnerSigner) SignTypedData(
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-	return polyauth.SignTypedData(s.signer, data)
+	return polyauth.SignTypedData(ctx, s.signer, data)
 }
 
 // NewOwnerSigner adapts a local private key. Never log or persist the key.

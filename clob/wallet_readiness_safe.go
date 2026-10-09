@@ -65,7 +65,7 @@ func (c *AuthenticatedClient) DeploySafeWallet(
 	factory := common.HexToAddress(wc.SafeFactory)
 	zero := (common.Address{}).Hex()
 	// builder-relayer-client's CreateProxy domain deliberately has no version.
-	signature, err := polyauth.SignTypedData(c.signer, apitypes.TypedData{
+	signature, err := polyauth.SignTypedData(ctx, c.signer, apitypes.TypedData{
 		Types: apitypes.Types{
 			"EIP712Domain": {
 				{Name: "name", Type: "string"},
