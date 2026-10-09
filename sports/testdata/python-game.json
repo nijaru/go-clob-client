@@ -1,0 +1,15 @@
+{
+  "gameId": 123,
+  "sportradarGameId": "sr-abc",
+  "slug": "lakers-vs-celtics",
+  "leagueAbbreviation": "NBA",
+  "homeTeam": "LAL",
+  "awayTeam": "BOS",
+  "status": "live",
+  "live": true,
+  "ended": false,
+  "score": "98-102",
+  "period": "Q4",
+  "elapsed": "10:32",
+  "turn": "BOS"
+}
