@@ -215,8 +215,10 @@ func (c *AuthenticatedClient) DeployDepositWallet(
 	)
 }
 
-// IsWalletDeployed reads the relayer's deployment view of the client's wallet.
-// It does not wait for transaction confirmation or CLOB/indexer readiness.
+// IsWalletDeployed reads the relayer deployment view of the configured wallet
+// using context-selected relayer auth. It does not prove chain confirmation or
+// trading readiness. Use IsWalletDeployedAt for a public unauthenticated probe,
+// or IsDepositWalletDeployed for an EOA-derived deposit wallet probe.
 func (c *AuthenticatedClient) IsWalletDeployed(ctx context.Context) (bool, error) {
 	cfg, err := c.gaslessConfig()
 	if err != nil {

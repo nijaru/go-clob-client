@@ -17,10 +17,10 @@ var (
 )
 
 // WalletReadiness records deployment visibility separately from confirmation.
-// Deployment is the submitted handle; Transaction is set only after its chain
-// confirmation. Both are nil for an already-deployed wallet or EOA. Partial
-// progress is returned on wait errors: resume Deployment.Wait or
-// WaitWalletDeployed rather than submitting another deployment.
+// Deployment is the submitted handle; Transaction is set only after relayer
+// confirmation, not receipt verification. Both are nil for an already-deployed
+// wallet or EOA. Partial progress is returned on wait errors: resume
+// Deployment.Wait or WaitWalletDeployed rather than submitting again.
 type WalletReadiness struct {
 	Wallet      common.Address
 	Deployed    bool // relayer deployment view; not CLOB/indexer readiness
@@ -43,10 +43,11 @@ func (c *AuthenticatedClient) requireDepositWalletDeploymentTarget() error {
 }
 
 // EnsureWalletReady explicitly checks readiness and, only for an undeployed
-// owner beacon Deposit Wallet, submits deployment and waits for confirmation
-// and relayer deployment visibility. EOA readiness requires no remote request.
-// Undeployed proxy, Safe, legacy UUPS, and session-signer wallets are not created.
-// It does not grant approvals or wait for CLOB balances/session-key indexing.
+// owner beacon Deposit Wallet or deterministic owner Safe, submits deployment
+// and waits for relayer confirmation and deployment visibility. EOA readiness
+// requires no remote request. Undeployed proxy, legacy UUPS, and session-signer
+// wallets are not created. It does not verify chain receipts, grant approvals,
+// or wait for CLOB balances/session-key indexing.
 func (c *AuthenticatedClient) EnsureWalletReady(
 	ctx context.Context,
 	metadata string,
@@ -67,10 +68,15 @@ func (c *AuthenticatedClient) EnsureWalletReady(
 		result.Deployed = true
 		return result, nil
 	}
-	if c.signatureType != SignatureTypePoly1271 {
+	var handle *GaslessTransactionHandle
+	switch c.signatureType {
+	case SignatureTypePoly1271:
+		handle, err = c.DeployDepositWallet(ctx, metadata)
+	case SignatureTypePolyGnosisSafe:
+		handle, err = c.DeploySafeWallet(ctx, metadata)
+	default:
 		return nil, fmt.Errorf("%w: %s", ErrWalletDeploymentRequired, result.Wallet)
 	}
-	handle, err := c.DeployDepositWallet(ctx, metadata)
 	if err != nil {
 		return nil, err
 	}

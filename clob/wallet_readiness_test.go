@@ -134,6 +134,10 @@ func TestWalletDeploymentOwnerBoundaries(t *testing.T) {
 			if !errors.Is(err, ErrWalletDeploymentIdentity) {
 				t.Fatalf("session target: %v", err)
 			}
+		case SignatureTypePolyGnosisSafe:
+			if !errors.Is(err, ErrSafeWalletDeploymentIdentity) {
+				t.Fatalf("non-owner Safe target: %v", err)
+			}
 		default:
 			if !errors.Is(err, ErrWalletDeploymentRequired) {
 				t.Fatalf("unsupported deployment: %v", err)
