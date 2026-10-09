@@ -71,7 +71,7 @@ Safe/proxy wallets, or a beacon deposit wallet when no funder is supplied, and
 validates the owner, chain and withdrawal wallet. Construction is offline and
 never deploys, approves or sends. Token and deposit-contract addresses and an
 RPC URL must be explicit. Transactions accepts `clob.Config.Signer` or
-`PrivateKey`, never both. EOA execution needs `signing.TransactionSigner`;
+`PrivateKey`, never both. EOA execution needs `signing.TransactionSigner` or wallet-owned `signing.TransactionSender`;
 Safe/proxy execution needs `signing.MessageSigner`; deposit-wallet batches and
 Safe creation use typed-data signing. Unsupported capabilities fail without
 sending.

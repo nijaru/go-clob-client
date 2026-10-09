@@ -50,7 +50,8 @@ requires real `CLOB_API_KEY`, `CLOB_API_SECRET`, `CLOB_API_PASSPHRASE` and, for
 smart wallets, separate `BUILDER_API_KEY`, `BUILDER_API_SECRET`, and
 `BUILDER_API_PASSPHRASE`. The example passes `clob.Config.Signer`, not exported
 key material; replace `signing.NewLocalSigner` with your device/service signer.
-EOA sends require its `signing.TransactionSigner` capability.
+EOA sends use its `signing.TransactionSigner` capability with SDK broadcasting,
+or its optional `signing.TransactionSender` for wallet-owned sending.
 
 On errors, the example prints every retained hash, including uncertain sends.
 Reconcile those submissions before retrying. Receipt success does not prove
