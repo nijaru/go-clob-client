@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"slices"
 	"strings"
@@ -142,7 +141,7 @@ func (c *AuthenticatedClient) AuthorizeSessionKey(
 	if err := c.requireSessionKeyOwner(); err != nil {
 		return nil, err
 	}
-	if c.getBuilderAuth() == nil {
+	if c.relayerAuth(ctx).BuilderAuth == nil {
 		return nil, ErrSessionKeyBuilderRequired
 	}
 	if req.Address == (common.Address{}) {
@@ -330,23 +329,13 @@ func (c *AuthenticatedClient) submitSessionKeyMutation(
 			map[string]string{"Idempotency-Key": idempotency},
 			out,
 		)
-		if err == nil || attempt == 2 || !retrySessionKeyError(err, false) {
+		if err == nil || attempt == 2 || !retryWalletError(err, false) {
 			return err
 		}
 		if err := walletSleep(requestCtx, polyrelay.DefaultPollInterval); err != nil {
 			return err
 		}
 	}
-}
-
-func retrySessionKeyError(err error, registry bool) bool {
-	var apiErr *polyhttp.APIError
-	if errors.As(err, &apiErr) {
-		return apiErr.StatusCode == 429 || apiErr.StatusCode >= 500 ||
-			(registry && apiErr.StatusCode == 404)
-	}
-	var netErr net.Error
-	return errors.As(err, &netErr)
 }
 
 func (c *AuthenticatedClient) waitSessionKeyRegistry(
@@ -356,7 +345,7 @@ func (c *AuthenticatedClient) waitSessionKeyRegistry(
 ) (*SessionKey, error) {
 	for attempt := 0; attempt < polyrelay.DefaultPollMaxAttempts; attempt++ {
 		keys, err := c.FetchSessionKeys(ctx)
-		if err != nil && !retrySessionKeyError(err, true) {
+		if err != nil && !retryWalletError(err, true) {
 			return nil, err
 		}
 		if err == nil {
@@ -400,15 +389,4 @@ func equalSessionScopes(left, right []SessionKeyScope) bool {
 		}
 	}
 	return true
-}
-
-func walletSleep(ctx context.Context, duration time.Duration) error {
-	timer := time.NewTimer(duration)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-timer.C:
-		return nil
-	}
 }

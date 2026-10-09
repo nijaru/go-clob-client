@@ -2,6 +2,8 @@
 // POLYMARKET_SESSION_ACTION=authorize|revoke and POLYMARKET_SESSION_ADDRESS.
 // The application generates/stores the session private key; the SDK only needs
 // its address. Authorization defaults to ALL and expires after 4,315 hours.
+// Authorization needs builder credentials; revocation also accepts
+// POLYMARKET_RELAYER_API_KEY / POLYMARKET_RELAYER_API_KEY_ADDRESS.
 package main
 
 import (
@@ -19,7 +21,9 @@ import (
 func main() {
 	var builder clob.BuilderAuth
 	var err error
-	if os.Getenv("POLYMARKET_SESSION_ACTION") != "" {
+	action := os.Getenv("POLYMARKET_SESSION_ACTION")
+	if action == "authorize" ||
+		(action == "revoke" && os.Getenv("POLYMARKET_RELAYER_API_KEY") == "") {
 		builder, err = clob.NewLocalBuilderAuth(
 			clob.Credentials{
 				Key:        os.Getenv("POLYMARKET_BUILDER_KEY"),
@@ -45,7 +49,19 @@ func main() {
 	defer client.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
 	defer cancel()
-	if action := os.Getenv("POLYMARKET_SESSION_ACTION"); action != "" {
+	if key := os.Getenv("POLYMARKET_RELAYER_API_KEY"); action == "revoke" && key != "" {
+		address := os.Getenv("POLYMARKET_RELAYER_API_KEY_ADDRESS")
+		if !common.IsHexAddress(address) {
+			log.Fatal("invalid relayer API-key address")
+		}
+		ctx, err = clob.WithRelayerAuth(ctx, clob.RelayerAuthConfig{
+			APIKey: &clob.RelayerAPIKey{Key: key, Address: common.HexToAddress(address)},
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+	if action != "" {
 		address := os.Getenv("POLYMARKET_SESSION_ADDRESS")
 		if !common.IsHexAddress(address) {
 			log.Fatal("invalid session address")

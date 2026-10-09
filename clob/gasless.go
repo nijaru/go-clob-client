@@ -17,11 +17,11 @@ import (
 // (Poly1271) wallets. EOA wallets broadcast directly via go-ethereum (see ctf.go)
 // and do not use the relayer.
 //
-// The relayer authenticates with POLY_BUILDER_* headers (the same builder-key
-// HMAC). An explicit BuilderAuth is required: CLOB L2 credentials are not
-// builder or relayer credentials. The heavy lifting (nonce fetch,
-// per-scheme signing, retry, poll) lives in internal/polyrelay; this file wires
-// it onto the AuthenticatedClient using the chain's contract addresses.
+// The relayer authenticates with builder HMAC or Relayer API-key headers.
+// WithRelayerAuth explicitly selects request-scoped auth; otherwise the client's
+// BuilderAuth is used. CLOB L2 credentials never authenticate the relayer.
+// Nonce fetching, per-scheme signing, retries, and polling live in
+// internal/polyrelay; this file supplies the client's chain and wallet identity.
 
 // relayerWalletType maps the client's SignatureType to a relayer transaction
 // type. EOA returns an error (EOAs broadcast directly, not via the relayer).
@@ -42,7 +42,7 @@ func (s SignatureType) relayerWalletType() (polyrelay.RelayerTransactionType, er
 }
 
 // RelayerTransport returns a relayer transport backed by a polyhttp client
-// pointed at the relayer host with builder-key auth. Each call builds a fresh
+// pointed at the relayer host with context-selected auth. Each call builds a fresh
 // transport; construction is cheap.
 func (c *AuthenticatedClient) RelayerTransport() *RelayerTransport {
 	return polyrelay.NewTransport(&polyhttp.Client{
@@ -53,10 +53,9 @@ func (c *AuthenticatedClient) RelayerTransport() *RelayerTransport {
 	})
 }
 
-// relayerHeaders always emits POLY_BUILDER_* auth — the relayer requires it on
-// every call regardless of auth level. The signature covers method + bare path +
-// body (query string excluded), matching py-sdk's transport and polyhttp's
-// header-invocation contract.
+// relayerHeaders emits exactly one auth scheme. Builder signatures cover the
+// method + bare path + body, excluding query strings. API-key auth requires no
+// timestamp or CLOB server-time request.
 func (c *AuthenticatedClient) relayerHeaders(
 	ctx context.Context,
 	method, path string,
@@ -64,16 +63,41 @@ func (c *AuthenticatedClient) relayerHeaders(
 	_ polyhttp.AuthLevel,
 	_ *int64,
 ) (map[string]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	auth := c.relayerAuth(ctx)
+	if auth.APIKey != nil {
+		return map[string]string{
+			"RELAYER_API_KEY":         auth.APIKey.Key,
+			"RELAYER_API_KEY_ADDRESS": auth.APIKey.Address.Hex(),
+		}, nil
+	}
+	if auth.BuilderAuth == nil {
+		return nil, fmt.Errorf(
+			"gasless: relayer auth requires BuilderAuth or RelayerAPIKey, not CLOB API credentials",
+		)
+	}
 	timestamp, err := c.timestamp(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if ba := c.getBuilderAuth(); ba != nil {
-		return ba.Headers(ctx, BuilderHeaderRequest{
-			Method: method, Path: path, Body: body, Timestamp: timestamp,
-		})
+	headers, err := auth.BuilderAuth.Headers(ctx, BuilderHeaderRequest{
+		Method: method, Path: path, Body: body, Timestamp: timestamp,
+	})
+	if err != nil {
+		return nil, err
 	}
-	return nil, fmt.Errorf("gasless: relayer auth requires BuilderAuth, not CLOB API credentials")
+	// Keep a remote/custom builder resolver from injecting another identity or
+	// overriding transport headers. Only the builder wire contract is accepted.
+	result := make(map[string]string, 4)
+	for _, name := range []string{"POLY_BUILDER_API_KEY", "POLY_BUILDER_PASSPHRASE", "POLY_BUILDER_SIGNATURE", "POLY_BUILDER_TIMESTAMP"} {
+		if headers[name] == "" {
+			return nil, fmt.Errorf("%w: missing %s", ErrInvalidRelayerAuth, name)
+		}
+		result[name] = headers[name]
+	}
+	return result, nil
 }
 
 // gaslessConfig builds the polyrelay config from the client's chain + wallet
@@ -169,18 +193,19 @@ func (c *AuthenticatedClient) PrepareGaslessTransaction(
 	)
 }
 
-// DeployDepositWallet submits an unsigned WALLET-CREATE to deploy a new deposit
-// wallet for the signer via the relayer.
+// DeployDepositWallet submits an unsigned WALLET-CREATE for the configured
+// owner's beacon Deposit Wallet. It cannot deploy a different wallet from the
+// one used by this client. Confirmation is explicit via the returned handle.
 func (c *AuthenticatedClient) DeployDepositWallet(
 	ctx context.Context,
 	metadata string,
 ) (*GaslessTransactionHandle, error) {
+	if err := c.requireDepositWalletDeploymentTarget(); err != nil {
+		return nil, err
+	}
 	wc, err := getWalletConfig(c.chainID)
 	if err != nil {
 		return nil, err
-	}
-	if wc.DepositWalletFactory == "" {
-		return nil, fmt.Errorf("gasless: deposit wallets unsupported on chain %d", c.chainID)
 	}
 	return polyrelay.DeployDepositWallet(
 		ctx, c.RelayerTransport(),
@@ -190,7 +215,8 @@ func (c *AuthenticatedClient) DeployDepositWallet(
 	)
 }
 
-// IsWalletDeployed reports whether the client's wallet is deployed on-chain.
+// IsWalletDeployed reads the relayer's deployment view of the client's wallet.
+// It does not wait for transaction confirmation or CLOB/indexer readiness.
 func (c *AuthenticatedClient) IsWalletDeployed(ctx context.Context) (bool, error) {
 	cfg, err := c.gaslessConfig()
 	if err != nil {

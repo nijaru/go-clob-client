@@ -2,8 +2,10 @@ package clob
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
@@ -24,19 +26,58 @@ func (h *WalletTransactionHandle) Wait(ctx context.Context) (*TransactionOutcome
 	if h.relayer != nil {
 		return h.relayer.Wait(ctx)
 	}
-	ec, err := h.signer.dialRPC(ctx)
+	receipt, err := h.signer.waitWalletTransactionReceipt(ctx, h.TransactionHash)
+	if err != nil {
+		return nil, err
+	}
+	return &TransactionOutcome{TransactionHash: receipt.TxHash.Hex()}, nil
+}
+
+// WaitReceipt first confirms through the existing EOA/relayer handle, then
+// waits for the actual on-chain receipt. Neither step waits for CLOB indexing.
+// A receipt lookup error cannot undo a transaction already confirmed by Wait.
+func (h *WalletTransactionHandle) WaitReceipt(ctx context.Context) (*types.Receipt, error) {
+	if h.relayer == nil {
+		return h.signer.waitWalletTransactionReceipt(ctx, h.TransactionHash)
+	}
+	outcome, err := h.Wait(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return h.signer.waitWalletTransactionReceipt(ctx, outcome.TransactionHash)
+}
+
+// WaitWalletTransactionReceipt waits for an on-chain receipt for an outcome,
+// including an explicitly deployed wallet. Unlike a relayer status, the receipt
+// includes logs and block metadata. A missing/invalid hash cannot prove success.
+func (c *AuthenticatedClient) WaitWalletTransactionReceipt(
+	ctx context.Context,
+	outcome TransactionOutcome,
+) (*types.Receipt, error) {
+	return c.SignerClient.waitWalletTransactionReceipt(ctx, outcome.TransactionHash)
+}
+
+func (c *SignerClient) waitWalletTransactionReceipt(
+	ctx context.Context,
+	hash string,
+) (*types.Receipt, error) {
+	decoded, err := hex.DecodeString(strings.TrimPrefix(hash, "0x"))
+	if err != nil || !strings.HasPrefix(hash, "0x") || len(decoded) != common.HashLength {
+		return nil, fmt.Errorf("wallet: receipt requires a valid transaction hash")
+	}
+	ec, err := c.dialRPC(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer ec.Close()
-	receipt, err := waitForReceipt(ctx, ec, common.HexToHash(h.TransactionHash), "wallet")
+	receipt, err := waitForReceipt(ctx, ec, common.BytesToHash(decoded), "wallet")
 	if err != nil {
 		return nil, err
 	}
 	if receipt.Status == types.ReceiptStatusFailed {
-		return nil, fmt.Errorf("%w: %s reverted", ErrWalletTransactionFailed, h.TransactionHash)
+		return nil, fmt.Errorf("%w: %s reverted", ErrWalletTransactionFailed, hash)
 	}
-	return &TransactionOutcome{TransactionHash: receipt.TxHash.Hex()}, nil
+	return receipt, nil
 }
 
 // ExecuteWalletTransaction executes calls in order. Smart wallets relay one
@@ -64,6 +105,7 @@ func (c *AuthenticatedClient) ExecuteWalletTransaction(
 			TransactionID:   h.TransactionID,
 			TransactionHash: h.TransactionHash,
 			relayer:         h,
+			signer:          c.SignerClient,
 		}, nil
 	}
 	var handle *WalletTransactionHandle

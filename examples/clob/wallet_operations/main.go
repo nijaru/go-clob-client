@@ -1,7 +1,8 @@
 // Inspect a protocol-aware split before submitting it. Provide a market
 // POLYMARKET_CONDITION_ID or comma-separated POLYMARKET_LEGS (native IDs).
 // POLYMARKET_EXECUTE=true is an explicit opt-in to sending the transaction.
-// Uses a Deposit Wallet and explicit builder credentials for gasless execution.
+// Uses a Deposit Wallet and explicit builder or Relayer API-key credentials.
+// Deployment is checked/created only after the execute opt-in.
 package main
 
 import (
@@ -13,19 +14,23 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/nijaru/go-clob-client/clob"
 )
 
 func main() {
-	builder, err := clob.NewLocalBuilderAuth(
-		clob.Credentials{
-			Key:        os.Getenv("POLYMARKET_BUILDER_KEY"),
-			Secret:     os.Getenv("POLYMARKET_BUILDER_SECRET"),
+	var builder clob.BuilderAuth
+	var err error
+	if os.Getenv("POLYMARKET_RELAYER_API_KEY") == "" {
+		builder, err = clob.NewLocalBuilderAuth(clob.Credentials{
+			Key: os.Getenv(
+				"POLYMARKET_BUILDER_KEY",
+			), Secret: os.Getenv("POLYMARKET_BUILDER_SECRET"),
 			Passphrase: os.Getenv("POLYMARKET_BUILDER_PASSPHRASE"),
-		},
-	)
-	if err != nil {
-		log.Fatal(err)
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 	client, err := clob.NewAuthenticatedClient(clob.Config{
 		ChainID: clob.PolygonChainID, PrivateKey: os.Getenv("POLYMARKET_PRIVATE_KEY"), SignatureType: clob.SignatureTypePoly1271, FunderAddress: os.Getenv("POLYMARKET_FUNDER"), BuilderAuth: builder,
@@ -58,6 +63,18 @@ func main() {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
+	if key := os.Getenv("POLYMARKET_RELAYER_API_KEY"); key != "" {
+		address := os.Getenv("POLYMARKET_RELAYER_API_KEY_ADDRESS")
+		if !common.IsHexAddress(address) {
+			log.Fatal("invalid relayer API-key address")
+		}
+		ctx, err = clob.WithRelayerAuth(ctx, clob.RelayerAuthConfig{
+			APIKey: &clob.RelayerAPIKey{Key: key, Address: common.HexToAddress(address)},
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
 	calls, err := wallet.PrepareSplitPosition(ctx, req)
 	if err != nil {
 		log.Fatal(err)
@@ -68,13 +85,21 @@ func main() {
 	if os.Getenv("POLYMARKET_EXECUTE") != "true" {
 		return
 	}
+	readiness, err := client.EnsureWalletReady(ctx, "Deploy Deposit Wallet")
+	if err != nil {
+		log.Fatalf("wallet readiness: %v (progress: %+v)", err, readiness)
+	}
 	handle, err := client.ExecuteWalletTransaction(ctx, calls, "Reviewed position split")
 	if err != nil {
 		log.Fatal(err)
 	}
-	outcome, err := handle.Wait(ctx)
+	receipt, err := handle.WaitReceipt(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("Confirmed %s\n", outcome.TransactionHash)
+	fmt.Printf(
+		"Confirmed %s in block %s (CLOB indexing may lag)\n",
+		receipt.TxHash,
+		receipt.BlockNumber,
+	)
 }

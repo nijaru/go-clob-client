@@ -8,6 +8,7 @@
 // Env: POLYMARKET_PRIVATE_KEY (the EOA that controls the wallet),
 //
 //	POLYMARKET_API_KEY / POLYMARKET_API_SECRET / POLYMARKET_API_PASSPHRASE,
+//	POLYMARKET_RELAYER_API_KEY / POLYMARKET_RELAYER_API_KEY_ADDRESS, or
 //	POLYMARKET_BUILDER_KEY / POLYMARKET_BUILDER_SECRET / POLYMARKET_BUILDER_PASSPHRASE,
 //	POLYMARKET_FUNDER (the proxy/Safe/deposit wallet address),
 //	POLYMARKET_APPROVAL_SPENDER (the exchange or adapter to approve).
@@ -35,12 +36,18 @@ func main() {
 		)
 	}
 
-	builder, err := clob.NewLocalBuilderAuth(clob.Credentials{
-		Key: os.Getenv("POLYMARKET_BUILDER_KEY"), Secret: os.Getenv("POLYMARKET_BUILDER_SECRET"),
-		Passphrase: os.Getenv("POLYMARKET_BUILDER_PASSPHRASE"),
-	})
-	if err != nil {
-		log.Fatal(err)
+	var builder clob.BuilderAuth
+	var err error
+	if os.Getenv("POLYMARKET_RELAYER_API_KEY") == "" {
+		builder, err = clob.NewLocalBuilderAuth(clob.Credentials{
+			Key: os.Getenv(
+				"POLYMARKET_BUILDER_KEY",
+			), Secret: os.Getenv("POLYMARKET_BUILDER_SECRET"),
+			Passphrase: os.Getenv("POLYMARKET_BUILDER_PASSPHRASE"),
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 	client, err := clob.NewAuthenticatedClient(clob.Config{
 		BuilderAuth:   builder,
@@ -71,6 +78,18 @@ func main() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
+	if key := os.Getenv("POLYMARKET_RELAYER_API_KEY"); key != "" {
+		address := os.Getenv("POLYMARKET_RELAYER_API_KEY_ADDRESS")
+		if !common.IsHexAddress(address) {
+			log.Fatal("invalid relayer API-key address")
+		}
+		ctx, err = clob.WithRelayerAuth(ctx, clob.RelayerAuthConfig{
+			APIKey: &clob.RelayerAPIKey{Key: key, Address: common.HexToAddress(address)},
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
 
 	// IsWalletDeployed checks whether the relayer knows the wallet is on-chain.
 	deployed, err := client.IsWalletDeployed(ctx)
