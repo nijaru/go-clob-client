@@ -22,34 +22,38 @@ type SubmitRequest struct {
 	Nonce           string               `json:"nonce,omitempty"`
 	Signature       string               `json:"signature,omitempty"`
 	Metadata        string               `json:"metadata"`
-	SignatureParams *signatureParams     `json:"signatureParams,omitempty"`
-	DepositWallet   *depositWalletParams `json:"depositWalletParams,omitempty"`
+	SignatureParams *SignatureParams     `json:"signatureParams,omitempty"`
+	DepositWallet   *DepositWalletParams `json:"depositWalletParams,omitempty"`
 }
 
-// signatureParams carries the scheme-specific signed parameters the relayer
+// SignatureParams carries the scheme-specific signed parameters the relayer
 // echoes back into on-chain submission. PROXY uses gas fields; SAFE uses the
 // SafeTx gas/operation fields.
-type signatureParams struct {
-	GasLimit       string `json:"gasLimit,omitempty"`
-	GasPrice       string `json:"gasPrice,omitempty"`
-	Relay          string `json:"relay,omitempty"`
-	RelayHub       string `json:"relayHub,omitempty"`
-	RelayerFee     string `json:"relayerFee,omitempty"`
-	BaseGas        string `json:"baseGas,omitempty"`
-	GasToken       string `json:"gasToken,omitempty"`
-	Operation      string `json:"operation,omitempty"`
-	RefundReceiver string `json:"refundReceiver,omitempty"`
-	SafeTxnGas     string `json:"safeTxnGas,omitempty"`
+type SignatureParams struct {
+	GasLimit        string `json:"gasLimit,omitempty"`
+	GasPrice        string `json:"gasPrice,omitempty"`
+	Relay           string `json:"relay,omitempty"`
+	RelayHub        string `json:"relayHub,omitempty"`
+	RelayerFee      string `json:"relayerFee,omitempty"`
+	BaseGas         string `json:"baseGas,omitempty"`
+	GasToken        string `json:"gasToken,omitempty"`
+	Operation       string `json:"operation,omitempty"`
+	Payment         string `json:"payment,omitempty"`
+	PaymentReceiver string `json:"paymentReceiver,omitempty"`
+	PaymentToken    string `json:"paymentToken,omitempty"`
+	RefundReceiver  string `json:"refundReceiver,omitempty"`
+	SafeTxnGas      string `json:"safeTxnGas,omitempty"`
 }
 
-// depositWalletParams carries the deposit-wallet batch the relayer submits.
-type depositWalletParams struct {
+// DepositWalletParams carries the deposit-wallet batch the relayer submits.
+type DepositWalletParams struct {
 	DepositWallet string        `json:"depositWallet"`
 	Deadline      string        `json:"deadline"`
-	Calls         []depositCall `json:"calls"`
+	Calls         []DepositCall `json:"calls"`
 }
 
-type depositCall struct {
+// DepositCall is one call in a signed deposit-wallet batch.
+type DepositCall struct {
 	Target string `json:"target"`
 	Value  string `json:"value"`
 	Data   string `json:"data"`
@@ -107,7 +111,7 @@ func BuildProxySubmit(in ProxySubmitInput) (*SubmitRequest, error) {
 		Nonce:       nonce,
 		Signature:   sig,
 		Metadata:    in.Metadata,
-		SignatureParams: &signatureParams{
+		SignatureParams: &SignatureParams{
 			GasLimit:   gasLimit,
 			GasPrice:   "0",
 			Relay:      addrHex(in.Relay),
@@ -153,7 +157,7 @@ func BuildSafeSubmit(in SafeSubmitInput) (*SubmitRequest, error) {
 		Nonce:       nonce,
 		Signature:   sig,
 		Metadata:    in.Metadata,
-		SignatureParams: &signatureParams{
+		SignatureParams: &SignatureParams{
 			BaseGas:        "0",
 			GasPrice:       "0",
 			GasToken:       addrHex(common.Address{}),
@@ -193,17 +197,17 @@ func BuildDepositSubmit(in DepositSubmitInput) (*SubmitRequest, error) {
 	if err != nil {
 		return nil, err
 	}
-	sig, err := HexSignature(in.Signature)
-	if err != nil {
-		return nil, err
+	if len(in.Signature) == 0 {
+		return nil, fmt.Errorf("polyrelay: empty deposit signature")
 	}
-	calls := make([]depositCall, len(in.Calls))
+	sig := hexData(in.Signature)
+	calls := make([]DepositCall, len(in.Calls))
 	for i, c := range in.Calls {
 		val, err := bigStr(c.Value)
 		if err != nil {
 			return nil, fmt.Errorf("call %d: %w", i, err)
 		}
-		calls[i] = depositCall{Target: addrHex(c.To), Value: val, Data: hexData(c.Data)}
+		calls[i] = DepositCall{Target: addrHex(c.To), Value: val, Data: hexData(c.Data)}
 	}
 	return &SubmitRequest{
 		Type:      string(TransactionTypeWallet),
@@ -212,7 +216,7 @@ func BuildDepositSubmit(in DepositSubmitInput) (*SubmitRequest, error) {
 		Nonce:     nonce,
 		Signature: sig,
 		Metadata:  in.Metadata,
-		DepositWallet: &depositWalletParams{
+		DepositWallet: &DepositWalletParams{
 			DepositWallet: addrHex(in.Wallet),
 			Deadline:      deadline,
 			Calls:         calls,

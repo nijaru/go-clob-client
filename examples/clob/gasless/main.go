@@ -8,6 +8,7 @@
 // Env: POLYMARKET_PRIVATE_KEY (the EOA that controls the wallet),
 //
 //	POLYMARKET_API_KEY / POLYMARKET_API_SECRET / POLYMARKET_API_PASSPHRASE,
+//	POLYMARKET_BUILDER_KEY / POLYMARKET_BUILDER_SECRET / POLYMARKET_BUILDER_PASSPHRASE,
 //	POLYMARKET_FUNDER (the proxy/Safe/deposit wallet address),
 //	POLYMARKET_APPROVAL_SPENDER (the exchange or adapter to approve).
 package main
@@ -17,6 +18,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 
@@ -33,11 +35,20 @@ func main() {
 		)
 	}
 
+	builder, err := clob.NewLocalBuilderAuth(clob.Credentials{
+		Key: os.Getenv("POLYMARKET_BUILDER_KEY"), Secret: os.Getenv("POLYMARKET_BUILDER_SECRET"),
+		Passphrase: os.Getenv("POLYMARKET_BUILDER_PASSPHRASE"),
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
 	client, err := clob.NewAuthenticatedClient(clob.Config{
-		ChainID:       clob.PolygonChainID,
-		PrivateKey:    key,
-		SignatureType: clob.SignatureTypePolyProxy, // or PolyGnosisSafe / Poly1271
-		FunderAddress: funder,
+		BuilderAuth:          builder,
+		DisableAutoHeartbeat: true,
+		ChainID:              clob.PolygonChainID,
+		PrivateKey:           key,
+		SignatureType:        clob.SignatureTypePolyProxy, // or PolyGnosisSafe / Poly1271
+		FunderAddress:        funder,
 		Credentials: &clob.Credentials{
 			Key:        os.Getenv("POLYMARKET_API_KEY"),
 			Secret:     os.Getenv("POLYMARKET_API_SECRET"),
@@ -52,10 +63,15 @@ func main() {
 	// Approve the configured exchange or adapter to spend collateral. The
 	// spender is deliberately an environment variable because the correct
 	// address depends on the chain and trading product.
-	collateral := common.HexToAddress("0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174")
+	collateralAddress, err := client.GetCollateralAddress()
+	if err != nil {
+		log.Fatal(err)
+	}
+	collateral := common.HexToAddress(collateralAddress)
 	approvalSpender := common.HexToAddress(spender)
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
 
 	// IsWalletDeployed checks whether the relayer knows the wallet is on-chain.
 	deployed, err := client.IsWalletDeployed(ctx)

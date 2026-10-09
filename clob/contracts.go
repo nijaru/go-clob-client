@@ -14,6 +14,7 @@ type contractConfig struct {
 	NegRiskCollateralAdapter string
 	ExchangeV3               string
 	ProtocolV2Router         string
+	CombinatorialModule      string
 	PositionManager          string
 	AutoRedeemOperator       string
 	PerpsDepositContract     string
@@ -31,6 +32,7 @@ var contractConfigs = map[int64]contractConfig{
 		NegRiskCollateralAdapter: "0xadA2005600Dec949baf300f4C6120000bDB6eAab",
 		ExchangeV3:               "0xe3333700cA9d93003F00f0F71f8515005F6c00Aa",
 		ProtocolV2Router:         "0x12121212006e4CD160D18e3f00711DA5c3372600",
+		CombinatorialModule:      "0x30000034706c7d8e12009dab006be20000c031a8",
 		PositionManager:          "0x006F54F7f9A22e0000CC2AB60031000000ae9fEF",
 		AutoRedeemOperator:       "0xa1200000d0002264C9a1698e001292D00E1b00af",
 		PerpsDepositContract:     "0xDCa4af75705dbB50f62437045afF9921947917d2",

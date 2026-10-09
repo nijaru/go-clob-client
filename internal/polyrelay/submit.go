@@ -9,7 +9,6 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"regexp"
-	"strconv"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -46,6 +45,7 @@ type GasEstimator func(ctx context.Context, from, to common.Address, data []byte
 // The clob package builds this from its Config (chain ID, contract addresses,
 // wallet type, signer + wallet addresses).
 type GaslessConfig struct {
+	SessionSigner        bool // wrap deposit batch signature for a non-owner signer
 	WalletType           RelayerTransactionType
 	Signer               common.Address // EOA authorizing the relay
 	Wallet               common.Address // proxy / Safe / deposit wallet address
@@ -196,7 +196,18 @@ func submitForWalletType(
 	if err != nil {
 		return ExecuteResponse{}, err
 	}
-	return t.Submit(ctx, payload)
+	response, submitErr := t.Submit(ctx, payload)
+	if submitErr == nil {
+		return response, nil
+	}
+	corrected, err := CorrectDepositNonce(cfg, key, payload, submitErr)
+	if err != nil {
+		return ExecuteResponse{}, err
+	}
+	if corrected != nil {
+		return t.Submit(ctx, corrected)
+	}
+	return ExecuteResponse{}, submitErr
 }
 
 // BuildGaslessSubmit prepares the signed relayer envelope without submitting
@@ -254,6 +265,12 @@ func buildDepositSubmit(
 	})
 	if err != nil {
 		return nil, err
+	}
+	if cfg.SessionSigner {
+		sig, err = WrapSessionSignature(cfg.Signer, sig)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return BuildDepositSubmit(DepositSubmitInput{
 		Signer:    cfg.Signer,
@@ -435,9 +452,12 @@ func isRetryableSubmitError(err error) bool {
 		return true
 	}
 	if m := nonceMismatchRE.FindStringSubmatch(msg); m != nil {
-		submitted, _ := strconv.ParseInt(m[1], 10, 64)
-		onChain, _ := strconv.ParseInt(m[2], 10, 64)
-		return submitted < onChain
+		submitted, ok := new(big.Int).SetString(m[1], 10)
+		if !ok {
+			return false
+		}
+		onChain, ok := new(big.Int).SetString(m[2], 10)
+		return ok && submitted.Cmp(onChain) < 0
 	}
 	return false
 }

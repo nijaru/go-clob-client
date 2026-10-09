@@ -44,7 +44,14 @@ func TestRelayerWalletType(t *testing.T) {
 
 func newGaslessClient(t *testing.T, sig SignatureType, relayerURL string) *AuthenticatedClient {
 	t.Helper()
+	builder, err := NewLocalBuilderAuth(
+		Credentials{Key: "builder", Secret: "c2VjcmV0", Passphrase: "p"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	cfg := Config{
+		BuilderAuth:   builder,
 		ChainID:       PolygonChainID,
 		PrivateKey:    gaslessTestKey,
 		SignatureType: sig,
@@ -52,6 +59,7 @@ func newGaslessClient(t *testing.T, sig SignatureType, relayerURL string) *Authe
 		RelayerHost:   relayerURL,
 		RPCURL:        "http://127.0.0.1:1", // closed port → estimate falls back fast
 	}
+
 	if sig != SignatureTypeEOA {
 		cfg.FunderAddress = "0x" + repeatHex(20)
 	}

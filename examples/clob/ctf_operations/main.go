@@ -1,67 +1,84 @@
+// Low-level Rust-style CTF operations for an EOA. For automatic CTF/V2 market
+// routing and combos, see examples/clob/wallet_operations.
+// Requires POLYMARKET_PRIVATE_KEY, POLYMARKET_CONDITION_ID (bytes32), and
+// POLYMARKET_OPERATION=split|merge|redeem|redeem-neg-risk. Amounts are base units.
 package main
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"math/big"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/nijaru/go-clob-client/clob"
 )
 
 func main() {
-	key := os.Getenv("POLYMARKET_PRIVATE_KEY")
-	if key == "" {
-		log.Fatal("POLYMARKET_PRIVATE_KEY is required")
+	condition, err := hex.DecodeString(
+		strings.TrimPrefix(os.Getenv("POLYMARKET_CONDITION_ID"), "0x"),
+	)
+	if err != nil || len(condition) != 32 {
+		log.Fatal("POLYMARKET_CONDITION_ID must be bytes32")
 	}
-
-	client, err := clob.NewSignerClient(clob.Config{
-		ChainID:    clob.PolygonChainID,
-		PrivateKey: key,
-	})
+	operation := os.Getenv("POLYMARKET_OPERATION")
+	if operation == "" {
+		log.Fatal("POLYMARKET_OPERATION is required; this example sends a transaction")
+	}
+	client, err := clob.NewSignerClient(
+		clob.Config{ChainID: clob.PolygonChainID, PrivateKey: os.Getenv("POLYMARKET_PRIVATE_KEY")},
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	ctx := context.Background()
-	conditionID := common.HexToHash("0x...")
-	collateral := common.HexToAddress("0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174")
-	amount := new(big.Int).SetInt64(1_000_000)
-
-	fmt.Println("Splitting 1 USDC into outcome tokens...")
-	receipt, err := client.SplitPosition(ctx, clob.SplitBinary(collateral, conditionID, amount))
+	collateral, err := client.GetCollateralAddress()
 	if err != nil {
-		log.Printf("Split failed: %v", err)
-	} else {
-		fmt.Printf("Split tx: %s (block %d)\n", receipt.Hash.Hex(), receipt.BlockNumber)
+		log.Fatal(err)
 	}
-
-	fmt.Println("Merging outcome tokens back into USDC...")
-	receipt, err = client.MergePositions(ctx, clob.MergeBinary(collateral, conditionID, amount))
+	if override := os.Getenv("POLYMARKET_COLLATERAL_TOKEN"); override != "" {
+		if !common.IsHexAddress(override) {
+			log.Fatal("invalid collateral override")
+		}
+		collateral = override
+	}
+	amount := big.NewInt(1_000_000)
+	conditionID := common.BytesToHash(condition)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	var receipt *clob.TxReceipt
+	switch operation {
+	case "split":
+		receipt, err = client.SplitPosition(
+			ctx,
+			clob.SplitBinary(common.HexToAddress(collateral), conditionID, amount),
+		)
+	case "merge":
+		receipt, err = client.MergePositions(
+			ctx,
+			clob.MergeBinary(common.HexToAddress(collateral), conditionID, amount),
+		)
+	case "redeem":
+		receipt, err = client.RedeemPositions(
+			ctx,
+			clob.RedeemBinary(common.HexToAddress(collateral), conditionID),
+		)
+	case "redeem-neg-risk":
+		receipt, err = client.RedeemNegRisk(
+			ctx,
+			clob.RedeemNegRiskRequest{
+				ConditionID: conditionID,
+				Amounts:     []*big.Int{amount, amount},
+			},
+		)
+	default:
+		log.Fatal("unknown operation")
+	}
 	if err != nil {
-		log.Printf("Merge failed: %v", err)
-	} else {
-		fmt.Printf("Merge tx: %s (block %d)\n", receipt.Hash.Hex(), receipt.BlockNumber)
+		log.Fatal(err)
 	}
-
-	fmt.Println("Redeeming winning tokens...")
-	receipt, err = client.RedeemPositions(ctx, clob.RedeemBinary(collateral, conditionID))
-	if err != nil {
-		log.Printf("Redeem failed: %v", err)
-	} else {
-		fmt.Printf("Redeem tx: %s (block %d)\n", receipt.Hash.Hex(), receipt.BlockNumber)
-	}
-
-	fmt.Println("Redeeming neg risk positions...")
-	receipt, err = client.RedeemNegRisk(ctx, clob.RedeemNegRiskRequest{
-		ConditionID: conditionID,
-		Amounts:     []*big.Int{amount, amount},
-	})
-	if err != nil {
-		log.Printf("NegRisk redeem failed: %v", err)
-	} else {
-		fmt.Printf("NegRisk redeem tx: %s (block %d)\n", receipt.Hash.Hex(), receipt.BlockNumber)
-	}
+	fmt.Printf("Confirmed %s in block %d\n", receipt.Hash, receipt.BlockNumber)
 }

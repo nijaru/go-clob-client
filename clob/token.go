@@ -89,19 +89,6 @@ type ERC20TransferRequest struct {
 	Amount           *big.Int
 }
 
-// TradingApprovalPlan contains only the approvals that are currently missing
-// for the configured wallet. The plan follows the official SDK contract set
-// for the selected chain.
-type TradingApprovalPlan struct {
-	ERC20Approvals   []ERC20ApprovalRequest
-	ERC1155Approvals []ERC1155ApprovalForAllRequest
-}
-
-// Empty reports whether all required trading approvals are already present.
-func (p TradingApprovalPlan) Empty() bool {
-	return len(p.ERC20Approvals) == 0 && len(p.ERC1155Approvals) == 0
-}
-
 func validateUint256(value *big.Int, name string) error {
 	if value == nil {
 		return fmt.Errorf("%w: %s is nil", ErrInvalidTokenAmount, name)
@@ -288,65 +275,14 @@ func requiredTradingApprovals(
 
 // PrepareTradingApprovals reads the configured wallet's current on-chain
 // allowances and returns only the missing official trading approvals.
-func (c *SignerClient) PrepareTradingApprovals(ctx context.Context) (*TradingApprovalPlan, error) {
-	config, err := getContractConfig(c.chainID)
+func (c *SignerClient) PrepareTradingApprovals(
+	ctx context.Context,
+) (*MissingTradingApprovals, error) {
+	state, err := c.GetTradingApprovalsState(ctx, "")
 	if err != nil {
 		return nil, err
 	}
-	erc20, erc1155, err := requiredTradingApprovals(c.chainID, config)
-	if err != nil {
-		return nil, err
-	}
-	ec, err := c.dialRPC(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("token: dial rpc for trading approvals: %w", err)
-	}
-	defer ec.Close()
-
-	owner := common.HexToAddress(c.funderAddress)
-	plan := &TradingApprovalPlan{
-		ERC20Approvals:   make([]ERC20ApprovalRequest, 0, len(erc20)),
-		ERC1155Approvals: make([]ERC1155ApprovalForAllRequest, 0, len(erc1155)),
-	}
-	for _, approval := range erc20 {
-		allowance, err := readERC20Allowance(
-			ctx,
-			ec,
-			approval.TokenAddress,
-			owner,
-			approval.SpenderAddress,
-		)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"token: read ERC20 approval for %s: %w",
-				approval.SpenderAddress.Hex(),
-				err,
-			)
-		}
-		if allowance.Cmp(approval.Amount) < 0 {
-			plan.ERC20Approvals = append(plan.ERC20Approvals, approval)
-		}
-	}
-	for _, approval := range erc1155 {
-		approved, err := readERC1155ApprovalForAll(
-			ctx,
-			ec,
-			approval.TokenAddress,
-			owner,
-			approval.OperatorAddress,
-		)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"token: read ERC1155 approval for %s: %w",
-				approval.OperatorAddress.Hex(),
-				err,
-			)
-		}
-		if !approved {
-			plan.ERC1155Approvals = append(plan.ERC1155Approvals, approval)
-		}
-	}
-	return plan, nil
+	return state.Missing, nil
 }
 
 // SetupTradingApprovals reads and submits the missing trading approvals from
@@ -393,7 +329,7 @@ func (c *SignerClient) SetupTradingApprovals(ctx context.Context) ([]TxReceipt, 
 func (c *AuthenticatedClient) SetupTradingApprovalsGasless(
 	ctx context.Context,
 	metadata string,
-) (*polyrelay.Handle, error) {
+) (*GaslessTransactionHandle, error) {
 	if _, err := c.gaslessConfig(); err != nil {
 		return nil, err
 	}
@@ -404,19 +340,7 @@ func (c *AuthenticatedClient) SetupTradingApprovalsGasless(
 	if plan.Empty() {
 		return nil, nil
 	}
-	missing := &MissingTradingApprovals{
-		ERC20Approvals:   make([]Erc20TradingApproval, 0, len(plan.ERC20Approvals)),
-		ERC1155Approvals: make([]ERC1155ApprovalForAllRequest, 0, len(plan.ERC1155Approvals)),
-	}
-	for _, approval := range plan.ERC20Approvals {
-		missing.ERC20Approvals = append(missing.ERC20Approvals, Erc20TradingApproval{
-			TokenAddress:   approval.TokenAddress,
-			SpenderAddress: approval.SpenderAddress,
-			Amount:         new(big.Int).Set(approval.Amount),
-		})
-	}
-	missing.ERC1155Approvals = append(missing.ERC1155Approvals, plan.ERC1155Approvals...)
-	calls, err := buildMissingTradingApprovalCalls(missing)
+	calls, err := buildMissingTradingApprovalCalls(plan)
 	if err != nil {
 		return nil, err
 	}
@@ -503,7 +427,7 @@ func (c *AuthenticatedClient) ApproveERC20Gasless(
 	ctx context.Context,
 	req ERC20ApprovalRequest,
 	metadata string,
-) (*polyrelay.Handle, error) {
+) (*GaslessTransactionHandle, error) {
 	data, err := packERC20Approval(req)
 	if err != nil {
 		return nil, err
@@ -521,7 +445,7 @@ func (c *AuthenticatedClient) ApproveERC1155ForAllGasless(
 	ctx context.Context,
 	req ERC1155ApprovalForAllRequest,
 	metadata string,
-) (*polyrelay.Handle, error) {
+) (*GaslessTransactionHandle, error) {
 	data, err := packERC1155ApprovalForAll(req)
 	if err != nil {
 		return nil, err
@@ -539,7 +463,7 @@ func (c *AuthenticatedClient) TransferERC20Gasless(
 	ctx context.Context,
 	req ERC20TransferRequest,
 	metadata string,
-) (*polyrelay.Handle, error) {
+) (*GaslessTransactionHandle, error) {
 	data, err := packERC20Transfer(req)
 	if err != nil {
 		return nil, err

@@ -35,9 +35,6 @@ func NewTransport(c *polyhttp.Client) *Transport {
 	return &Transport{http: c}
 }
 
-// Client returns the underlying polyhttp client.
-func (t *Transport) Client() *polyhttp.Client { return t.http }
-
 // FetchExecuteParams gets the relayer execute nonce and relay address for
 // address+type via /v1/account/transactions/params, the unified endpoint used by
 // all wallet types (proxy, safe, deposit). py-sdk additionally exposes a legacy

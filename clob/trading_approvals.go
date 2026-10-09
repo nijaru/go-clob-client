@@ -3,7 +3,6 @@ package clob
 import (
 	"context"
 	"fmt"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/nijaru/go-clob-client/internal/polyrelay"
@@ -11,11 +10,7 @@ import (
 
 // Erc20TradingApproval is one required ERC-20 allowance that is not configured
 // for a wallet. It mirrors the official SDK model name.
-type Erc20TradingApproval struct {
-	TokenAddress   common.Address
-	SpenderAddress common.Address
-	Amount         *big.Int
-}
+type Erc20TradingApproval = ERC20ApprovalRequest
 
 // Erc1155TradingApproval is one required ERC-1155 operator approval that is not
 // configured for a wallet. It mirrors the official SDK model name; the Go
@@ -54,11 +49,7 @@ func buildMissingTradingApprovalCalls(
 		len(missing.ERC20Approvals)+len(missing.ERC1155Approvals),
 	)
 	for _, approval := range missing.ERC20Approvals {
-		data, err := packERC20Approval(ERC20ApprovalRequest{
-			TokenAddress:   approval.TokenAddress,
-			SpenderAddress: approval.SpenderAddress,
-			Amount:         approval.Amount,
-		})
+		data, err := packERC20Approval(approval)
 		if err != nil {
 			return nil, err
 		}
@@ -96,7 +87,7 @@ func (c *SignerClient) GetTradingApprovalsState(
 	}
 	defer ec.Close()
 
-	owner := common.HexToAddress(c.funderAddress)
+	owner := c.WalletAddress()
 	if wallet != "" {
 		if !common.IsHexAddress(wallet) {
 			return nil, fmt.Errorf("token: invalid wallet address %q", wallet)
@@ -121,11 +112,7 @@ func (c *SignerClient) GetTradingApprovalsState(
 				approval.SpenderAddress.Hex(), err)
 		}
 		if allowance.Cmp(approval.Amount) < 0 {
-			missing.ERC20Approvals = append(missing.ERC20Approvals, Erc20TradingApproval{
-				TokenAddress:   approval.TokenAddress,
-				SpenderAddress: approval.SpenderAddress,
-				Amount:         new(big.Int).Set(approval.Amount),
-			})
+			missing.ERC20Approvals = append(missing.ERC20Approvals, approval)
 		}
 	}
 	for _, approval := range erc1155 {
@@ -149,15 +136,4 @@ func (c *SignerClient) GetTradingApprovalsState(
 		Missing:         missing,
 		IsFullyApproved: missing.Empty(),
 	}, nil
-}
-
-// GetTradingApprovalsState reads the configured wallet's current on-chain
-// approval state and returns a snapshot of what is missing. It does not
-// submit any transactions. The wallet defaults to the configured funder
-// address; pass an explicit wallet to inspect a different owner.
-func (c *AuthenticatedClient) GetTradingApprovalsState(
-	ctx context.Context,
-	wallet string,
-) (*TradingApprovalsState, error) {
-	return c.SignerClient.GetTradingApprovalsState(ctx, wallet)
 }

@@ -18,24 +18,6 @@ func TestConditionID(t *testing.T) {
 	}
 }
 
-func TestCollectionID(t *testing.T) {
-	parent := common.Hash{}
-	conditionID := common.HexToHash(
-		"0xabcdef000000000000000000000000000000000000000000000000000000000001",
-	)
-	indexSet := big.NewInt(3)
-
-	got := CollectionID(parent, conditionID, indexSet)
-	if got == (common.Hash{}) {
-		t.Fatal("CollectionID returned zero hash")
-	}
-
-	got2 := CollectionID(got, conditionID, indexSet)
-	if got2 == got {
-		t.Fatal("CollectionID with non-zero parent should produce different result")
-	}
-}
-
 func TestPositionID(t *testing.T) {
 	collateral := common.HexToAddress("0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174")
 	collectionID := common.HexToHash(

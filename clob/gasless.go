@@ -8,7 +8,6 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/nijaru/go-clob-client/internal/polyauth"
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
 	"github.com/nijaru/go-clob-client/internal/polyrelay"
 )
@@ -19,8 +18,8 @@ import (
 // and do not use the relayer.
 //
 // The relayer authenticates with POLY_BUILDER_* headers (the same builder-key
-// HMAC). This client prefers an explicit BuilderAuth and otherwise signs with the
-// L2 API credentials, which serve the same role. The heavy lifting (nonce fetch,
+// HMAC). An explicit BuilderAuth is required: CLOB L2 credentials are not
+// builder or relayer credentials. The heavy lifting (nonce fetch,
 // per-scheme signing, retry, poll) lives in internal/polyrelay; this file wires
 // it onto the AuthenticatedClient using the chain's contract addresses.
 
@@ -45,7 +44,7 @@ func (s SignatureType) relayerWalletType() (polyrelay.RelayerTransactionType, er
 // RelayerTransport returns a relayer transport backed by a polyhttp client
 // pointed at the relayer host with builder-key auth. Each call builds a fresh
 // transport; construction is cheap.
-func (c *AuthenticatedClient) RelayerTransport() *polyrelay.Transport {
+func (c *AuthenticatedClient) RelayerTransport() *RelayerTransport {
 	return polyrelay.NewTransport(&polyhttp.Client{
 		BaseURL:    c.relayerHost,
 		HTTPClient: c.http.HTTPClient,
@@ -74,19 +73,7 @@ func (c *AuthenticatedClient) relayerHeaders(
 			Method: method, Path: path, Body: body, Timestamp: timestamp,
 		})
 	}
-	creds := c.credentials()
-	if creds == nil {
-		return nil, fmt.Errorf("gasless: relayer auth requires API credentials or BuilderAuth")
-	}
-	return polyauth.BuilderHeaders(
-		creds.Key,
-		c.decodedSecret,
-		creds.Passphrase,
-		timestamp,
-		method,
-		path,
-		body,
-	)
+	return nil, fmt.Errorf("gasless: relayer auth requires BuilderAuth, not CLOB API credentials")
 }
 
 // gaslessConfig builds the polyrelay config from the client's chain + wallet
@@ -123,7 +110,16 @@ func (c *AuthenticatedClient) gaslessConfig() (polyrelay.GaslessConfig, error) {
 			)
 		}
 	}
+	sessionSigner := false
+	if walletType == polyrelay.TransactionTypeWallet {
+		owner, err := c.isDepositWalletOwner()
+		if err != nil {
+			return polyrelay.GaslessConfig{}, err
+		}
+		sessionSigner = !owner
+	}
 	return polyrelay.GaslessConfig{
+		SessionSigner:        sessionSigner,
 		WalletType:           walletType,
 		Signer:               common.HexToAddress(c.Address()),
 		Wallet:               common.HexToAddress(c.funderAddress),
@@ -156,9 +152,9 @@ func (c *AuthenticatedClient) estimateProxyGas(
 // The returned Handle is polled (or Wait-ed) for confirmation.
 func (c *AuthenticatedClient) PrepareGaslessTransaction(
 	ctx context.Context,
-	calls []polyrelay.TransactionCall,
+	calls []TransactionCall,
 	metadata string,
-) (*polyrelay.Handle, error) {
+) (*GaslessTransactionHandle, error) {
 	cfg, err := c.gaslessConfig()
 	if err != nil {
 		return nil, err
@@ -178,7 +174,7 @@ func (c *AuthenticatedClient) PrepareGaslessTransaction(
 func (c *AuthenticatedClient) DeployDepositWallet(
 	ctx context.Context,
 	metadata string,
-) (*polyrelay.Handle, error) {
+) (*GaslessTransactionHandle, error) {
 	wc, err := getWalletConfig(c.chainID)
 	if err != nil {
 		return nil, err

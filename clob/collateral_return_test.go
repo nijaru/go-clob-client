@@ -13,7 +13,14 @@ import (
 
 func newCollateralReturnClient(t *testing.T, host string, sig SignatureType) *AuthenticatedClient {
 	t.Helper()
+	builder, err := NewLocalBuilderAuth(
+		Credentials{Key: "builder", Secret: "c2VjcmV0", Passphrase: "p"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	cfg := Config{
+		BuilderAuth:          builder,
 		ChainID:              PolygonChainID,
 		PrivateKey:           gaslessTestKey,
 		SignatureType:        sig,

@@ -62,7 +62,7 @@ type collateralReturnSubmitRequest struct {
 func (c *AuthenticatedClient) ExecuteCollateralReturnPlan(
 	ctx context.Context,
 	plan CollateralReturnPlan,
-) (*polyrelay.Handle, error) {
+) (*GaslessTransactionHandle, error) {
 	wallet, err := c.collateralReturnWallet()
 	if err != nil {
 		return nil, err
@@ -125,6 +125,25 @@ func (c *AuthenticatedClient) ExecuteCollateralReturnPlan(
 				polyhttp.AuthNone,
 				&response,
 			)
+			if buildErr != nil {
+				corrected, err := polyrelay.CorrectDepositNonce(
+					cfg,
+					c.signer.PrivateKey(),
+					envelope,
+					buildErr,
+				)
+				if err != nil {
+					return nil, err
+				}
+				if corrected != nil {
+					buildErr = c.collateralReturnHTTP().
+						PostJSON(requestCtx, collateralReturnSubmitEndpoint,
+							collateralReturnSubmitRequest{
+								Envelope: corrected,
+								PlanHash: plan.PlanHash,
+							}, polyhttp.AuthNone, &response)
+				}
+			}
 			if buildErr == nil {
 				return polyrelay.NewHandle(c.RelayerTransport(), response), nil
 			}
@@ -133,10 +152,8 @@ func (c *AuthenticatedClient) ExecuteCollateralReturnPlan(
 		if attempt == polyrelay.SubmitRetryAttempts || !polyrelay.IsRetryableSubmitError(buildErr) {
 			return nil, buildErr
 		}
-		select {
-		case <-requestCtx.Done():
-			return nil, requestCtx.Err()
-		case <-time.After(polyrelay.DefaultPollInterval):
+		if err := walletSleep(requestCtx, polyrelay.DefaultPollInterval); err != nil {
+			return nil, err
 		}
 	}
 

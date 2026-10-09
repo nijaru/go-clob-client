@@ -32,67 +32,15 @@ func (c *SignerClient) sendContractTxAndWait(
 	data []byte,
 	label string,
 ) (*types.Receipt, error) {
+	signed, err := c.broadcastWalletCall(ctx, tokenCall(to, data))
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", label, err)
+	}
 	ec, err := c.dialRPC(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("%s: dial rpc: %w", label, err)
+		return nil, fmt.Errorf("%s: dial receipt rpc: %w", label, err)
 	}
 	defer ec.Close()
-
-	key := c.signer.PrivateKey()
-	from := crypto.PubkeyToAddress(key.PublicKey)
-
-	nonce, err := ec.PendingNonceAt(ctx, from)
-	if err != nil {
-		return nil, fmt.Errorf("%s: get nonce: %w", label, err)
-	}
-
-	chainID := big.NewInt(c.chainID)
-	gasTipCap, err := ec.SuggestGasTipCap(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("%s: suggest gas tip: %w", label, err)
-	}
-
-	head, err := ec.HeaderByNumber(ctx, nil)
-	if err != nil {
-		return nil, fmt.Errorf("%s: get latest header: %w", label, err)
-	}
-	gasFeeCap := new(big.Int).Add(
-		gasTipCap,
-		new(big.Int).Mul(head.BaseFee, big.NewInt(2)),
-	)
-
-	msg := ethereum.CallMsg{
-		From:      from,
-		To:        &to,
-		Data:      data,
-		GasFeeCap: gasFeeCap,
-		GasTipCap: gasTipCap,
-	}
-	gasLimit, err := ec.EstimateGas(ctx, msg)
-	if err != nil {
-		return nil, fmt.Errorf("%s: estimate gas: %w", label, err)
-	}
-
-	tx := types.NewTx(&types.DynamicFeeTx{
-		ChainID:   chainID,
-		Nonce:     nonce,
-		GasFeeCap: gasFeeCap,
-		GasTipCap: gasTipCap,
-		Gas:       gasLimit,
-		To:        &to,
-		Value:     big.NewInt(0),
-		Data:      data,
-	})
-
-	signed, err := types.SignTx(tx, types.LatestSignerForChainID(chainID), key)
-	if err != nil {
-		return nil, fmt.Errorf("%s: sign tx: %w", label, err)
-	}
-
-	if err := ec.SendTransaction(ctx, signed); err != nil {
-		return nil, fmt.Errorf("%s: send tx: %w", label, err)
-	}
-
 	receipt, err := waitForReceipt(ctx, ec, signed.Hash(), label)
 	if err != nil {
 		return nil, err
@@ -151,6 +99,9 @@ func (c *SignerClient) negRiskAdapterAddr() (common.Address, error) {
 // packSplitPosition encodes a CTF splitPosition call. Shared by the on-chain EOA
 // path and the gasless relayer path so the calldata can never diverge.
 func packSplitPosition(req SplitPositionRequest) ([]byte, error) {
+	if err := validateCTFPartition(req.Partition, req.Amount); err != nil {
+		return nil, err
+	}
 	return ctfABI.Pack(
 		"splitPosition",
 		req.CollateralToken,
@@ -162,6 +113,9 @@ func packSplitPosition(req SplitPositionRequest) ([]byte, error) {
 }
 
 func packMergePositions(req MergePositionsRequest) ([]byte, error) {
+	if err := validateCTFPartition(req.Partition, req.Amount); err != nil {
+		return nil, err
+	}
 	return ctfABI.Pack(
 		"mergePositions",
 		req.CollateralToken,
@@ -173,6 +127,17 @@ func packMergePositions(req MergePositionsRequest) ([]byte, error) {
 }
 
 func packRedeemPositions(req RedeemPositionsRequest) ([]byte, error) {
+	if len(req.IndexSets) == 0 {
+		return nil, fmt.Errorf("ctf: empty index sets")
+	}
+	for _, index := range req.IndexSets {
+		if err := validateUint256(index, "index set"); err != nil {
+			return nil, err
+		}
+		if index.Sign() == 0 {
+			return nil, fmt.Errorf("ctf: zero index set")
+		}
+	}
 	return ctfABI.Pack(
 		"redeemPositions",
 		req.CollateralToken,
@@ -183,6 +148,14 @@ func packRedeemPositions(req RedeemPositionsRequest) ([]byte, error) {
 }
 
 func packRedeemNegRisk(req RedeemNegRiskRequest) ([]byte, error) {
+	if len(req.Amounts) != 2 {
+		return nil, fmt.Errorf("ctf: neg-risk redemption requires two amounts")
+	}
+	for _, amount := range req.Amounts {
+		if err := validateUint256(amount, "redemption amount"); err != nil {
+			return nil, err
+		}
+	}
 	return negRiskABI.Pack("redeemPositions", req.ConditionID, req.Amounts)
 }
 
@@ -279,25 +252,6 @@ func ConditionID(oracle common.Address, questionID common.Hash, outcomeSlotCount
 	n.FillBytes(slot)
 	buf = append(buf, slot...)
 	return crypto.Keccak256Hash(buf)
-}
-
-func CollectionID(
-	parentCollectionID common.Hash,
-	conditionID common.Hash,
-	indexSet *big.Int,
-) common.Hash {
-	inner := make([]byte, 64)
-	copy(inner[:32], conditionID.Bytes())
-	indexSet.FillBytes(inner[32:64])
-	h := crypto.Keccak256Hash(inner)
-
-	var result [32]byte
-	pb := parentCollectionID.Bytes()
-	hb := h.Bytes()
-	for i := range result {
-		result[i] = pb[i] ^ hb[i]
-	}
-	return common.BytesToHash(result[:])
 }
 
 func PositionID(collateralToken common.Address, collectionID common.Hash) *big.Int {
