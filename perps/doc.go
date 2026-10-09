@@ -1,21 +1,21 @@
-// Package perps provides a Go client for the Polymarket Perps API.
+// Package perps provides an experimental Go client for the Polymarket Perps API.
 //
-// The Perps surface is a distinct product from the CLOB event markets and lives
-// behind its own host (https://api.perpetuals.polymarket.com). It is modeled as
-// a separate top-level package rather than folded into clob/ to keep the two
-// protocols and their auth/session models apart.
+// Perps uses its own REST and WebSocket hosts, separate from CLOB event markets.
+// New provides public market reads, position snapshots, registration and builder
+// status, plus six public streaming topics. NewAuthenticated provides delegated
+// account reads, history iterators, notifications, TWAP/chase execution and
+// OpenSession for trading and typed account updates. NewOwner provides explicit
+// owner-signed credential creation/resume/revocation, builder consent, collateral
+// transfers, withdrawal and a caller-owned deposit transaction boundary.
 //
-// Oracle: the official TypeScript SDK (ts-sdk) is the reference for perps; the
-// Rust SDK has no perps module yet. Market-data endpoints are public GET
-// requests under /v1/info/*. Authenticated account reads and the delegated
-// WebSocket session are available through NewAuthenticated. Signed entry-order
-// placement and low-level batch/cancel/cancel-all/leverage commands are
-// available when the delegated private key is supplied. Authenticated
-// notification pages, read-state operations, fills cursor/sort pagination,
-// and typed notification resync events are available as an experimental
-// extension; TP/SL orchestration and credential lifecycle remain separate
-// follow-ups.
+// Monetary values use exact decimal strings; timestamps are Unix milliseconds
+// unless explicitly documented otherwise. Sessions follow their context and
+// must be closed when no longer needed. Reconnects and sequence gaps emit resync
+// signals; book events are deltas, not reconstructed snapshots. Slow consumers
+// close the session rather than silently losing updates.
 //
-// Decimal values are represented as their wire strings (e.g. "123.450000") to
-// avoid precision loss; callers should parse with a decimal library as needed.
+// Submissions are not automatically retried except explicit order_in_flight
+// cancellation item rejections. Reconcile uncertain outcomes before resubmitting.
+// OrderPlacementError and OrderWithTPSLResult retain reconciliation identities.
+// See README.md in this package for the upstream capability inventory and gaps.
 package perps

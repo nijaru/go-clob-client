@@ -72,7 +72,9 @@ func TestAuthenticatedAccountReads(t *testing.T) {
 	mux.HandleFunc("/v1/account/fills", func(w http.ResponseWriter, r *http.Request) {
 		assertPerpsAuth(t, r)
 		_ = json.NewEncoder(w).Encode(PerpsPage[PerpsAccountFill]{
-			Data: []PerpsAccountFill{{TradeID: 3, InstrumentID: 7, Price: "4"}},
+			Data: []PerpsAccountFill{
+				{TradeID: 3, InstrumentID: 7, Price: "4", Fee: "0", BuilderFee: "0", TotalFee: "0"},
+			},
 		})
 	})
 	mux.HandleFunc("/v1/account/funding", func(w http.ResponseWriter, r *http.Request) {
@@ -186,7 +188,7 @@ func TestFillsPageCarriesSortAndNextCursor(t *testing.T) {
 			t.Errorf("fills query = %v, want sort=asc cursor=12", query)
 		}
 		_ = json.NewEncoder(w).Encode(PerpsPage[PerpsAccountFill]{
-			Data: []PerpsAccountFill{{TradeID: 34}},
+			Data: []PerpsAccountFill{{TradeID: 34, Fee: "0", BuilderFee: "0", TotalFee: "0"}},
 			More: true,
 		})
 	})
@@ -306,14 +308,19 @@ func TestSessionHandlesBatchedFramesAndOrderWaiters(t *testing.T) {
 		ctx:          context.Background(),
 		events:       make(chan PerpsSessionEvent, 2),
 		errors:       make(chan error, 1),
-		orderWaiters: make(map[int][]chan orderWaitResponse),
+		orderWaiters: make(map[string]chan orderWaitResponse),
 	}
+	watch, err := session.watchOrder("0123456789abcdef0123456789abcdef")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.unwatchOrder(watch)
 	session.handlePayload([]byte(`[
-		{"ch":"orders","ts":1,"sq":2,"data":{"oid":77,"status":"open"}},
+		{"ch":"orders","ts":1,"sq":2,"data":{"oid":77,"status":"open","coid":"0123456789abcdef0123456789abcdef"}},
 		{"ch":"balances","ts":3,"sq":4,"data":{"asset":"USDC"}}
 	]`))
 
-	update, err := session.waitForOrderUpdate(context.Background(), 77)
+	update, err := session.waitWatchedOrder(t.Context(), watch, 77)
 	if err != nil || update.ID != 77 {
 		t.Fatalf("waitForOrderUpdate = %+v, %v", update, err)
 	}

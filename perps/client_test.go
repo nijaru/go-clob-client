@@ -81,7 +81,7 @@ func (fs *fakeServer) klinesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = json.NewEncoder(w).Encode(json.RawMessage(
-		`{"data":[[2000,"2","3","2","3","5",1]],"more":false}`,
+		`{"data":[[61000,"2","3","2","3","5",1]],"more":false}`,
 	))
 }
 
@@ -230,12 +230,6 @@ func TestGetFees(t *testing.T) {
 	}
 }
 
-func TestPerpsWithdrawalFailedStatus(t *testing.T) {
-	if PerpsWithdrawalFailed != "failed" {
-		t.Fatalf("PerpsWithdrawalFailed = %q, want failed", PerpsWithdrawalFailed)
-	}
-}
-
 func TestIterCandlesPagination(t *testing.T) {
 	_, srv := newFakeServer(t)
 	c := newTestClient(t, srv)
@@ -245,8 +239,8 @@ func TestIterCandlesPagination(t *testing.T) {
 	for page, err := range c.IterCandles(t.Context(), CandlesParams{
 		InstrumentID: 1,
 		Interval:     PerpsKline1m,
-		Start:        0,
-		End:          9999,
+		Start:        1,
+		End:          121000,
 	}) {
 		if err != nil {
 			t.Fatalf("IterCandles: %v", err)
@@ -267,7 +261,7 @@ func TestGetCandlesPageCursor(t *testing.T) {
 	c := newTestClient(t, srv)
 	p1, next, err := c.GetCandlesPage(
 		t.Context(),
-		CandlesParams{InstrumentID: 1, Interval: PerpsKline1m, Start: 0, End: 9999},
+		CandlesParams{InstrumentID: 1, Interval: PerpsKline1m, Start: 1, End: 121000},
 	)
 	if err != nil {
 		t.Fatalf("page1: %v", err)
@@ -289,7 +283,7 @@ func TestIterTradesDedupes(t *testing.T) {
 	c := newTestClient(t, srv)
 
 	var all []PerpsPublicTrade
-	for page, err := range c.IterTrades(t.Context(), TradesParams{InstrumentID: 1, Start: 0, End: 9999}) {
+	for page, err := range c.IterTrades(t.Context(), TradesParams{InstrumentID: 1, Start: 1, End: 9999}) {
 		if err != nil {
 			t.Fatalf("IterTrades: %v", err)
 		}
@@ -312,7 +306,7 @@ func TestIterFundingHistory(t *testing.T) {
 	_, srv := newFakeServer(t)
 	c := newTestClient(t, srv)
 	var total int
-	for page, err := range c.IterFundingHistory(t.Context(), FundingParams{InstrumentID: 1, Start: 0, End: 9999}) {
+	for page, err := range c.IterFundingHistory(t.Context(), FundingParams{InstrumentID: 1, Start: 1, End: 9999}) {
 		if err != nil {
 			t.Fatalf("IterFundingHistory: %v", err)
 		}
@@ -320,29 +314,5 @@ func TestIterFundingHistory(t *testing.T) {
 	}
 	if total != 2 {
 		t.Fatalf("expected 2 funding samples, got %d", total)
-	}
-}
-
-func TestCursorRoundTrip(t *testing.T) {
-	orig := candlesCursor{
-		Kind:           "perpsCandles",
-		InstrumentID:   42,
-		Interval:       PerpsKline1d,
-		StartTimestamp: 100,
-		EndTimestamp:   200,
-	}
-	enc := encodeCursor(orig)
-	if enc == "" {
-		t.Fatal("encodeCursor returned empty")
-	}
-	var dec candlesCursor
-	if err := decodeCursor(enc, &dec); err != nil {
-		t.Fatalf("decodeCursor: %v", err)
-	}
-	if dec != orig {
-		t.Fatalf("round trip mismatch: %+v != %+v", dec, orig)
-	}
-	if err := decodeCursor("not-base64!!!", &dec); err == nil {
-		t.Fatal("expected error for invalid cursor")
 	}
 }

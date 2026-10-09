@@ -288,6 +288,7 @@ func TestPlaceOrderWaitsForMatchingOrderUpdate(t *testing.T) {
 					"ts": 1234,
 					"sq": 9,
 					"data": map[string]any{
+						"coid":   "0123456789abcdef0123456789abcdef",
 						"oid":    123,
 						"iid":    1,
 						"buy":    true,
@@ -326,11 +327,12 @@ func TestPlaceOrderWaitsForMatchingOrderUpdate(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = session.Close() })
 	order, err := session.PlaceOrder(t.Context(), PerpsOrderRequest{
-		InstrumentID: 1,
-		Side:         PerpsOrderBuy,
-		Price:        "100.50",
-		Quantity:     "10",
-		TimeInForce:  PerpsTIFGTC,
+		ClientOrderID: "0123456789abcdef0123456789abcdef",
+		InstrumentID:  1,
+		Side:          PerpsOrderBuy,
+		Price:         "100.50",
+		Quantity:      "10",
+		TimeInForce:   PerpsTIFGTC,
 	}, 0)
 	if err != nil {
 		t.Fatalf("PlaceOrder: %v", err)

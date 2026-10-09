@@ -6,6 +6,7 @@ import (
 	stdjson "encoding/json"
 	"errors"
 	"fmt"
+	"iter"
 	"net/url"
 	"strconv"
 )
@@ -19,13 +20,14 @@ const (
 type PerpsNotificationType string
 
 const (
-	PerpsNotificationPositionOpened     PerpsNotificationType = "position_opened"
-	PerpsNotificationPositionIncreased  PerpsNotificationType = "position_increased"
-	PerpsNotificationPositionReduced    PerpsNotificationType = "position_reduced"
-	PerpsNotificationPositionClosed     PerpsNotificationType = "position_closed"
-	PerpsNotificationLimitOrderCanceled PerpsNotificationType = "limit_order_canceled"
-	PerpsNotificationLiquidationWarning PerpsNotificationType = "liquidation_warning"
-	PerpsNotificationPositionLiquidated PerpsNotificationType = "position_liquidated"
+	PerpsNotificationPositionOpened      PerpsNotificationType = "position_opened"
+	PerpsNotificationPositionIncreased   PerpsNotificationType = "position_increased"
+	PerpsNotificationPositionReduced     PerpsNotificationType = "position_reduced"
+	PerpsNotificationPositionClosed      PerpsNotificationType = "position_closed"
+	PerpsNotificationLimitOrderCanceled  PerpsNotificationType = "limit_order_canceled"
+	PerpsNotificationLiquidationWarning  PerpsNotificationType = "liquidation_warning"
+	PerpsNotificationPositionLiquidated  PerpsNotificationType = "position_liquidated"
+	PerpsNotificationPositionDeleveraged PerpsNotificationType = "position_deleveraged"
 )
 
 // PerpsNotificationOrderType identifies the order that produced a position
@@ -117,13 +119,14 @@ type PerpsPositionLiquidatedNotification struct {
 // populated after JSON decoding; Type and ID are also copied for convenient
 // dispatch without inspecting the variant.
 type PerpsNotification struct {
-	ID                 string
-	Type               PerpsNotificationType
-	PositionChange     *PerpsPositionChangeNotification
-	PositionClosed     *PerpsPositionClosedNotification
-	LimitOrderCanceled *PerpsLimitOrderCanceledNotification
-	LiquidationWarning *PerpsLiquidationWarningNotification
-	PositionLiquidated *PerpsPositionLiquidatedNotification
+	ID                  string
+	Type                PerpsNotificationType
+	PositionChange      *PerpsPositionChangeNotification
+	PositionClosed      *PerpsPositionClosedNotification
+	LimitOrderCanceled  *PerpsLimitOrderCanceledNotification
+	LiquidationWarning  *PerpsLiquidationWarningNotification
+	PositionLiquidated  *PerpsPositionLiquidatedNotification
+	PositionDeleveraged *PerpsPositionDeleveragedNotification
 }
 
 // UnmarshalJSON decodes the known notification variants while preserving a
@@ -189,6 +192,23 @@ func (n *PerpsNotification) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		n.PositionLiquidated = &value
+	case PerpsNotificationPositionDeleveraged:
+		var value PerpsPositionDeleveragedNotification
+		if err := stdjson.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		if err := validateNotificationID(value.ID); err != nil {
+			return err
+		}
+		if err := validateNotificationSide(value.Side); err != nil {
+			return err
+		}
+		if !validInstrumentID(value.InstrumentID) || value.SizeClosed == "" || value.Price == "" ||
+			value.PnL == "" ||
+			value.MarginType != PerpsMarginCross && value.MarginType != PerpsMarginIsolated {
+			return fmt.Errorf("perps: invalid ADL notification")
+		}
+		n.PositionDeleveraged = &value
 	default:
 		return fmt.Errorf("%w: %q", ErrUnknownPerpsNotification, probe.Type)
 	}
@@ -387,7 +407,36 @@ func (c *AuthenticatedClient) GetNotificationsPage(
 	if err := c.getAuthenticatedJSON(ctx, accountNotificationsEndpoint, query, &out); err != nil {
 		return PerpsNotificationsPage{}, err
 	}
+	if out.More && out.NextCursor == p.Cursor {
+		return PerpsNotificationsPage{}, ErrPaginationNonProgress
+	}
 	return out, nil
+}
+
+// IterNotifications follows opaque server cursors, skipping unknown variants.
+func (c *AuthenticatedClient) IterNotifications(
+	ctx context.Context,
+	p NotificationsParams,
+) iter.Seq2[[]PerpsNotificationEntry, error] {
+	return func(yield func([]PerpsNotificationEntry, error) bool) {
+		seen := map[string]bool{}
+		for {
+			page, err := c.GetNotificationsPage(ctx, p)
+			if err != nil {
+				yield(nil, err)
+				return
+			}
+			if !yield(page.Items, nil) || !page.More {
+				return
+			}
+			if seen[page.NextCursor] {
+				yield(nil, ErrPaginationNonProgress)
+				return
+			}
+			seen[page.NextCursor] = true
+			p.Cursor = page.NextCursor
+		}
+	}
 }
 
 // GetUnreadNotificationsCount returns the account's current unread count.

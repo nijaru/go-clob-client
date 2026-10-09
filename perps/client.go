@@ -21,8 +21,9 @@ const DefaultWebSocketHost = "wss://ws.perpetuals.polymarket.com/v1/ws"
 
 // Client is a read-only client for the Polymarket Perps API.
 type Client struct {
-	host string
-	http *polyhttp.Client
+	host          string
+	http          *polyhttp.Client
+	webSocketHost string
 }
 
 // Config configures a Perps client.
@@ -64,7 +65,8 @@ func (c Config) normalized() Config {
 func New(config Config) *Client {
 	config = config.normalized()
 	return &Client{
-		host: config.Host,
+		host:          config.Host,
+		webSocketHost: config.WebSocketHost,
 		http: &polyhttp.Client{
 			BaseURL:    config.Host,
 			HTTPClient: config.HTTPClient,
@@ -83,14 +85,14 @@ type AuthenticatedConfig struct {
 // AuthenticatedClient reads account data and opens delegated Perps sessions.
 type AuthenticatedClient struct {
 	*Client
-	webSocketHost string
-	chainID       int64
-	credentials   PerpsCredentials
+	chainID     int64
+	credentials PerpsCredentials
 }
 
 // NewAuthenticated creates an authenticated Perps client from delegated
 // credentials. Credential creation and revocation remain explicit owner-signed
-// operations; this constructor is the safe resume path for stored credentials.
+// operations. This constructor validates local key identity only; use
+// OwnerClient.Resume to verify owner identity and expiration with the server.
 func NewAuthenticated(config AuthenticatedConfig) (*AuthenticatedClient, error) {
 	baseConfig := config.Config.normalized()
 	if !common.IsHexAddress(config.Credentials.Proxy) ||
@@ -100,12 +102,15 @@ func NewAuthenticated(config AuthenticatedConfig) (*AuthenticatedClient, error) 
 	if config.Credentials.Secret == "" {
 		return nil, fmt.Errorf("perps: delegated credential secret is required")
 	}
-	return &AuthenticatedClient{
-		Client:        New(baseConfig),
-		webSocketHost: baseConfig.WebSocketHost,
-		chainID:       baseConfig.ChainID,
-		credentials:   config.Credentials,
-	}, nil
+	client := &AuthenticatedClient{
+		Client:      New(baseConfig),
+		chainID:     baseConfig.ChainID,
+		credentials: config.Credentials,
+	}
+	if _, err := client.delegatedSigner(); err != nil {
+		return nil, err
+	}
+	return client, nil
 }
 
 // Credentials returns a copy of the delegated credentials used by the client.

@@ -4,14 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
-
-	"github.com/nijaru/go-clob-client/internal/polyhttp"
-	"github.com/quagmt/udecimal"
 )
 
 // PerpsOrderSide is the direction of an authenticated order.
@@ -22,8 +17,8 @@ const (
 	PerpsOrderSell PerpsOrderSide = "sell"
 )
 
-// PerpsOrderRequest is the stable entry-order subset accepted by the signed
-// perps session command. TP/SL orchestration is intentionally separate.
+// PerpsOrderRequest describes an entry order. Order expiry is distinct from
+// the signed command deadline. Builder attribution comes from SessionConfig.
 type PerpsOrderRequest struct {
 	InstrumentID  int
 	Side          PerpsOrderSide
@@ -33,6 +28,7 @@ type PerpsOrderRequest struct {
 	PostOnly      bool
 	ReduceOnly    bool
 	ClientOrderID string
+	GTDExpiry     int64
 }
 
 // PerpsOrderAck is the acknowledgement returned by createOrders.
@@ -42,6 +38,7 @@ type PerpsOrderAck struct {
 	ClientOrderID  string `json:"coid,omitempty"`
 	Error          string `json:"error,omitempty"`
 	orderIDPresent bool
+	Builder        *PerpsBuilderTerms `json:"builder,omitempty"`
 }
 
 func (a *PerpsOrderAck) UnmarshalJSON(data []byte) error {
@@ -62,15 +59,13 @@ func (a *PerpsOrderAck) UnmarshalJSON(data []byte) error {
 
 // PerpsCancelResult is the acknowledgement returned by a cancel command.
 type PerpsCancelResult struct {
-	Status        string `json:"status"`
-	OrderID       int    `json:"oid,omitempty"`
-	ClientOrderID string `json:"coid,omitempty"`
-	Error         string `json:"error,omitempty"`
+	Status          string `json:"status"`
+	OrderID         int    `json:"oid,omitempty"`
+	ClientOrderID   string `json:"coid,omitempty"`
+	Error           string `json:"error,omitempty"`
+	orderIDPresent  bool
+	clientIDPresent bool
 }
-
-// ErrPerpsAutoCancelDailyLimit indicates that the account cannot arm another
-// auto-cancel schedule until its daily trigger counter resets.
-var ErrPerpsAutoCancelDailyLimit = errors.New("perps: auto-cancel daily trigger limit reached")
 
 // PerpsLeverageResult is the acknowledgement returned by updateLeverage.
 type PerpsLeverageResult struct {
@@ -82,20 +77,23 @@ type PerpsLeverageResult struct {
 }
 
 type perpsOrderUpdate struct {
-	ID               int              `json:"oid"`
-	InstrumentID     int              `json:"iid"`
-	Buy              bool             `json:"buy"`
-	Price            string           `json:"p"`
-	Quantity         string           `json:"qty"`
-	TimeInForce      PerpsTimeInForce `json:"tif"`
-	PostOnly         bool             `json:"po"`
-	ReduceOnly       bool             `json:"ro"`
-	Status           PerpsOrderStatus `json:"status"`
-	RestingQuantity  string           `json:"rest"`
-	FilledQuantity   string           `json:"fill"`
-	CreatedTimestamp int64            `json:"cts"`
-	UpdatedTimestamp int64            `json:"uts"`
-	ClientOrderID    string           `json:"coid,omitempty"`
+	ID               int                `json:"oid"`
+	InstrumentID     int                `json:"iid"`
+	Buy              bool               `json:"buy"`
+	Price            string             `json:"p"`
+	Quantity         string             `json:"qty"`
+	TimeInForce      PerpsTimeInForce   `json:"tif"`
+	PostOnly         bool               `json:"po"`
+	ReduceOnly       bool               `json:"ro"`
+	Status           PerpsOrderStatus   `json:"status"`
+	RestingQuantity  string             `json:"rest"`
+	FilledQuantity   string             `json:"fill"`
+	CreatedTimestamp int64              `json:"cts"`
+	UpdatedTimestamp int64              `json:"uts"`
+	ClientOrderID    string             `json:"coid,omitempty"`
+	TPSL             *PerpsTPSLFields   `json:"tpsl,omitempty"`
+	ChaseID          *int64             `json:"chid,omitempty"`
+	Builder          *PerpsBuilderTerms `json:"builder,omitempty"`
 }
 
 func (u perpsOrderUpdate) order() PerpsOrder {
@@ -114,8 +112,23 @@ func (u perpsOrderUpdate) order() PerpsOrder {
 		CreatedTimestamp: u.CreatedTimestamp,
 		UpdatedTimestamp: u.UpdatedTimestamp,
 		ClientOrderID:    u.ClientOrderID,
+		TPSL:             u.TPSL, ChaseID: u.ChaseID, Builder: u.Builder,
 	}
 }
+
+// OrderPlacementError retains submission identity when acknowledgement or update
+// delivery fails. The outcome may be unknown; reconcile with GetOrders before
+// resubmitting, using ClientOrderID or the accepted order IDs.
+type OrderPlacementError struct {
+	Cause            error
+	ClientOrderID    string
+	Acknowledgements []PerpsOrderAck
+}
+
+func (e *OrderPlacementError) Error() string {
+	return fmt.Sprintf("perps: place order %s: %v", e.ClientOrderID, e.Cause)
+}
+func (e *OrderPlacementError) Unwrap() error { return e.Cause }
 
 // PlaceOrder submits one entry order and waits for its first authenticated
 // orders update. Use PostOrders when the acknowledgement is sufficient or when
@@ -125,14 +138,28 @@ func (s *Session) PlaceOrder(
 	order PerpsOrderRequest,
 	expiresAt int64,
 ) (*PerpsOrder, error) {
-	acknowledgements, err := s.PostOrders(ctx, []PerpsOrderRequest{order}, expiresAt)
+	if err := ensureClientOrderID(&order); err != nil {
+		return nil, err
+	}
+	watch, err := s.watchOrder(order.ClientOrderID)
 	if err != nil {
 		return nil, err
 	}
+	defer s.unwatchOrder(watch)
+	acknowledgements, err := s.PostOrders(ctx, []PerpsOrderRequest{order}, expiresAt)
+	placementError := func(cause error) error {
+		return &OrderPlacementError{
+			Cause:            cause,
+			ClientOrderID:    order.ClientOrderID,
+			Acknowledgements: acknowledgements,
+		}
+	}
+	if err != nil {
+		return nil, placementError(err)
+	}
 	if len(acknowledgements) != 1 {
-		return nil, fmt.Errorf(
-			"perps: expected one order acknowledgement, got %d",
-			len(acknowledgements),
+		return nil, placementError(
+			fmt.Errorf("expected one order acknowledgement, got %d", len(acknowledgements)),
 		)
 	}
 	acknowledgement := acknowledgements[0]
@@ -141,9 +168,9 @@ func (s *Session) PlaceOrder(
 	}
 	waitContext, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	update, err := s.waitForOrderUpdate(waitContext, acknowledgement.OrderID)
+	update, err := s.waitWatchedOrder(waitContext, watch, acknowledgement.OrderID)
 	if err != nil {
-		return nil, fmt.Errorf("perps: wait for order update: %w", err)
+		return nil, placementError(fmt.Errorf("wait for order update: %w", err))
 	}
 	orderResult := update.order()
 	return &orderResult, nil
@@ -159,9 +186,17 @@ func (s *Session) PostOrders(
 	if len(orders) == 0 {
 		return nil, fmt.Errorf("perps: at least one order is required")
 	}
-	if len(orders) > 15 {
-		return nil, fmt.Errorf("perps: at most 15 orders may be submitted at once")
-	}
+	return s.postOrderGroup(ctx, orders, nil, "", expiresAt)
+}
+
+func (s *Session) postOrderGroup(
+	ctx context.Context,
+	orders []PerpsOrderRequest,
+	triggers []triggerOrder,
+	group string,
+	expiresAt int64,
+) ([]PerpsOrderAck, error) {
+	builder := s.builderTerms()
 	rawOrders := make([]any, len(orders))
 	bodyOrders := make([]any, len(orders))
 	for i, order := range orders {
@@ -169,20 +204,45 @@ func (s *Session) PostOrders(
 		if err != nil {
 			return nil, err
 		}
+		appendBuilder(&raw, body, builder)
 		rawOrders[i] = raw
 		bodyOrders[i] = body
 	}
+	for _, trigger := range triggers {
+		raw, body, err := trigger.wire()
+		if err != nil {
+			return nil, err
+		}
+		appendBuilder(&raw, body, builder)
+		rawOrders = append(rawOrders, raw)
+		bodyOrders = append(bodyOrders, body)
+	}
 	op := []any{"createOrders", rawOrders}
-	data, err := s.sendSignedCommand(ctx, op, map[string]any{
-		"type": "createOrders",
-		"args": bodyOrders,
-	}, expiresAt)
+	bodyOp := map[string]any{"type": "createOrders", "args": bodyOrders}
+	if group != "" {
+		op = append(op, group)
+		bodyOp["grp"] = group
+	}
+	data, err := s.sendSignedCommand(ctx, op, bodyOp, expiresAt)
 	if err != nil {
 		return nil, err
 	}
 	var acknowledgements []PerpsOrderAck
 	if err := json.Unmarshal(data, &acknowledgements); err != nil {
 		return nil, fmt.Errorf("perps: decode order acknowledgement: %w", err)
+	}
+	if len(acknowledgements) != len(rawOrders) {
+		return acknowledgements, fmt.Errorf("perps: order acknowledgement count mismatch")
+	}
+	for _, ack := range acknowledgements {
+		if ack.Status == "ok" && !ack.orderIDPresent {
+			return acknowledgements, fmt.Errorf(
+				"perps: successful acknowledgement missing order ID",
+			)
+		}
+		if ack.Status != "ok" && ack.Status != "err" {
+			return acknowledgements, fmt.Errorf("perps: invalid order acknowledgement status")
+		}
 	}
 	return acknowledgements, nil
 }
@@ -201,19 +261,10 @@ func (s *Session) CancelOrders(
 			return nil, fmt.Errorf("perps: order ID must be non-negative")
 		}
 	}
-	op := []any{"cancelOrders", orderIDs}
-	data, err := s.sendSignedCommand(ctx, op, map[string]any{
-		"type": "cancelOrders",
-		"args": orderIDs,
-	}, expiresAt)
-	if err != nil {
-		return nil, err
-	}
-	var results []PerpsCancelResult
-	if err := json.Unmarshal(data, &results); err != nil {
-		return nil, fmt.Errorf("perps: decode cancel acknowledgement: %w", err)
-	}
-	return results, nil
+	return s.CancelOrdersWithRetry(
+		ctx,
+		CancelOrdersRequest{OrderIDs: orderIDs, ExpiresAt: expiresAt},
+	)
 }
 
 // CancelOrdersByClientID cancels orders by caller-supplied client ID.
@@ -232,90 +283,10 @@ func (s *Session) CancelOrdersByClientID(
 			)
 		}
 	}
-	op := []any{"cancelOrdersCOID", clientOrderIDs}
-	data, err := s.sendSignedCommand(ctx, op, map[string]any{
-		"type": "cancelOrdersCOID",
-		"args": clientOrderIDs,
-	}, expiresAt)
-	if err != nil {
-		return nil, err
-	}
-	var results []PerpsCancelResult
-	if err := json.Unmarshal(data, &results); err != nil {
-		return nil, fmt.Errorf("perps: decode client cancel acknowledgement: %w", err)
-	}
-	return results, nil
-}
-
-// CancelAllOrders cancels all open orders, optionally scoped to one instrument.
-// The official service accepts this signed command over authenticated REST;
-// the Session method delegates here rather than pretending it is a WS frame.
-func (c *AuthenticatedClient) CancelAllOrders(
-	ctx context.Context,
-	instrumentID *int,
-	expiresAt int64,
-) error {
-	if instrumentID != nil && *instrumentID < 0 {
-		return fmt.Errorf("perps: instrument ID must be non-negative")
-	}
-	var rawArgs []any
-	bodyArgs := map[string]any{}
-	if instrumentID != nil {
-		rawArgs = []any{*instrumentID}
-		bodyArgs["iid"] = *instrumentID
-	} else {
-		rawArgs = []any{}
-	}
-	signer, err := c.delegatedSigner()
-	if err != nil {
-		return err
-	}
-	command, err := makePerpsSignedCommand(
-		signer,
-		c.chainID,
-		[]any{"cancelAll", rawArgs},
-		map[string]any{"type": "cancelAll", "args": bodyArgs},
-		expiresAt,
-	)
-	if err != nil {
-		return err
-	}
-	var ack struct {
-		Status string `json:"status"`
-		Error  string `json:"error,omitempty"`
-	}
-	if err := c.http.DoJSON(
+	return s.CancelOrdersWithRetry(
 		ctx,
-		http.MethodDelete,
-		"/v1/trade/orders/all",
-		nil,
-		command,
-		polyhttp.AuthNone,
-		nil,
-		map[string]string{
-			"POLYMARKET-PROXY":  c.credentials.Proxy,
-			"POLYMARKET-SECRET": c.credentials.Secret,
-		},
-		&ack,
-	); err != nil {
-		return err
-	}
-	if ack.Status != "ok" {
-		if ack.Error == "" {
-			ack.Error = "cancel-all rejected"
-		}
-		return fmt.Errorf("perps: %s", ack.Error)
-	}
-	return nil
-}
-
-// CancelAllOrders cancels all open orders, optionally scoped to one instrument.
-func (s *Session) CancelAllOrders(
-	ctx context.Context,
-	instrumentID *int,
-	expiresAt int64,
-) error {
-	return s.client.CancelAllOrders(ctx, instrumentID, expiresAt)
+		CancelOrdersRequest{ClientOrderIDs: clientOrderIDs, ExpiresAt: expiresAt},
+	)
 }
 
 // UpdateLeverage signs and submits a leverage/margin-mode update.
@@ -324,10 +295,10 @@ func (s *Session) UpdateLeverage(
 	instrumentID, leverage int,
 	cross bool,
 ) (*PerpsLeverageResult, error) {
-	if instrumentID < 0 {
-		return nil, fmt.Errorf("perps: instrument ID must be non-negative")
+	if !validInstrumentID(instrumentID) {
+		return nil, fmt.Errorf("perps: invalid instrument ID")
 	}
-	if leverage <= 0 {
+	if leverage <= 0 || uint64(leverage) > 4294967295 {
 		return nil, fmt.Errorf("perps: leverage must be positive")
 	}
 	op := []any{"updateLeverage", []any{instrumentID, leverage, cross}}
@@ -348,84 +319,6 @@ func (s *Session) UpdateLeverage(
 	return &result, nil
 }
 
-const (
-	perpsAutoCancelMinimumDelay = 5 * time.Second
-	autoCancelDailyLimitCode    = "auto_cancel_daily_limit_reached"
-)
-
-// ArmAutoCancel arms the one-shot schedule that cancels all open orders at
-// cancelAt, expressed as Unix milliseconds. The deadline must be at least five
-// seconds in the future. Arming again replaces the prior schedule.
-func (s *Session) ArmAutoCancel(
-	ctx context.Context,
-	cancelAt int64,
-	expiresAt int64,
-) error {
-	if cancelAt < time.Now().Add(perpsAutoCancelMinimumDelay).UnixMilli() {
-		return fmt.Errorf("perps: cancel time must be at least 5 seconds in the future")
-	}
-	return s.updateAutoCancel(ctx, cancelAt, expiresAt)
-}
-
-// DisarmAutoCancel clears the current auto-cancel schedule without triggering
-// it. It remains allowed after the daily trigger limit is reached.
-func (s *Session) DisarmAutoCancel(ctx context.Context, expiresAt int64) error {
-	return s.updateAutoCancel(ctx, 0, expiresAt)
-}
-
-// GetAutoCancelStatus returns the schedule and daily trigger counters for the
-// session account.
-func (s *Session) GetAutoCancelStatus(
-	ctx context.Context,
-) (*PerpsAutoCancelStatus, error) {
-	return s.client.GetAutoCancelStatus(ctx)
-}
-
-func (s *Session) updateAutoCancel(
-	ctx context.Context,
-	deadline int64,
-	expiresAt int64,
-) error {
-	if expiresAt < 0 {
-		return fmt.Errorf("perps: expiration must not be negative")
-	}
-	op := []any{"autoCancel", []any{deadline}}
-	body, err := makePerpsSignedCommand(
-		s.signer,
-		s.chainID,
-		op,
-		map[string]any{"type": "autoCancel", "args": map[string]any{"time": deadline}},
-		expiresAt,
-	)
-	if err != nil {
-		return err
-	}
-	var response PerpsAutoCancelResponse
-	if err := s.client.patchAuthenticatedJSON(
-		ctx,
-		"/v1/trade/auto-cancel",
-		body,
-		&response,
-	); err != nil {
-		if isAutoCancelDailyLimitError(err) {
-			return fmt.Errorf("%w: %w", ErrPerpsAutoCancelDailyLimit, err)
-		}
-		return err
-	}
-	if response.Status != "ok" {
-		if response.Error == "" {
-			response.Error = "auto-cancel update rejected"
-		}
-		return fmt.Errorf("perps: %s", response.Error)
-	}
-	return nil
-}
-
-func isAutoCancelDailyLimitError(err error) bool {
-	var apiErr *polyhttp.APIError
-	return errors.As(err, &apiErr) && strings.Contains(apiErr.Message, autoCancelDailyLimitCode)
-}
-
 // UpdateMargin adjusts isolated margin for an instrument. Positive amounts add
 // margin and negative amounts remove it.
 func (s *Session) UpdateMargin(
@@ -433,8 +326,8 @@ func (s *Session) UpdateMargin(
 	instrumentID int,
 	amount string,
 ) error {
-	if instrumentID < 0 {
-		return fmt.Errorf("perps: instrument ID must be non-negative")
+	if !validInstrumentID(instrumentID) {
+		return fmt.Errorf("perps: invalid instrument ID")
 	}
 	normalizedAmount, err := normalizePerpsDecimal(amount)
 	if err != nil {
@@ -466,11 +359,28 @@ func normalizePerpsDecimal(value string) (string, error) {
 	if value == "" {
 		return "", fmt.Errorf("perps: margin amount is required")
 	}
-	decimal, err := udecimal.Parse(value)
+	decimal, err := parseFixedDecimal(value, false)
 	if err != nil {
-		return "", fmt.Errorf("perps: invalid margin amount %q: %w", value, err)
+		return "", fmt.Errorf("perps: invalid margin amount: %w", err)
 	}
-	return decimal.String(), nil
+	if decimal.Sign() == 0 {
+		return "0", nil
+	}
+	negative := strings.HasPrefix(value, "-")
+	value = strings.TrimPrefix(value, "-")
+	whole, fraction, _ := strings.Cut(value, ".")
+	whole = strings.TrimLeft(whole, "0")
+	if whole == "" {
+		whole = "0"
+	}
+	fraction = strings.TrimRight(fraction, "0")
+	if fraction != "" {
+		whole += "." + fraction
+	}
+	if negative {
+		whole = "-" + whole
+	}
+	return whole, nil
 }
 
 func validatePerpsPostOrderAck(ack PerpsOrderAck) error {
@@ -478,7 +388,7 @@ func validatePerpsPostOrderAck(ack PerpsOrderAck) error {
 		if ack.Error == "" {
 			ack.Error = "order rejected"
 		}
-		return fmt.Errorf("%s", ack.Error)
+		return &CommandError{Operation: "createOrders", Code: ack.Error}
 	}
 	if !ack.orderIDPresent {
 		return fmt.Errorf("successful order acknowledgement missing order ID")
@@ -523,14 +433,32 @@ func perpsOrderWire(order PerpsOrderRequest) ([]any, map[string]any, error) {
 	}
 	if order.TimeInForce != PerpsTIFGTC &&
 		order.TimeInForce != PerpsTIFIOC &&
-		order.TimeInForce != PerpsTIFFOK {
+		order.TimeInForce != PerpsTIFFOK && order.TimeInForce != PerpsTIFGTD {
 		return nil, nil, fmt.Errorf("perps: invalid time-in-force %q", order.TimeInForce)
 	}
-	if order.TimeInForce == PerpsTIFGTC && order.Price == "" {
-		return nil, nil, fmt.Errorf("perps: GTC orders require a price")
+	if !validInstrumentID(order.InstrumentID) {
+		return nil, nil, fmt.Errorf("perps: invalid instrument ID")
 	}
-	if order.TimeInForce != PerpsTIFGTC && order.PostOnly {
-		return nil, nil, fmt.Errorf("perps: post-only is only valid for GTC orders")
+	if _, err := parseFixedDecimal(order.Quantity, true); err != nil {
+		return nil, nil, err
+	}
+	if order.Price != "" {
+		if _, err := parseFixedDecimal(order.Price, true); err != nil {
+			return nil, nil, err
+		}
+	}
+	if (order.TimeInForce == PerpsTIFGTC || order.TimeInForce == PerpsTIFGTD) && order.Price == "" {
+		return nil, nil, fmt.Errorf("perps: resting orders require a price")
+	}
+	if order.TimeInForce != PerpsTIFGTC && order.TimeInForce != PerpsTIFGTD && order.PostOnly {
+		return nil, nil, fmt.Errorf("perps: post-only requires GTC or GTD")
+	}
+	if order.TimeInForce == PerpsTIFGTD {
+		if order.GTDExpiry <= time.Now().UnixMilli() || order.GTDExpiry > 18446744073709 {
+			return nil, nil, fmt.Errorf("perps: GTD expiry must be future and within venue range")
+		}
+	} else if order.GTDExpiry != 0 {
+		return nil, nil, fmt.Errorf("perps: order expiry requires GTD")
 	}
 	if order.ClientOrderID != "" && !validPerpsClientOrderID(order.ClientOrderID) {
 		return nil, nil, fmt.Errorf(
@@ -564,6 +492,10 @@ func perpsOrderWire(order PerpsOrderRequest) ([]any, map[string]any, error) {
 	}
 	if order.ClientOrderID != "" {
 		body["c"] = order.ClientOrderID
+	}
+	if order.GTDExpiry != 0 {
+		raw = append(raw, order.GTDExpiry)
+		body["gtd_expiry"] = order.GTDExpiry
 	}
 	return raw, body, nil
 }

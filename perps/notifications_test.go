@@ -193,10 +193,9 @@ func TestPerpsNotificationAccountMethods(t *testing.T) {
 
 func TestPerpsSessionSequenceGapResync(t *testing.T) {
 	session := &Session{
-		ctx:          context.Background(),
-		events:       make(chan PerpsSessionEvent, 4),
-		errors:       make(chan error, 1),
-		orderWaiters: make(map[int][]chan orderWaitResponse),
+		ctx:    context.Background(),
+		events: make(chan PerpsSessionEvent, 4),
+		errors: make(chan error, 1),
 	}
 	session.handlePayload([]byte(`{"ch":"balances","ts":100,"sq":7,"data":{"asset":"USDC"}}`))
 	session.handlePayload([]byte(`{"ch":"balances","ts":101,"sq":9,"data":{"asset":"USDC"}}`))
@@ -220,10 +219,9 @@ func TestPerpsSessionSequenceGapResync(t *testing.T) {
 
 func TestPerpsSessionTypedNotificationAndResync(t *testing.T) {
 	session := &Session{
-		ctx:          context.Background(),
-		events:       make(chan PerpsSessionEvent, 2),
-		errors:       make(chan error, 1),
-		orderWaiters: make(map[int][]chan orderWaitResponse),
+		ctx:    context.Background(),
+		events: make(chan PerpsSessionEvent, 2),
+		errors: make(chan error, 1),
 	}
 	session.handlePayload(
 		[]byte(

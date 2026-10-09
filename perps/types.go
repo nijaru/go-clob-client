@@ -46,6 +46,7 @@ type PerpsTimeInForce string
 
 const (
 	PerpsTIFGTC PerpsTimeInForce = "gtc"
+	PerpsTIFGTD PerpsTimeInForce = "gtd"
 	PerpsTIFIOC PerpsTimeInForce = "ioc"
 	PerpsTIFFOK PerpsTimeInForce = "fok"
 )
@@ -68,6 +69,15 @@ const (
 	PerpsOrderZeroQuantity               PerpsOrderStatus = "zero_quantity"
 	PerpsOrderDuplicate                  PerpsOrderStatus = "duplicate_order"
 	PerpsOrderNotFound                   PerpsOrderStatus = "order_not_found"
+	PerpsOrderAlreadyTerminal            PerpsOrderStatus = "order_already_terminal"
+	PerpsOrderSweepCapExceeded           PerpsOrderStatus = "sweep_cap_exceeded"
+	PerpsOrderRestingOrderLimitExceeded  PerpsOrderStatus = "resting_order_limit_exceeded"
+	PerpsOrderBelowMinNotional           PerpsOrderStatus = "below_min_notional"
+	PerpsOrderInstrumentDisabled         PerpsOrderStatus = "instrument_disabled"
+	PerpsOrderInstrumentCloseOnly        PerpsOrderStatus = "instrument_close_only"
+	PerpsOrderInstrumentSettled          PerpsOrderStatus = "instrument_settled"
+	PerpsOrderInsufficientMarginAtFill   PerpsOrderStatus = "insufficient_margin_at_fill"
+	PerpsOrderMarkPriceUnavailable       PerpsOrderStatus = "mark_price_unavailable"
 	PerpsOrderReduceOnlyInvalid          PerpsOrderStatus = "reduce_only_invalid"
 	PerpsOrderReduceOnlyExpired          PerpsOrderStatus = "reduce_only_expired"
 	PerpsOrderExpired                    PerpsOrderStatus = "order_expired"
@@ -107,23 +117,27 @@ const (
 
 // PerpsInstrument is a tradable perps instrument.
 type PerpsInstrument struct {
-	ID                int             `json:"instrument_id"`
-	Category          PerpsCategory   `json:"category"`
-	Symbol            string          `json:"symbol"`
-	BaseAsset         string          `json:"base_asset"`
-	QuoteAsset        string          `json:"quote_asset"`
-	FundingInterval   string          `json:"funding_interval"`
-	QuantityDecimals  int             `json:"quantity_decimals"`
-	PriceDecimals     int             `json:"price_decimals"`
-	PriceBounds       string          `json:"price_bounds"`
-	LiquidationFee    string          `json:"liquidation_fee"`
-	MaxOrderCount     int             `json:"max_order_count"`
-	MinNotional       string          `json:"min_notional"`
-	MaxMarketNotional string          `json:"max_market_notional"`
-	MaxLimitNotional  string          `json:"max_limit_notional"`
-	MaxLeverage       int             `json:"max_leverage"`
-	IsolatedOnly      bool            `json:"isolated_only"`
-	RiskTiers         []PerpsRiskTier `json:"risk_tiers"`
+	InstrumentType    string                     `json:"instrument_type"`
+	DisplaySymbol     string                     `json:"display_symbol,omitempty"`
+	CloseOnly         bool                       `json:"close_only"`
+	Settlement        *PerpsInstrumentSettlement `json:"settlement,omitempty"`
+	ID                int                        `json:"instrument_id"`
+	Category          PerpsCategory              `json:"category"`
+	Symbol            string                     `json:"symbol"`
+	BaseAsset         string                     `json:"base_asset"`
+	QuoteAsset        string                     `json:"quote_asset"`
+	FundingInterval   string                     `json:"funding_interval"`
+	QuantityDecimals  int                        `json:"quantity_decimals"`
+	PriceDecimals     int                        `json:"price_decimals"`
+	PriceBounds       string                     `json:"price_bounds"`
+	LiquidationFee    string                     `json:"liquidation_fee"`
+	MaxOrderCount     int                        `json:"max_order_count"`
+	MinNotional       string                     `json:"min_notional"`
+	MaxMarketNotional string                     `json:"max_market_notional"`
+	MaxLimitNotional  string                     `json:"max_limit_notional"`
+	MaxLeverage       int                        `json:"max_leverage"`
+	IsolatedOnly      bool                       `json:"isolated_only"`
+	RiskTiers         []PerpsRiskTier            `json:"risk_tiers"`
 }
 
 // PerpsRiskTier maps a notional lower bound to a maximum allowed leverage.
@@ -269,6 +283,7 @@ func isJSONArray(data []byte) bool {
 
 // PerpsPublicTrade is a single public trade print.
 type PerpsPublicTrade struct {
+	Settlement   bool      `json:"settlement"`
 	TradeID      int64     `json:"trade_id"`
 	InstrumentID int       `json:"instrument_id"`
 	Side         PerpsSide `json:"side"`
@@ -381,20 +396,23 @@ type PerpsAccountConfig struct {
 
 // PerpsOrder is an authenticated order returned by the account API.
 type PerpsOrder struct {
-	ID               int              `json:"order_id"`
-	InstrumentID     int              `json:"instrument_id"`
-	Buy              bool             `json:"buy"`
-	Price            string           `json:"price"`
-	Quantity         string           `json:"quantity"`
-	TimeInForce      PerpsTimeInForce `json:"tif"`
-	PostOnly         bool             `json:"post_only"`
-	ReduceOnly       bool             `json:"ro"`
-	Status           PerpsOrderStatus `json:"status"`
-	RestingQuantity  string           `json:"resting_quantity"`
-	FilledQuantity   string           `json:"filled_quantity"`
-	CreatedTimestamp int64            `json:"created_timestamp"`
-	UpdatedTimestamp int64            `json:"updated_timestamp"`
-	ClientOrderID    string           `json:"client_order_id,omitempty"`
+	ChaseID          *int64             `json:"chid,omitempty"`
+	TPSL             *PerpsTPSLFields   `json:"tpsl,omitempty"`
+	Builder          *PerpsBuilderTerms `json:"builder,omitempty"`
+	ID               int                `json:"order_id"`
+	InstrumentID     int                `json:"instrument_id"`
+	Buy              bool               `json:"buy"`
+	Price            string             `json:"price"`
+	Quantity         string             `json:"quantity"`
+	TimeInForce      PerpsTimeInForce   `json:"tif"`
+	PostOnly         bool               `json:"post_only"`
+	ReduceOnly       bool               `json:"ro"`
+	Status           PerpsOrderStatus   `json:"status"`
+	RestingQuantity  string             `json:"resting_quantity"`
+	FilledQuantity   string             `json:"filled_quantity"`
+	CreatedTimestamp int64              `json:"created_timestamp"`
+	UpdatedTimestamp int64              `json:"updated_timestamp"`
+	ClientOrderID    string             `json:"client_order_id,omitempty"`
 }
 
 // PerpsPage is the wire page returned by authenticated history endpoints.
@@ -406,21 +424,25 @@ type PerpsPage[T any] struct {
 
 // PerpsAccountFill is an authenticated trade fill.
 type PerpsAccountFill struct {
-	TradeID            int64     `json:"trade_id"`
-	OrderID            int       `json:"order_id"`
-	InstrumentID       int       `json:"instrument_id"`
-	Side               PerpsSide `json:"side"`
-	Price              string    `json:"price"`
-	Quantity           string    `json:"quantity"`
-	Taker              bool      `json:"taker"`
-	Fee                string    `json:"fee"`
-	FeeAsset           string    `json:"fee_asset"`
-	PreviousSize       string    `json:"previous_size"`
-	PreviousEntryPrice string    `json:"previous_entry_price"`
-	PnL                string    `json:"pnl"`
-	Liquidation        bool      `json:"liquidation"`
-	Timestamp          int64     `json:"timestamp"`
-	Hash               string    `json:"hash"`
+	Settlement         bool               `json:"settlement"`
+	BuilderFee         string             `json:"builder_fee"`
+	TotalFee           string             `json:"total_fee"`
+	Builder            *PerpsBuilderTerms `json:"builder,omitempty"`
+	TradeID            int64              `json:"trade_id"`
+	OrderID            int                `json:"order_id"`
+	InstrumentID       int                `json:"instrument_id"`
+	Side               PerpsSide          `json:"side"`
+	Price              string             `json:"price"`
+	Quantity           string             `json:"quantity"`
+	Taker              bool               `json:"taker"`
+	Fee                string             `json:"fee"`
+	FeeAsset           string             `json:"fee_asset"`
+	PreviousSize       string             `json:"previous_size"`
+	PreviousEntryPrice string             `json:"previous_entry_price"`
+	PnL                string             `json:"pnl"`
+	Liquidation        bool               `json:"liquidation"`
+	Timestamp          int64              `json:"timestamp"`
+	Hash               string             `json:"hash"`
 }
 
 // PerpsAccountFundingPayment is an account funding payment entry.

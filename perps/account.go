@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"time"
 )
 
 const (
@@ -44,8 +45,8 @@ type AccountHistoryParams struct {
 	DepositStatus    PerpsDepositStatus
 	WithdrawalStatus PerpsWithdrawalStatus
 	Hash             string
-	// Sort and Cursor are used by GetFillsPage. They are ignored by the
-	// other account history endpoints, which have their own cursor semantics.
+	// Fills use a server trade-ID cursor; other histories use opaque SDK cursors.
+	// Sort applies only to fills.
 	Sort   PerpsSortDirection
 	Cursor string
 }
@@ -55,6 +56,7 @@ type AccountIntervalHistoryParams struct {
 	Start    int64
 	End      int64
 	Interval PerpsPnlInterval
+	Cursor   string
 }
 
 // GetBalances returns the authenticated account's collateral balances.
@@ -170,10 +172,14 @@ func (c *AuthenticatedClient) GetFillsPage(
 	if err := c.getAuthenticatedJSON(ctx, "/v1/account/fills", fillsQuery(p), &out); err != nil {
 		return PerpsPage[PerpsAccountFill]{}, err
 	}
-	if out.More && len(out.Data) > 0 {
+	if out.More {
+		if len(out.Data) == 0 {
+			return PerpsPage[PerpsAccountFill]{}, ErrPaginationNonProgress
+		}
 		out.NextCursor = strconv.FormatInt(out.Data[len(out.Data)-1].TradeID, 10)
-	} else {
-		out.More = false
+		if out.NextCursor == p.Cursor {
+			return PerpsPage[PerpsAccountFill]{}, ErrPaginationNonProgress
+		}
 	}
 	return out, nil
 }
@@ -183,16 +189,16 @@ func (c *AuthenticatedClient) GetFundingPaymentsPage(
 	ctx context.Context,
 	p AccountHistoryParams,
 ) (PerpsPage[PerpsAccountFundingPayment], error) {
-	var out PerpsPage[PerpsAccountFundingPayment]
-	if err := c.getAuthenticatedJSON(
+	return descendingHistory(
 		ctx,
+		c,
 		"/v1/account/funding",
-		historyQuery(p),
-		&out,
-	); err != nil {
-		return PerpsPage[PerpsAccountFundingPayment]{}, err
-	}
-	return out, nil
+		p,
+		24*time.Hour,
+		func(t PerpsAccountFundingPayment) string { return strconv.FormatInt(t.ID, 10) },
+		func(t PerpsAccountFundingPayment) int64 { return t.Timestamp },
+		false,
+	)
 }
 
 // GetDepositsPage returns one page of authenticated collateral deposits.
@@ -200,16 +206,23 @@ func (c *AuthenticatedClient) GetDepositsPage(
 	ctx context.Context,
 	p AccountHistoryParams,
 ) (PerpsPage[PerpsDeposit], error) {
-	var out PerpsPage[PerpsDeposit]
-	if err := c.getAuthenticatedJSON(
+	return descendingHistory(
 		ctx,
+		c,
 		"/v1/account/deposits",
-		historyQuery(p),
-		&out,
-	); err != nil {
-		return PerpsPage[PerpsDeposit]{}, err
-	}
-	return out, nil
+		p,
+		90*24*time.Hour,
+		func(t PerpsDeposit) string { return t.Hash },
+		func(t PerpsDeposit) int64 {
+			return func() int64 {
+				if t.ConfirmedTimestamp != 0 {
+					return t.ConfirmedTimestamp
+				}
+				return t.CreatedTimestamp
+			}()
+		},
+		false,
+	)
 }
 
 // GetWithdrawalsPage returns one page of authenticated collateral withdrawals.
@@ -217,16 +230,23 @@ func (c *AuthenticatedClient) GetWithdrawalsPage(
 	ctx context.Context,
 	p AccountHistoryParams,
 ) (PerpsPage[PerpsWithdrawal], error) {
-	var out PerpsPage[PerpsWithdrawal]
-	if err := c.getAuthenticatedJSON(
+	return descendingHistory(
 		ctx,
+		c,
 		"/v1/account/withdrawals",
-		historyQuery(p),
-		&out,
-	); err != nil {
-		return PerpsPage[PerpsWithdrawal]{}, err
-	}
-	return out, nil
+		p,
+		90*24*time.Hour,
+		func(t PerpsWithdrawal) string { return strconv.Itoa(t.WithdrawalID) },
+		func(t PerpsWithdrawal) int64 {
+			return func() int64 {
+				if t.ConfirmedTimestamp != 0 {
+					return t.ConfirmedTimestamp
+				}
+				return t.CreatedTimestamp
+			}()
+		},
+		false,
+	)
 }
 
 // GetEquityHistoryPage returns one page of timestamped account equity.
@@ -234,16 +254,13 @@ func (c *AuthenticatedClient) GetEquityHistoryPage(
 	ctx context.Context,
 	p AccountIntervalHistoryParams,
 ) (PerpsPage[PerpsEquityPoint], error) {
-	var out PerpsPage[PerpsEquityPoint]
-	if err := c.getAuthenticatedJSON(
+	return intervalHistory(
 		ctx,
+		c,
 		"/v1/account/equity",
-		intervalHistoryQuery(p),
-		&out,
-	); err != nil {
-		return PerpsPage[PerpsEquityPoint]{}, err
-	}
-	return out, nil
+		p,
+		func(t PerpsEquityPoint) int64 { return t.Timestamp },
+	)
 }
 
 // GetPnlHistoryPage returns one page of timestamped account PnL.
@@ -251,16 +268,13 @@ func (c *AuthenticatedClient) GetPnlHistoryPage(
 	ctx context.Context,
 	p AccountIntervalHistoryParams,
 ) (PerpsPage[PerpsPnlPoint], error) {
-	var out PerpsPage[PerpsPnlPoint]
-	if err := c.getAuthenticatedJSON(
+	return intervalHistory(
 		ctx,
+		c,
 		"/v1/account/pnl",
-		intervalHistoryQuery(p),
-		&out,
-	); err != nil {
-		return PerpsPage[PerpsPnlPoint]{}, err
-	}
-	return out, nil
+		p,
+		func(t PerpsPnlPoint) int64 { return t.Timestamp },
+	)
 }
 
 func fillsQuery(p AccountHistoryParams) url.Values {

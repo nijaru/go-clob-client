@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"iter"
 	"net/url"
+	"slices"
 	"strconv"
 	"time"
 )
@@ -27,6 +28,9 @@ func (c *Client) GetInstruments(
 	ctx context.Context,
 	p InstrumentsParams,
 ) ([]PerpsInstrument, error) {
+	if p.InstrumentID != nil && !validInstrumentID(*p.InstrumentID) {
+		return nil, fmt.Errorf("perps: invalid instrument ID")
+	}
 	query := url.Values{}
 	if p.InstrumentID != nil {
 		query.Set("instrument_id", strconv.Itoa(*p.InstrumentID))
@@ -44,6 +48,9 @@ func (c *Client) GetInstruments(
 // GetTickers lists current tickers, enriched with 24h open price and volume
 // from the statistics feed (mirrors the TS SDK's joined ticker response).
 func (c *Client) GetTickers(ctx context.Context, p TickersParams) ([]PerpsTicker, error) {
+	if p.InstrumentID != nil && !validInstrumentID(*p.InstrumentID) {
+		return nil, fmt.Errorf("perps: invalid instrument ID")
+	}
 	query := url.Values{}
 	if p.InstrumentID != nil {
 		query.Set("instrument_id", strconv.Itoa(*p.InstrumentID))
@@ -96,6 +103,12 @@ func (c *Client) getStatistics(ctx context.Context, p TickersParams) ([]PerpsSta
 
 // GetBook returns an order book snapshot for an instrument. Depth defaults to 100.
 func (c *Client) GetBook(ctx context.Context, p BookParams) (*PerpsBook, error) {
+	if !validInstrumentID(p.InstrumentID) {
+		return nil, fmt.Errorf("perps: invalid instrument ID")
+	}
+	if p.Depth != 0 && p.Depth != 10 && p.Depth != 100 && p.Depth != 500 && p.Depth != 1000 {
+		return nil, fmt.Errorf("perps: invalid book depth")
+	}
 	query := url.Values{}
 	query.Set("instrument_id", strconv.Itoa(p.InstrumentID))
 	if p.Depth == 0 {
@@ -138,32 +151,27 @@ func (c *Client) GetCandlesPage(
 	next := ""
 	if more && last != nil {
 		state.StartTimestamp = last.Timestamp + klineIntervalMs(state.Interval)
-		next = encodeCursor(state)
+		if state.StartTimestamp <= last.Timestamp {
+			return nil, "", ErrPaginationNonProgress
+		}
+		next, err = encodeCursor(state)
 	}
-	return items, next, nil
+	return items, next, err
 }
 
 // IterCandles ranges over all candle pages for an instrument.
 func (c *Client) IterCandles(ctx context.Context, p CandlesParams) iter.Seq2[[]PerpsCandle, error] {
 	return func(yield func([]PerpsCandle, error) bool) {
-		state, err := candlesState(p)
-		if err != nil {
-			yield(nil, err)
-			return
-		}
 		for {
-			items, more, last, err := c.candlesPage(ctx, state)
+			items, next, err := c.GetCandlesPage(ctx, p)
 			if err != nil {
 				yield(nil, err)
 				return
 			}
-			if !yield(items, nil) {
+			if !yield(items, nil) || next == "" {
 				return
 			}
-			if !more || last == nil {
-				return
-			}
-			state.StartTimestamp = last.Timestamp + klineIntervalMs(state.Interval)
+			p.Cursor = next
 		}
 	}
 }
@@ -185,6 +193,12 @@ func (c *Client) candlesPage(
 	if n := len(out.Data); n > 0 {
 		last = &out.Data[n-1]
 	}
+	if out.More && (last == nil || last.Timestamp+klineIntervalMs(s.Interval) <= s.StartTimestamp) {
+		return nil, false, nil, ErrPaginationNonProgress
+	}
+	if last != nil && last.Timestamp+klineIntervalMs(s.Interval) > s.EndTimestamp {
+		out.More = false
+	}
 	return out.Data, out.More, last, nil
 }
 
@@ -203,15 +217,22 @@ func (c *Client) GetTradesPage(
 	}
 	next := ""
 	if more && last != nil {
-		// Advance endTimestamp to the last seen timestamp (minus 1 when the
-		// last timestamp is shared with already-seen trades) and carry seen IDs.
-		state.EndTimestamp = last.Timestamp
-		if hasSeen(state.SeenTradeIDs, last.TradeID) {
-			state.EndTimestamp--
+		if last.Timestamp > state.EndTimestamp {
+			return nil, "", ErrPaginationNonProgress
 		}
-		next = encodeCursor(state)
+		if last.Timestamp < state.EndTimestamp {
+			state.SeenTradeIDs = nil
+		}
+		state.EndTimestamp = last.Timestamp
+		for _, item := range items {
+			if item.Timestamp == last.Timestamp &&
+				!slices.Contains(state.SeenTradeIDs, item.TradeID) {
+				state.SeenTradeIDs = append(state.SeenTradeIDs, item.TradeID)
+			}
+		}
+		next, err = encodeCursor(state)
 	}
-	return items, next, nil
+	return items, next, err
 }
 
 // IterTrades ranges over all public-trade pages for an instrument, de-duplicating
@@ -221,33 +242,16 @@ func (c *Client) IterTrades(
 	p TradesParams,
 ) iter.Seq2[[]PerpsPublicTrade, error] {
 	return func(yield func([]PerpsPublicTrade, error) bool) {
-		state, err := tradesState(p)
-		if err != nil {
-			yield(nil, err)
-			return
-		}
 		for {
-			items, more, last, err := c.tradesPage(ctx, state)
+			items, next, err := c.GetTradesPage(ctx, p)
 			if err != nil {
 				yield(nil, err)
 				return
 			}
-			if !yield(items, nil) {
+			if !yield(items, nil) || next == "" {
 				return
 			}
-			if !more || last == nil {
-				return
-			}
-			if hasSeen(state.SeenTradeIDs, last.TradeID) {
-				state.EndTimestamp = last.Timestamp - 1
-			} else {
-				state.EndTimestamp = last.Timestamp
-			}
-			for _, it := range items {
-				if it.Timestamp == last.Timestamp {
-					state.SeenTradeIDs = append(state.SeenTradeIDs, it.TradeID)
-				}
-			}
+			p.Cursor = next
 		}
 	}
 }
@@ -279,6 +283,12 @@ func (c *Client) tradesPage(
 	if n := len(filtered); n > 0 {
 		last = &filtered[n-1]
 	}
+	if len(out.Data) > 0 && out.Data[len(out.Data)-1].Timestamp <= s.StartTimestamp {
+		out.More = false
+	}
+	if out.More && last == nil {
+		return nil, false, nil, ErrPaginationNonProgress
+	}
 	return filtered, out.More, last, nil
 }
 
@@ -298,9 +308,9 @@ func (c *Client) GetFundingHistoryPage(
 	next := ""
 	if more && last != nil {
 		state.EndTimestamp = last.Timestamp - 1
-		next = encodeCursor(state)
+		next, err = encodeCursor(state)
 	}
-	return items, next, nil
+	return items, next, err
 }
 
 // IterFundingHistory ranges over all funding-rate history pages for an instrument.
@@ -309,24 +319,16 @@ func (c *Client) IterFundingHistory(
 	p FundingParams,
 ) iter.Seq2[[]PerpsFundingRate, error] {
 	return func(yield func([]PerpsFundingRate, error) bool) {
-		state, err := fundingState(p)
-		if err != nil {
-			yield(nil, err)
-			return
-		}
 		for {
-			items, more, last, err := c.fundingPage(ctx, state)
+			items, next, err := c.GetFundingHistoryPage(ctx, p)
 			if err != nil {
 				yield(nil, err)
 				return
 			}
-			if !yield(items, nil) {
+			if !yield(items, nil) || next == "" {
 				return
 			}
-			if !more || last == nil {
-				return
-			}
-			state.EndTimestamp = last.Timestamp - 1
+			p.Cursor = next
 		}
 	}
 }
@@ -346,6 +348,12 @@ func (c *Client) fundingPage(
 	var last *PerpsFundingRate
 	if n := len(out.Data); n > 0 {
 		last = &out.Data[n-1]
+	}
+	if out.More && (last == nil || last.Timestamp-1 >= s.EndTimestamp) {
+		return nil, false, nil, ErrPaginationNonProgress
+	}
+	if last != nil && last.Timestamp <= s.StartTimestamp {
+		out.More = false
 	}
 	return out.Data, out.More, last, nil
 }
@@ -376,87 +384,110 @@ type tradesCursor struct {
 }
 
 func candlesState(p CandlesParams) (candlesCursor, error) {
+	s := candlesCursor{
+		Kind:           "perpsCandles",
+		InstrumentID:   p.InstrumentID,
+		StartTimestamp: p.Start,
+		EndTimestamp:   p.End,
+		Interval:       p.Interval,
+	}
 	if p.Cursor != "" {
-		var s candlesCursor
 		if err := decodeCursor(p.Cursor, &s); err != nil {
 			return candlesCursor{}, err
 		}
-		return s, nil
+	} else {
+		now := time.Now().UnixMilli()
+		if s.StartTimestamp == 0 {
+			s.StartTimestamp = now - 24*60*60*1000
+		}
+		if s.EndTimestamp == 0 {
+			s.EndTimestamp = now
+		}
 	}
-	now := time.Now().UnixMilli()
-	start := p.Start
-	if start == 0 {
-		start = now - 24*60*60*1000
+	if s.Kind != "perpsCandles" {
+		return candlesCursor{}, fmt.Errorf("perps: cursor belongs to another endpoint")
 	}
-	end := p.End
-	if end == 0 {
-		end = now
+	if err := validateMarketRange(s.InstrumentID, s.StartTimestamp, s.EndTimestamp); err != nil {
+		return candlesCursor{}, err
 	}
-	return candlesCursor{
-		Kind:           "perpsCandles",
-		InstrumentID:   p.InstrumentID,
-		Interval:       p.Interval,
-		StartTimestamp: start,
-		EndTimestamp:   end,
-	}, nil
+	if klineIntervalMs(s.Interval) == 0 {
+		return candlesCursor{}, fmt.Errorf("perps: invalid candle interval")
+	}
+
+	return s, nil
 }
 
 func fundingState(p FundingParams) (fundingCursor, error) {
+	s := fundingCursor{
+		Kind:           "perpsFundingHistory",
+		InstrumentID:   p.InstrumentID,
+		StartTimestamp: p.Start,
+		EndTimestamp:   p.End,
+	}
 	if p.Cursor != "" {
-		var s fundingCursor
 		if err := decodeCursor(p.Cursor, &s); err != nil {
 			return fundingCursor{}, err
 		}
-		return s, nil
+	} else {
+		now := time.Now().UnixMilli()
+		if s.StartTimestamp == 0 {
+			s.StartTimestamp = now - 24*60*60*1000
+		}
+		if s.EndTimestamp == 0 {
+			s.EndTimestamp = now
+		}
 	}
-	now := time.Now().UnixMilli()
-	start := p.Start
-	if start == 0 {
-		start = now - 24*60*60*1000
+	if s.Kind != "perpsFundingHistory" {
+		return fundingCursor{}, fmt.Errorf("perps: cursor belongs to another endpoint")
 	}
-	end := p.End
-	if end == 0 {
-		end = now
+	if err := validateMarketRange(s.InstrumentID, s.StartTimestamp, s.EndTimestamp); err != nil {
+		return fundingCursor{}, err
 	}
-	return fundingCursor{
-		Kind:           "perpsFundingHistory",
-		InstrumentID:   p.InstrumentID,
-		StartTimestamp: start,
-		EndTimestamp:   end,
-	}, nil
+
+	return s, nil
 }
 
 func tradesState(p TradesParams) (tradesCursor, error) {
+	s := tradesCursor{
+		Kind:           "perpsTrades",
+		InstrumentID:   p.InstrumentID,
+		StartTimestamp: p.Start,
+		EndTimestamp:   p.End,
+	}
 	if p.Cursor != "" {
-		var s tradesCursor
 		if err := decodeCursor(p.Cursor, &s); err != nil {
 			return tradesCursor{}, err
 		}
-		return s, nil
+	} else {
+		now := time.Now().UnixMilli()
+		if s.StartTimestamp == 0 {
+			s.StartTimestamp = now - 24*60*60*1000
+		}
+		if s.EndTimestamp == 0 {
+			s.EndTimestamp = now
+		}
 	}
-	now := time.Now().UnixMilli()
-	start := p.Start
-	if start == 0 {
-		start = now - 24*60*60*1000
+	if s.Kind != "perpsTrades" {
+		return tradesCursor{}, fmt.Errorf("perps: cursor belongs to another endpoint")
 	}
-	end := p.End
-	if end == 0 {
-		end = now
+	if err := validateMarketRange(s.InstrumentID, s.StartTimestamp, s.EndTimestamp); err != nil {
+		return tradesCursor{}, err
 	}
-	return tradesCursor{
-		Kind:           "perpsTrades",
-		InstrumentID:   p.InstrumentID,
-		StartTimestamp: start,
-		EndTimestamp:   end,
-	}, nil
+
+	for _, id := range s.SeenTradeIDs {
+		if id < 0 {
+			return tradesCursor{}, fmt.Errorf("perps: invalid seen trade ID")
+		}
+	}
+	return s, nil
 }
 
-func encodeCursor(v any) string {
+func encodeCursor(v any) (string, error) {
 	b, err := json.Marshal(v)
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("perps: encode cursor: %w", err)
 	}
-	return base64.StdEncoding.EncodeToString(b)
+	return base64.StdEncoding.EncodeToString(b), nil
 }
 
 func decodeCursor(s string, v any) error {
@@ -468,15 +499,6 @@ func decodeCursor(s string, v any) error {
 		return fmt.Errorf("perps: invalid cursor: %w", err)
 	}
 	return nil
-}
-
-func hasSeen(ids []int64, target int64) bool {
-	for _, id := range ids {
-		if id == target {
-			return true
-		}
-	}
-	return false
 }
 
 func klineIntervalMs(interval PerpsKlineInterval) int64 {
@@ -498,6 +520,6 @@ func klineIntervalMs(interval PerpsKlineInterval) int64 {
 	case PerpsKline1w:
 		return 7 * 24 * 60 * 60 * 1000
 	default:
-		return 60 * 1000
+		return 0
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"strconv"
 	"time"
@@ -14,6 +15,62 @@ import (
 
 	"github.com/nijaru/go-clob-client/internal/polyauth"
 )
+
+func perpsTypedData(
+	chainID int64,
+	primary string,
+	fields []apitypes.Type,
+	message apitypes.TypedDataMessage,
+	contract string,
+) apitypes.TypedData {
+	domain := apitypes.TypedDataDomain{
+		Name:    "Polymarket",
+		Version: "1",
+		ChainId: ethmath.NewHexOrDecimal256(chainID),
+	}
+	domainTypes := []apitypes.Type{
+		{Name: "name", Type: "string"},
+		{Name: "version", Type: "string"},
+		{Name: "chainId", Type: "uint256"},
+	}
+	if contract != "" {
+		domain.VerifyingContract = contract
+		domainTypes = append(domainTypes, apitypes.Type{Name: "verifyingContract", Type: "address"})
+	}
+	return apitypes.TypedData{
+		Types:       apitypes.Types{"EIP712Domain": domainTypes, primary: fields},
+		PrimaryType: primary,
+		Domain:      domain,
+		Message:     message,
+	}
+}
+
+func operationTypedData(
+	chainID int64,
+	op []any,
+	salt uint64,
+	ts int64,
+) (apitypes.TypedData, error) {
+	encoded, err := encodePerpsMsgpack(op)
+	if err != nil {
+		return apitypes.TypedData{}, err
+	}
+	return perpsTypedData(
+		chainID,
+		"Op",
+		[]apitypes.Type{
+			{Name: "data", Type: "bytes32"},
+			{Name: "salt", Type: "uint64"},
+			{Name: "ts", Type: "uint64"},
+		},
+		apitypes.TypedDataMessage{
+			"data": "0x" + hex.EncodeToString(crypto.Keccak256(encoded)),
+			"salt": strconv.FormatUint(salt, 10),
+			"ts":   strconv.FormatInt(ts, 10),
+		},
+		"",
+	), nil
+}
 
 func randomPerpsSalt() (uint64, error) {
 	var raw [8]byte
@@ -30,37 +87,11 @@ func signPerpsOperation(
 	salt uint64,
 	timestamp int64,
 ) (string, error) {
-	encoded, err := encodePerpsMsgpack(op)
+	data, err := operationTypedData(chainID, op, salt, timestamp)
 	if err != nil {
 		return "", err
 	}
-	dataHash := crypto.Keccak256(encoded)
-	typedData := apitypes.TypedData{
-		Types: apitypes.Types{
-			"EIP712Domain": {
-				{Name: "name", Type: "string"},
-				{Name: "version", Type: "string"},
-				{Name: "chainId", Type: "uint256"},
-			},
-			"Op": {
-				{Name: "data", Type: "bytes32"},
-				{Name: "salt", Type: "uint64"},
-				{Name: "ts", Type: "uint64"},
-			},
-		},
-		PrimaryType: "Op",
-		Domain: apitypes.TypedDataDomain{
-			Name:    "Polymarket",
-			Version: "1",
-			ChainId: ethmath.NewHexOrDecimal256(chainID),
-		},
-		Message: apitypes.TypedDataMessage{
-			"data": "0x" + fmt.Sprintf("%x", dataHash),
-			"salt": strconv.FormatUint(salt, 10),
-			"ts":   strconv.FormatInt(timestamp, 10),
-		},
-	}
-	return polyauth.SignTypedData(signer, typedData)
+	return polyauth.SignTypedData(signer, data)
 }
 
 func makePerpsSignedCommand(
