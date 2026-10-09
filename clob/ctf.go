@@ -32,11 +32,12 @@ func (c *SignerClient) sendContractTxAndWait(
 	data []byte,
 	label string,
 ) (*types.Receipt, error) {
-	hash, err := c.broadcastWalletCall(ctx, tokenCall(to, data))
+	call := tokenCall(to, append([]byte(nil), data...))
+	hash, err := c.broadcastWalletCall(ctx, call)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", label, err)
 	}
-	receipt, err := c.waitWalletTransactionReceipt(ctx, hash.Hex())
+	receipt, err := c.waitWalletCallReceipt(ctx, call, hash.Hex())
 	if err != nil {
 		sendErr := walletSubmissionError(hash, false, err)
 		sendErr.Submission.ConfirmedReceipt = receipt

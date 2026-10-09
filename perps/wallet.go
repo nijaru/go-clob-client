@@ -14,7 +14,8 @@ import (
 // engine. Transactions accepts a signing.Signer or local PrivateKey; CLOB L2
 // credentials are not required. Smart wallets require relayer auth, selected
 // by context or BuilderAuth. EOA sends use signing.TransactionSigner or optional
-// wallet-owned signing.TransactionSender; Safe/proxy relay signing uses
+// wallet-owned signing.TransactionSender. Optional signing.TransactionWaiter
+// supports verified replacement completion; Safe/proxy relay signing uses
 // signing.MessageSigner.
 // None of these credentials is perps auth.
 // Owner.Wallet may be omitted to use the derived transaction wallet.

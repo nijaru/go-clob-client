@@ -70,14 +70,10 @@ func (w *Wallet) SendTransaction(
 	if !ok {
 		return common.Hash{}, ErrTransactionSendingUnsupported
 	}
-	if request.ChainID == nil || request.ChainID.Sign() <= 0 || request.Value == nil ||
-		request.Value.Sign() < 0 || request.Value.BitLen() > 256 {
-		return common.Hash{}, fmt.Errorf("signing: invalid transaction request")
+	request, err := w.transactionRequest(request)
+	if err != nil {
+		return common.Hash{}, err
 	}
-	request.ChainID = new(big.Int).Set(request.ChainID)
-	request.Value = new(big.Int).Set(request.Value)
-	request.Data = append([]byte(nil), request.Data...)
-	request.From = w.address
 	hash, err := sender.SendTransaction(ctx, request)
 	err = errors.Join(err, ctx.Err())
 	if hash == (common.Hash{}) && err == nil {
@@ -87,4 +83,21 @@ func (w *Wallet) SendTransaction(
 		return hash, &TransactionSendError{Hash: hash, Err: err}
 	}
 	return hash, nil
+}
+
+func (w *Wallet) transactionRequest(request TransactionRequest) (TransactionRequest, error) {
+	if request.ChainID == nil || request.ChainID.Sign() <= 0 || request.Value == nil ||
+		request.Value.Sign() < 0 || request.Value.BitLen() > 256 {
+		return TransactionRequest{}, fmt.Errorf("signing: invalid transaction request")
+	}
+	request.From = w.address
+	return cloneTransactionRequest(request), nil
+}
+
+// cloneTransactionRequest copies an already validated call intent.
+func cloneTransactionRequest(request TransactionRequest) TransactionRequest {
+	request.ChainID = new(big.Int).Set(request.ChainID)
+	request.Value = new(big.Int).Set(request.Value)
+	request.Data = append([]byte(nil), request.Data...)
+	return request
 }

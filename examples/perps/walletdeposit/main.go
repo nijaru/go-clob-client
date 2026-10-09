@@ -54,7 +54,8 @@ func run() error {
 		return fmt.Errorf("unknown wallet type %q", *kind)
 	}
 	// Replace this local convenience with a hardware/remote signing.Signer.
-	// For managed EOA sends it must also implement signing.TransactionSigner.
+	// EOA execution needs signing.TransactionSigner or TransactionSender.
+	// A provider may also implement TransactionWaiter for verified replacements.
 	signer, err := signing.NewLocalSigner(os.Getenv("PRIVATE_KEY"))
 	if err != nil {
 		return err
@@ -187,7 +188,7 @@ func run() error {
 	receipts, err := tx.Wait(ctx)
 	for _, receipt := range receipts {
 		fmt.Printf(
-			"RPC receipt hash=%s block=%s status=%d\n",
+			"mined receipt hash=%s block=%s status=%d\n",
 			receipt.TxHash,
 			receipt.BlockNumber,
 			receipt.Status,

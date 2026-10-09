@@ -96,14 +96,24 @@ Unsigned `OwnerClient.PrepareDeposit` needs none of those execution credentials.
   `DeployDepositWallet` explicitly submits current beacon-wallet creation.
   `Readiness` reports on-chain code and relayer registry status separately.
   Registry readiness never substitutes for code or a transaction receipt.
-- `CollateralTransaction.Wait(ctx)` checks relayer outcomes and successful RPC
-  receipts, validates receipt identity and chain, and returns collected receipts
+- `CollateralTransaction.Wait(ctx)` checks relayer outcomes and mined receipts,
+  validates receipt identity and chain, and returns collected receipts
   even on failure. It sends nothing, is cancellable, and supports concurrent
   waits. Success means mined execution, **not** perps ledger credit or reorg
   finality. It reconciles uncertain hashes, but never sends a missing tail.
   A partial EOA sequence returns `ErrCollateralTransactionIncomplete` after
   resolving its recorded receipts, rather than reporting the whole sequence
   complete.
+- EOA wallets may implement `signing.TransactionWaiter` to reconcile fee
+  replacements. The provider returns a signed mined transaction and its receipt;
+  the SDK verifies the pinned sender, chain, original recipient/value/calldata,
+  receipt hash, mined block and success/revert status. A cancellation transaction
+  or changed call cannot complete the original intent. Submission hashes remain
+  unchanged; returned `receipt.TxHash` identifies the final transaction. Without
+  this capability, completion polls the original hash through RPC as before.
+  The wallet provider owns replacement association: an opaque original hash
+  cannot prove a nonce. The SDK does not scan blocks, submit replacements or
+  establish finality. The configured RPC chain check still applies.
 
 RPC chain identity is checked before submission. Gas estimation, EIP-1559
 signing and relayer serialization remain owned by CLOB. Its gasless engine may

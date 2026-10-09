@@ -73,11 +73,6 @@ func NewWallet(signer Signer) (*Wallet, error) {
 	if address == (common.Address{}) {
 		return nil, ErrInvalidSigner
 	}
-	// Reuse an existing boundary: wrapping Wallet would falsely expose all of
-	// its optional methods as capabilities of the underlying signer.
-	if wallet, ok := signer.(*Wallet); ok {
-		return wallet, nil
-	}
 	return &Wallet{signer: signer, address: address}, nil
 }
 

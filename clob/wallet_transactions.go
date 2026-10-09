@@ -16,6 +16,8 @@ import (
 
 // WalletTransactionHandle retains EOA submission attempts or a relayer batch.
 // Unknown external hashes remain uncertain attempts, never successful completion.
+// Exported fields are read-only snapshots; hashes always identify the original
+// submissions. WaitReceipt(s) and Wait expose the final completion hashes.
 type WalletTransactionHandle struct {
 	TransactionID   string
 	TransactionHash string
@@ -23,6 +25,15 @@ type WalletTransactionHandle struct {
 	RequestedCalls  int
 	relayer         *GaslessTransactionHandle
 	signer          *SignerClient
+	attempts        []walletTransactionAttempt
+	requestedCalls  int
+}
+
+// Each attempt owns its immutable original intent and submission. Public fields
+// are reporting snapshots; reconciliation never trusts caller-mutated aliases.
+type walletTransactionAttempt struct {
+	call       TransactionCall
+	submission WalletTransactionSubmission
 }
 
 func (h *WalletTransactionHandle) Wait(ctx context.Context) (*TransactionOutcome, error) {
@@ -66,18 +77,28 @@ func (h *WalletTransactionHandle) WaitReceipts(ctx context.Context) ([]*types.Re
 		}
 		return []*types.Receipt{receipt}, err
 	}
-	if len(h.Submissions) == 0 || h.RequestedCalls < len(h.Submissions) {
+	if len(h.attempts) == 0 || h.requestedCalls < len(h.attempts) {
 		return nil, fmt.Errorf("wallet: no valid EOA submissions to wait for")
 	}
-	receipts := make([]*types.Receipt, 0, len(h.Submissions))
-	for _, submission := range h.Submissions {
+	receipts := make([]*types.Receipt, 0, len(h.attempts))
+	for _, attempt := range h.attempts {
+		submission := attempt.submission
 		if submission.TransactionHash == "" {
 			return receipts, &WalletTransactionError{
 				Submission: submission,
 				Err:        ErrWalletTransactionUnknownHash,
 			}
 		}
-		receipt, err := h.signer.waitWalletTransactionReceipt(ctx, submission.TransactionHash)
+		receipt, err := h.signer.waitWalletCallReceipt(
+			ctx,
+			attempt.call,
+			submission.TransactionHash,
+		)
+		// A failed recheck cannot erase a receipt observed during execution.
+		// Keep its error: prior mining is not a new completion/finality claim.
+		if receipt == nil && err != nil {
+			receipt = submission.ConfirmedReceipt
+		}
 		if receipt != nil {
 			receipts = append(receipts, receipt)
 		}
@@ -85,7 +106,7 @@ func (h *WalletTransactionHandle) WaitReceipts(ctx context.Context) ([]*types.Re
 			return receipts, err
 		}
 	}
-	if len(h.Submissions) != h.RequestedCalls {
+	if len(h.attempts) != h.requestedCalls {
 		return receipts, ErrWalletTransactionIncomplete
 	}
 	return receipts, nil
@@ -160,7 +181,8 @@ func (c *SignerClient) ExecuteWalletTransaction(
 // ExecuteEOACalls executes a non-atomic EOA sequence without CLOB credentials.
 // Each preceding call must mine successfully before the next is sent. Errors
 // retain all attempts, including an external send with an unknown hash. Receipt
-// validation proves mining status and identity, not an opaque sender's intent.
+// validation via RPC proves mining status and identity, not an opaque sender's
+// intent. Optional wallet completion additionally verifies the signed call.
 func (c *SignerClient) ExecuteEOACalls(
 	ctx context.Context,
 	calls []TransactionCall,
@@ -183,14 +205,27 @@ func (c *SignerClient) ExecuteEOACalls(
 			Data:  append([]byte(nil), call.Data...),
 		}
 	}
-	handle := &WalletTransactionHandle{RequestedCalls: len(prepared), signer: c}
+	handle := &WalletTransactionHandle{
+		RequestedCalls: len(prepared),
+		requestedCalls: len(prepared),
+		signer:         c,
+	}
 	for i, call := range prepared {
 		hash, err := c.broadcastWalletCall(ctx, call)
 		var sendErr *WalletTransactionError
-		if errors.As(err, &sendErr) {
-			handle.Submissions = append(handle.Submissions, sendErr.Submission)
+		var submission WalletTransactionSubmission
+		attempted := errors.As(err, &sendErr) || hash != (common.Hash{})
+		if sendErr != nil {
+			submission = sendErr.Submission
 		} else if hash != (common.Hash{}) {
-			handle.Submissions = append(handle.Submissions, WalletTransactionSubmission{TransactionHash: hash.Hex()})
+			submission.TransactionHash = hash.Hex()
+		}
+		if attempted {
+			handle.attempts = append(
+				handle.attempts,
+				walletTransactionAttempt{call: call, submission: submission},
+			)
+			handle.Submissions = append(handle.Submissions, submission)
 		}
 		if hash != (common.Hash{}) {
 			handle.TransactionHash = hash.Hex()
@@ -202,7 +237,8 @@ func (c *SignerClient) ExecuteEOACalls(
 			return handle, fmt.Errorf("wallet: broadcast call %d of %d: %w", i+1, len(calls), err)
 		}
 		if i+1 < len(calls) {
-			receipt, err := c.waitWalletTransactionReceipt(ctx, handle.TransactionHash)
+			receipt, err := c.waitWalletCallReceipt(ctx, call, hash.Hex())
+			handle.attempts[i].submission.ConfirmedReceipt = receipt
 			handle.Submissions[i].ConfirmedReceipt = receipt
 			if err != nil {
 				return handle, fmt.Errorf("wallet: confirm call %d of %d: %w", i+1, len(calls), err)
@@ -210,6 +246,25 @@ func (c *SignerClient) ExecuteEOACalls(
 		}
 	}
 	return handle, nil
+}
+
+// waitWalletCallReceipt uses verified provider completion only when the original
+// call intent is available. Hash-only reconciliation retains strict RPC identity.
+func (c *SignerClient) waitWalletCallReceipt(
+	ctx context.Context,
+	call TransactionCall,
+	hash string,
+) (*types.Receipt, error) {
+	if !c.signer.CanWaitTransactions() {
+		return c.waitWalletTransactionReceipt(ctx, hash)
+	}
+	_, receipt, err := c.signer.WaitTransaction(ctx, signing.TransactionRequest{
+		ChainID: big.NewInt(c.chainID), To: call.To, Value: call.Value, Data: call.Data,
+	}, common.HexToHash(hash))
+	if errors.Is(err, signing.ErrTransactionReverted) {
+		err = errors.Join(ErrWalletTransactionFailed, err)
+	}
+	return receipt, err
 }
 
 func (c *SignerClient) broadcastWalletCall(

@@ -40,7 +40,9 @@ var (
 )
 
 // Wait reconciles every recorded submission, including uncertain EOA hashes,
-// through independent RPC receipts. An unsubmitted tail returns
+// through verified wallet completion when supported, otherwise independent RPC
+// receipts. Original submission hashes are retained; receipt.TxHash identifies
+// the final transaction, including a replacement. An unsubmitted tail returns
 // ErrCollateralTransactionIncomplete, never success. Collected receipts are
 // returned on error, including a revert. Success means mined execution, not
 // perps ledger credit, registry readiness, reorg finality or ERC-20 return-value
@@ -53,7 +55,18 @@ func (t *CollateralTransaction) Wait(ctx context.Context) ([]*types.Receipt, err
 	// just the chain seen before submission. CLOB owns receipt integrity checks.
 	ec, err := t.wallet.dial(ctx)
 	if err != nil {
-		return nil, err
+		// A cancelled/failed chain check cannot undo an already observed
+		// prefix. These reporting snapshots are not a new completion claim.
+		var receipts []*types.Receipt
+		for _, submission := range t.Submissions {
+			if submission.ConfirmedReceipt != nil {
+				receipts = append(receipts, submission.ConfirmedReceipt)
+				if submission.ConfirmedReceipt.Status == types.ReceiptStatusFailed {
+					err = errors.Join(err, ErrCollateralTransactionReverted)
+				}
+			}
+		}
+		return receipts, err
 	}
 	ec.Close()
 	if t.handle != nil {
