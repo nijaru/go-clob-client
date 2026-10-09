@@ -30,7 +30,8 @@ go get github.com/nijaru/go-clob-client@latest
 The module exposes several focused packages:
 
 - **`clob`** — trading, orderbooks, prices, account management, websockets, heartbeats, wallet operations
-- **`data`** — read-only analytics: positions, trades, activity, combo portfolios, holders, leaderboards
+- **`data`** — Data API v2: positions, trades, activity, combo portfolios, analytics, and leaderboards
+- **`data/legacy`** — explicit v1 Data API contracts retained for Rust SDK coverage
 - **`gamma`** — markets, events, tags, sports, comments, profiles, and clarifications
 - **`bridge`** — deposit-address discovery
 - **`perps`** — public perpetuals market data and authenticated account/session access
@@ -159,11 +160,21 @@ for order, err := range client.IterOpenOrders(ctx, clob.OpenOrderParams{}) {
 ```go
 import "github.com/nijaru/go-clob-client/data"
 
-client := data.New(data.Config{})
+client, err := data.NewClient(data.Config{})
+if err != nil {
+	log.Fatal(err)
+}
 
-positions, err := client.GetPositions(ctx, data.PositionParams{
+page, err := client.GetPositions(ctx, data.PositionsParams{
 	User: "0x1234...",
+	Page: data.PageParams{Limit: 100},
 })
+if err != nil {
+	log.Fatal(err)
+}
+for _, position := range page.Items {
+	fmt.Println(position.AssetID, position.CurrentSize, position.CurrentValue)
+}
 ```
 
 ## Client Tiers

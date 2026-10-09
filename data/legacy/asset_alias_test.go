@@ -1,4 +1,4 @@
-package data
+package legacy
 
 import (
 	"testing"

@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	json "github.com/go-json-experiment/json"
 	"github.com/go-json-experiment/json/jsontext"
@@ -293,6 +294,11 @@ func (c *Client) doJSON(
 			*target = strings.TrimSpace(string(payload))
 		}
 		return nil
+	case io.Writer:
+		if _, err := io.Copy(target, resp.Body); err != nil {
+			return fmt.Errorf("write response body: %w", err)
+		}
+		return nil
 	case *[]byte:
 		payload, err := io.ReadAll(resp.Body)
 		if err != nil {
@@ -455,11 +461,17 @@ func marshalBody(body any) ([]byte, error) {
 }
 
 func newAPIError(resp *http.Response, body, requestBody []byte) *APIError {
+	// Prefer the server's clock when interpreting an absolute Retry-After.
+	// This also avoids making a skewed client clock retry too early.
+	reference := time.Now()
+	if date, err := http.ParseTime(resp.Header.Get("Date")); err == nil {
+		reference = date
+	}
 	err := &APIError{
 		StatusCode:         resp.StatusCode,
 		Body:               bytes.Clone(body),
 		RequestBody:        bytes.Clone(requestBody),
-		RetryAfterSeconds:  retryAfterSeconds(resp.Header.Get("Retry-After"), body),
+		RetryAfterSeconds:  retryAfterSeconds(resp.Header.Get("Retry-After"), body, reference),
 		RateLimit:          parseRateLimitHeaders(resp.Header),
 		TradingRestriction: detectTradingRestriction(resp, body),
 	}
@@ -493,8 +505,12 @@ func newAPIError(resp *http.Response, body, requestBody []byte) *APIError {
 
 // retryAfterSeconds extracts a finite, non-negative retry delay. A valid
 // Retry-After header takes precedence over the JSON body fallback.
-func retryAfterSeconds(header string, body []byte) *float64 {
+func retryAfterSeconds(header string, body []byte, reference time.Time) *float64 {
 	if seconds, ok := parseRetryAfterNumber(header); ok {
+		return &seconds
+	}
+	if date, err := http.ParseTime(strings.TrimSpace(header)); err == nil {
+		seconds := math.Max(0, date.Sub(reference).Seconds())
 		return &seconds
 	}
 
