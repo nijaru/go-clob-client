@@ -187,16 +187,12 @@ func (s *Session) CancelOrdersWithRetry(
 			return fail(err, attempt)
 		}
 		if attempt > 0 {
-			delay := min(100*time.Millisecond*time.Duration(1<<min(attempt-1, 4)), time.Second)
-			if time.Now().Add(delay).After(deadline) {
-				break
+			ready, err := waitCancelRetry(ctx, attempt, deadline)
+			if err != nil {
+				return fail(err, attempt)
 			}
-			timer := time.NewTimer(delay)
-			select {
-			case <-ctx.Done():
-				timer.Stop()
-				return fail(ctx.Err(), attempt)
-			case <-timer.C:
+			if !ready {
+				break
 			}
 		}
 		var ids any
@@ -254,4 +250,24 @@ func (s *Session) CancelOrdersWithRetry(
 		pending = retry
 	}
 	return results, nil
+}
+
+// A timer schedules eligibility, not a deadline guarantee: the goroutine may
+// resume late. Recheck both cancellation and expiry before authorizing a resend.
+func waitCancelRetry(ctx context.Context, attempt int, deadline time.Time) (bool, error) {
+	delay := min(100*time.Millisecond*time.Duration(1<<min(attempt-1, 4)), time.Second)
+	if time.Now().Add(delay).After(deadline) {
+		return false, nil
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false, ctx.Err()
+	case <-timer.C:
+	}
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	return time.Now().Before(deadline), nil
 }
