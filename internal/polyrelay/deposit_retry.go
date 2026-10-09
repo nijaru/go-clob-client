@@ -1,7 +1,7 @@
 package polyrelay
 
 import (
-	"crypto/ecdsa"
+	"context"
 	"errors"
 	"fmt"
 	"math/big"
@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
+	"github.com/nijaru/go-clob-client/signing"
 )
 
 // CorrectDepositNonce re-signs a deposit batch with the on-chain nonce reported
@@ -16,8 +17,9 @@ import (
 // a fresh params fetch can return the same stale nonce indefinitely.
 // It returns nil,nil when the error is not a deposit nonce mismatch.
 func CorrectDepositNonce(
+	ctx context.Context,
 	cfg GaslessConfig,
-	key *ecdsa.PrivateKey,
+	key *signing.Wallet,
 	payload *SubmitRequest,
 	submitErr error,
 ) (*SubmitRequest, error) {
@@ -68,7 +70,14 @@ func CorrectDepositNonce(
 		}
 		calls[i] = TransactionCall{To: common.HexToAddress(call.Target), Value: value, Data: data}
 	}
+	if key == nil {
+		return nil, ErrNilSigner
+	}
+	if key.Address() != cfg.Signer {
+		return nil, fmt.Errorf("polyrelay: signer address mismatch")
+	}
 	sig, err := Sign(
+		ctx,
 		TransactionTypeWallet,
 		key,
 		RelayRequest{

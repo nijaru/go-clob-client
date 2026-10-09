@@ -238,7 +238,7 @@ func (c *AuthenticatedClient) signSessionKeyMutation(
 		ctx,
 		c.RelayerTransport(),
 		cfg,
-		c.signer.PrivateKey(),
+		c.signer,
 		[]TransactionCall{tokenCall(c.WalletAddress(), data)},
 		"",
 	)

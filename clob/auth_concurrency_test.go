@@ -118,8 +118,14 @@ func TestAuthPromotionSharesCacheAndPreservesResponseCallbacks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	signer, err := base.AsSigner(
+	local, err := polyauth.ParsePrivateKey(
 		"0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signer, err := base.AsSigner(
+		local,
 		SignatureTypeEOA,
 		"",
 	)

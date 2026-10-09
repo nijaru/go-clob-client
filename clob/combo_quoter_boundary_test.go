@@ -87,7 +87,7 @@ func TestComboQuoterSessionKeyBoundary(t *testing.T) {
 	) {
 		t.Fatalf("session-key websocket: %v", err)
 	}
-	if _, err := client.buildComboQuoterQuote(comboQuoteRequest(), ComboRFQQuoteResponse{Price: "0.5"}); !errors.Is(
+	if _, err := client.buildComboQuoterQuote(t.Context(), comboQuoteRequest(), ComboRFQQuoteResponse{Price: "0.5"}); !errors.Is(
 		err,
 		ErrComboSessionKeyUnsupported,
 	) {

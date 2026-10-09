@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/nijaru/go-clob-client/signing"
 )
 
 const (
@@ -68,9 +70,11 @@ type Config struct {
 	BuilderGatewayHost string
 	// ChainID is the EVM chain ID. Defaults to PolygonChainID (137).
 	ChainID int64
-	// PrivateKey is the hex-encoded Ethereum private key used for signing.
-	// Required for SignerClient and AuthenticatedClient.
+	// PrivateKey is a local signing convenience. Set exactly one of PrivateKey
+	// and Signer for SignerClient or AuthenticatedClient.
 	PrivateKey string
+	// Signer supports external or hardware EOA signing without exporting a key.
+	Signer signing.Signer
 	// Credentials are the Polymarket API credentials for L2 authenticated requests.
 	// Required for AuthenticatedClient.
 	Credentials *Credentials
@@ -123,6 +127,9 @@ type Config struct {
 }
 
 func (c Config) validate() error {
+	if c.PrivateKey != "" && c.Signer != nil {
+		return fmt.Errorf("set exactly one of PrivateKey and Signer")
+	}
 	if c.RetryMax < 0 || c.RetryBackoff < 0 || c.TickSizeCacheTTL < 0 || c.HeartbeatInterval < 0 ||
 		c.RateBurst < 0 {
 		return fmt.Errorf("retry, cache, heartbeat, and burst settings must not be negative")

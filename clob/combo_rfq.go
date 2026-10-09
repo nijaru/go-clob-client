@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
-	"github.com/nijaru/go-clob-client/internal/polyauth"
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
 	"github.com/quagmt/udecimal"
 )
@@ -438,7 +437,7 @@ func (c *AuthenticatedClient) AcceptComboQuote(
 	if c.signatureType == SignatureTypePoly1271 {
 		order.Signer = order.Maker
 	}
-	if err := c.signComboOrder(&order, contracts.ExchangeV3); err != nil {
+	if err := c.signComboOrder(ctx, &order, contracts.ExchangeV3); err != nil {
 		return nil, fmt.Errorf("combo accept: sign order: %w", err)
 	}
 
@@ -644,13 +643,19 @@ func (c *SignerClient) comboMakerAddress() string {
 // comboProtocolVersion is the Exchange V3 EIP-712 domain version.
 const comboProtocolVersion = "3"
 
-func (c *SignerClient) signComboOrder(order *comboSignedOrderWire, exchange string) error {
+func (c *SignerClient) signComboOrder(
+	ctx context.Context,
+	order *comboSignedOrderWire,
+	exchange string,
+) error {
 	typed := buildOrderTypedData(c.chainID, comboProtocolVersion, exchange, order.typedOrder())
 	var err error
 	if c.signatureType == SignatureTypePoly1271 {
-		order.Signature, err = signPoly1271Order(c.signer, typed, c.chainID)
+		order.Signature, err = signPoly1271Order(ctx, c.signer, typed, c.chainID)
 	} else {
-		order.Signature, err = polyauth.SignTypedData(c.signer, typed)
+		var sig []byte
+		sig, err = c.signer.SignTypedData(ctx, typed)
+		order.Signature = "0x" + hex.EncodeToString(sig)
 	}
 	return err
 }

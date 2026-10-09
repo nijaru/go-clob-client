@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/nijaru/go-clob-client/internal/polyauth"
+	"github.com/nijaru/go-clob-client/signing"
 )
 
 // Independent eth-account 0.13.x EIP-712 fixtures, with the nested Solady
@@ -31,8 +31,14 @@ func TestCrossSDKOrderSigningFixtures(t *testing.T) {
 	if err := json.Unmarshal(data, &fixtures); err != nil {
 		t.Fatal(err)
 	}
-	signer, err := polyauth.ParsePrivateKey(
+	local, err := signing.NewLocalSigner(
 		"0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signer, err := signing.NewWallet(
+		&externalTestSigner{address: local.Address(), sign: local.SignTypedData},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -68,9 +74,11 @@ func TestCrossSDKOrderSigningFixtures(t *testing.T) {
 			}
 			var signature string
 			if f.Kind == "deposit" {
-				signature, err = signPoly1271Order(signer, typed, 137)
+				signature, err = signPoly1271Order(t.Context(), signer, typed, 137)
 			} else {
-				signature, err = polyauth.SignTypedData(signer, typed)
+				var sig []byte
+				sig, err = signer.SignTypedData(t.Context(), typed)
+				signature = "0x" + hex.EncodeToString(sig)
 			}
 			if err != nil {
 				t.Fatal(err)

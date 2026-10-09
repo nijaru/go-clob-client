@@ -1,6 +1,7 @@
 package clob
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -52,6 +53,7 @@ func comboPositionValid(id string) bool {
 }
 
 func (c *AuthenticatedClient) buildComboQuoterQuote(
+	ctx context.Context,
 	request ComboRFQQuoteRequest,
 	response ComboRFQQuoteResponse,
 ) (comboQuoterQuote, error) {
@@ -156,7 +158,7 @@ func (c *AuthenticatedClient) buildComboQuoterQuote(
 	if c.signatureType == SignatureTypePoly1271 {
 		order.Signer = order.Maker
 	}
-	if err := c.signComboOrder(&order, contracts.ExchangeV3); err != nil {
+	if err := c.signComboOrder(ctx, &order, contracts.ExchangeV3); err != nil {
 		return empty, err
 	}
 	wireSide := uint8(0)

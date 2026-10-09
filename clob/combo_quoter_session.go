@@ -242,7 +242,7 @@ func (s *ComboRFQSession) Quote(
 	if err := ctx.Err(); err != nil {
 		return ComboRFQQuoteReference{}, err
 	}
-	quote, err := s.client.buildComboQuoterQuote(request, response)
+	quote, err := s.client.buildComboQuoterQuote(ctx, request, response)
 	if err != nil {
 		return ComboRFQQuoteReference{}, err
 	}

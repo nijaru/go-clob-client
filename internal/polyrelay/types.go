@@ -91,7 +91,7 @@ type RelayRequest struct {
 
 // Sentinels for invalid request inputs. Use errors.Is to distinguish.
 var (
-	ErrNilKey        = errors.New("polyrelay: nil private key")
+	ErrNilSigner     = errors.New("polyrelay: nil signer")
 	ErrEmptyBatch    = errors.New("polyrelay: empty call batch")
 	ErrUnknownType   = errors.New("polyrelay: unknown relayer transaction type")
 	ErrNilValue      = errors.New("polyrelay: nil value in uint256 field")

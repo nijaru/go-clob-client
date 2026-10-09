@@ -1,7 +1,7 @@
 package polyrelay
 
 import (
-	"crypto/ecdsa"
+	"context"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -10,58 +10,61 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
+	"github.com/nijaru/go-clob-client/signing"
 )
 
-// Each scheme produces a 65-byte secp256k1 signature deterministically
-// (RFC 6979), matching eth-account/coincurve and ts-sdk's ox output for
-// identical inputs. See signer_test.go for byte-exact parity vectors.
+// The local adapter uses RFC 6979, matching eth-account/coincurve and
+// ts-sdk's ox output. External signers need not be deterministic; all signatures
+// must recover the pinned EOA. See signer_test.go for byte-exact local vectors.
 const (
 	proxyPrefix    = "rlx:"          // legacy proxy relay preimage prefix
 	depositDomName = "DepositWallet" // Solady deposit-wallet EIP-712 domain
 	depositDomVer  = "1"
 )
 
-// scheme describes how a wallet family turns a request into a signature:
-// the digest to sign, whether the digest is EIP-191-wrapped (personal-signed)
-// before signing, and an optional recovery-byte repack.
-type scheme struct {
-	digest func(*RelayRequest) ([]byte, error)
-	wrap   bool // EIP-191 personal-sign over the digest (double-hash)
-	pack   func(sig []byte)
-}
-
-// schemes is the single dispatch table. Adding a wallet family means adding a
-// row here — callers never switch on transaction type.
-var schemes = map[RelayerTransactionType]scheme{
-	TransactionTypeProxy:  {digest: proxyDigest, wrap: true},
-	TransactionTypeSafe:   {digest: safeDigest, wrap: true, pack: packSafeSignature},
-	TransactionTypeWallet: {digest: depositDigest, wrap: false},
-}
-
-// Sign produces the relayer signature for req under the given wallet type.
-// The returned signature is a raw 65-byte value (recovery byte in {27,28} or
-// its scheme-specific repacked form); use HexSignature at the JSON boundary.
-func Sign(txType RelayerTransactionType, key *ecdsa.PrivateKey, req RelayRequest) ([]byte, error) {
-	if key == nil {
-		return nil, ErrNilKey
+// Sign verifies the EOA signature before scheme-specific wrapping. Safe and
+// Proxy require personal signing; deposit wallets require structured EIP-712.
+func Sign(
+	ctx context.Context,
+	txType RelayerTransactionType,
+	signer *signing.Wallet,
+	req RelayRequest,
+) ([]byte, error) {
+	if signer == nil {
+		return nil, ErrNilSigner
 	}
-	sch, ok := schemes[txType]
-	if !ok {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if txType == TransactionTypeWallet {
+		data, err := depositTypedData(&req)
+		if err != nil {
+			return nil, err
+		}
+		return signer.SignTypedData(ctx, data)
+	}
+	var digest []byte
+	var err error
+	switch txType {
+	case TransactionTypeProxy:
+		digest, err = proxyDigest(&req)
+	case TransactionTypeSafe:
+		digest, err = safeDigest(&req)
+	default:
 		return nil, fmt.Errorf("%w: %q", ErrUnknownType, txType)
 	}
-	digest, err := sch.digest(&req)
 	if err != nil {
 		return nil, err
 	}
-	if sch.wrap {
-		digest = personalHash(digest)
+	if req.Signer != (common.Address{}) && req.Signer != signer.Address() {
+		return nil, fmt.Errorf("polyrelay: signer address mismatch")
 	}
-	sig, err := signHash(key, digest)
+	sig, err := signer.SignMessage(ctx, digest)
 	if err != nil {
 		return nil, err
 	}
-	if sch.pack != nil {
-		sch.pack(sig)
+	if txType == TransactionTypeSafe {
+		packSafeSignature(sig)
 	}
 	return sig, nil
 }
@@ -78,30 +81,6 @@ func HexSignature(sig []byte) (string, error) {
 // ---------------------------------------------------------------------------
 // Shared primitives
 // ---------------------------------------------------------------------------
-
-// personalHash returns the EIP-191 "personal sign" digest of msg
-// (keccak256 of "\x19Ethereum Signed Message:\n<len>" + msg). It builds one
-// buffer sized to header + decimal length + message.
-func personalHash(msg []byte) []byte {
-	buf := make([]byte, 0, len(eip191Header)+4+len(msg))
-	buf = append(buf, eip191Header...)
-	buf = strconv.AppendInt(buf, int64(len(msg)), 10)
-	buf = append(buf, msg...)
-	return crypto.Keccak256(buf)
-}
-
-const eip191Header = "\x19Ethereum Signed Message:\n"
-
-// signHash signs a 32-byte digest with key, returning a 65-byte signature with
-// the recovery byte normalized to {27,28}.
-func signHash(key *ecdsa.PrivateKey, digest []byte) ([]byte, error) {
-	sig, err := crypto.Sign(digest, key)
-	if err != nil {
-		return nil, fmt.Errorf("polyrelay: sign: %w", err)
-	}
-	sig[64] += 27
-	return sig, nil
-}
 
 // pad32 writes v into a 32-byte big-endian buffer (right-justified via
 // FillBytes). Returns a typed error for out-of-range caller input.
@@ -223,17 +202,20 @@ func packSafeSignature(sig []byte) {
 // WALLET (deposit) scheme: EIP-712 Batch, signed directly (no double-hash)
 // ---------------------------------------------------------------------------
 
-func depositDigest(req *RelayRequest) ([]byte, error) {
+func depositTypedData(req *RelayRequest) (apitypes.TypedData, error) {
 	if len(req.Calls) == 0 {
-		return nil, ErrEmptyBatch
+		return apitypes.TypedData{}, ErrEmptyBatch
 	}
 	if req.ChainID == nil || req.Nonce == nil || req.Deadline == nil {
-		return nil, fmt.Errorf("%w: deposit digest requires chainId, nonce, deadline", ErrNilValue)
+		return apitypes.TypedData{}, fmt.Errorf(
+			"%w: deposit digest requires chainId, nonce, deadline",
+			ErrNilValue,
+		)
 	}
 	calls := make([]apitypes.TypedDataMessage, len(req.Calls))
 	for i, c := range req.Calls {
 		if c.Value == nil {
-			return nil, fmt.Errorf("%w: call %d value", ErrNilValue, i)
+			return apitypes.TypedData{}, fmt.Errorf("%w: call %d value", ErrNilValue, i)
 		}
 		calls[i] = apitypes.TypedDataMessage{
 			"target": c.To.Hex(),
@@ -275,9 +257,5 @@ func depositDigest(req *RelayRequest) ([]byte, error) {
 			"calls":    calls,
 		},
 	}
-	digest, _, err := apitypes.TypedDataAndHash(td)
-	if err != nil {
-		return nil, fmt.Errorf("polyrelay: deposit digest: %w", err)
-	}
-	return digest, nil
+	return td, nil
 }

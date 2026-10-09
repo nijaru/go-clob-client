@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/nijaru/go-clob-client/signing"
 )
 
 func TestSignerPromotionRejectsUnsupportedChain(t *testing.T) {
@@ -17,7 +19,11 @@ func TestSignerPromotionRejectsUnsupportedChain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := base.AsSigner(key, SignatureTypeEOA, ""); err == nil {
+	local, err := signing.NewLocalSigner(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := base.AsSigner(local, SignatureTypeEOA, ""); err == nil {
 		t.Fatal("signer promotion bypassed the supported-chain boundary")
 	}
 	if _, err := NewSignerClient(Config{ChainID: 1, PrivateKey: key}); err == nil {

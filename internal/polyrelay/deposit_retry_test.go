@@ -28,6 +28,7 @@ func TestDepositNonceCorrectionRejectsNonStaleOrUnrelatedNonce(t *testing.T) {
 			},
 		}
 		corrected, err := CorrectDepositNonce(
+			t.Context(),
 			testGaslessConfig(TransactionTypeWallet),
 			mustKey(t),
 			payload,

@@ -184,8 +184,9 @@ func verifySessionBatch(
 		return
 	}
 	signature, err := polyrelay.Sign(
+		t.Context(),
 		polyrelay.TransactionTypeWallet,
-		client.signer.PrivateKey(),
+		client.signer,
 		polyrelay.RelayRequest{
 			Wallet:   client.WalletAddress(),
 			ChainID:  big.NewInt(137),

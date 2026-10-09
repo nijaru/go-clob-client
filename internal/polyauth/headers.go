@@ -1,17 +1,22 @@
 package polyauth
 
 import (
+	"context"
 	"strconv"
 )
 
-func L1Headers(signer *Signer, chainID, timestamp, nonce int64) (map[string]string, error) {
-	signature, err := signer.signClobAuth(chainID, timestamp, nonce)
+func L1Headers(
+	ctx context.Context,
+	signer *Signer,
+	chainID, timestamp, nonce int64,
+) (map[string]string, error) {
+	signature, err := signClobAuth(ctx, signer, chainID, timestamp, nonce)
 	if err != nil {
 		return nil, err
 	}
 
 	return map[string]string{
-		"POLY_ADDRESS":   signer.address.Hex(),
+		"POLY_ADDRESS":   signer.Address().Hex(),
 		"POLY_SIGNATURE": signature,
 		"POLY_TIMESTAMP": strconv.FormatInt(timestamp, 10),
 		"POLY_NONCE":     strconv.FormatInt(nonce, 10),
@@ -30,7 +35,7 @@ func L2Headers(
 	signature := HMACSignatureBytes(secret, timestamp, method, path, normalizeSignatureBody(body))
 
 	return map[string]string{
-		"POLY_ADDRESS":    signer.address.Hex(),
+		"POLY_ADDRESS":    signer.Address().Hex(),
 		"POLY_SIGNATURE":  signature,
 		"POLY_TIMESTAMP":  strconv.FormatInt(timestamp, 10),
 		"POLY_API_KEY":    key,

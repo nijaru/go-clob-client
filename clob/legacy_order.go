@@ -2,12 +2,12 @@ package clob
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"strconv"
 
 	ethmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
-	"github.com/nijaru/go-clob-client/internal/polyauth"
 )
 
 // LegacyOrderFields contains the signed fields specific to protocol V1.
@@ -57,14 +57,14 @@ func (c *SignerClient) signLegacyOrder(
 		FeeRateBps: strconv.FormatUint(uint64(fee.BaseFee), 10),
 	}
 	order.Order.Timestamp, order.Order.Metadata, order.Order.Builder = "", "", ""
-	signature, err := polyauth.SignTypedData(
-		c.signer,
+	signature, err := c.signer.SignTypedData(
+		ctx,
 		buildLegacyOrderTypedData(c.chainID, exchange.VerifyingContract, order),
 	)
 	if err != nil {
 		return nil, err
 	}
-	order.Signature = signature
+	order.Signature = "0x" + hex.EncodeToString(signature)
 	return &order, nil
 }
 

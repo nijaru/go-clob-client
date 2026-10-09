@@ -11,6 +11,7 @@ import (
 	"github.com/nijaru/go-clob-client/clob/ws/rtds"
 	"github.com/nijaru/go-clob-client/internal/polyauth"
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
+	"github.com/nijaru/go-clob-client/signing"
 )
 
 // Client is the base Polymarket CLOB client containing public, unauthenticated methods.
@@ -68,10 +69,10 @@ func NewClient(config Config) (*Client, error) {
 	return newBase(config), nil
 }
 
-// NewSignerClient creates a signing CLOB client with L1 Ethereum auth. PrivateKey is required.
+// NewSignerClient creates a signing CLOB client with L1 Ethereum auth.
 func NewSignerClient(config Config) (*SignerClient, error) {
-	if config.PrivateKey == "" {
-		return nil, fmt.Errorf("PrivateKey is required")
+	if config.PrivateKey == "" && config.Signer == nil {
+		return nil, fmt.Errorf("PrivateKey or Signer is required")
 	}
 	config = config.normalized()
 	if err := config.validate(); err != nil {
@@ -81,11 +82,11 @@ func NewSignerClient(config Config) (*SignerClient, error) {
 }
 
 // NewAuthenticatedClient creates a fully authenticated CLOB client with L2 API key auth.
-// Both PrivateKey and Credentials are required. Construction performs no network
+// A signer and Credentials are required. Construction performs no network
 // requests and starts no goroutines; call StartHeartbeats explicitly if needed.
 func NewAuthenticatedClient(config Config) (*AuthenticatedClient, error) {
-	if config.PrivateKey == "" {
-		return nil, fmt.Errorf("PrivateKey is required")
+	if config.PrivateKey == "" && config.Signer == nil {
+		return nil, fmt.Errorf("PrivateKey or Signer is required")
 	}
 	if config.Credentials == nil {
 		return nil, fmt.Errorf("Credentials are required")
@@ -157,7 +158,15 @@ func newSignerFrom(base *Client, config Config) (*SignerClient, error) {
 	if _, err := getContractConfig(config.ChainID); err != nil {
 		return nil, err
 	}
-	signer, err := polyauth.ParsePrivateKey(config.PrivateKey)
+	source := config.Signer
+	if source == nil {
+		local, err := signing.NewLocalSigner(config.PrivateKey)
+		if err != nil {
+			return nil, err
+		}
+		source = local
+	}
+	signer, err := signing.NewWallet(source)
 	if err != nil {
 		return nil, err
 	}
@@ -199,14 +208,14 @@ func (c *Client) NewRTDSClient() *rtds.Client {
 
 // AsSigner upgrades a base client to a SignerClient.
 func (c *Client) AsSigner(
-	privateKey string,
+	source signing.Signer,
 	sigType SignatureType,
 	funder string,
 ) (*SignerClient, error) {
 	if _, err := getContractConfig(c.chainID); err != nil {
 		return nil, err
 	}
-	signer, err := polyauth.ParsePrivateKey(privateKey)
+	signer, err := signing.NewWallet(source)
 	if err != nil {
 		return nil, err
 	}

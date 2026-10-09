@@ -4,14 +4,13 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"strconv"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	ethmath "github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"github.com/nijaru/go-clob-client/internal/polyauth"
 )
@@ -26,8 +25,6 @@ const (
 	orderTypeString      = "Order(uint256 salt,address maker,address signer,uint256 tokenId," +
 		"uint256 makerAmount,uint256 takerAmount,uint8 side,uint8 signatureType," +
 		"uint256 timestamp,bytes32 metadata,bytes32 builder)"
-	soladyTypeString = "TypedDataSign(Order contents,string name,string version,uint256 chainId," +
-		"address verifyingContract,bytes32 salt)" + orderTypeString
 )
 
 const zeroBytes32 = "0x0000000000000000000000000000000000000000000000000000000000000000"
@@ -181,9 +178,11 @@ func (c *SignerClient) signOrder(ctx context.Context, input orderBuildInput) (*S
 
 	var signature string
 	if input.SignatureType == SignatureTypePoly1271 {
-		signature, err = signPoly1271Order(c.signer, typedData, c.chainID)
+		signature, err = signPoly1271Order(ctx, c.signer, typedData, c.chainID)
 	} else {
-		signature, err = polyauth.SignTypedData(c.signer, typedData)
+		var sig []byte
+		sig, err = c.signer.SignTypedData(ctx, typedData)
+		signature = "0x" + hex.EncodeToString(sig)
 	}
 	if err != nil {
 		return nil, err
@@ -204,6 +203,7 @@ func (c *SignerClient) signOrder(ctx context.Context, input orderBuildInput) (*S
 // domain separator, contents hash, and the EIP-712 type string so the deposit
 // wallet's isValidSignature check can reconstruct the original typed-data digest.
 func signPoly1271Order(
+	ctx context.Context,
 	signer *polyauth.Signer,
 	typedData apitypes.TypedData,
 	chainID int64,
@@ -220,29 +220,31 @@ func signPoly1271Order(
 		return "", fmt.Errorf("hash order contents: %w", err)
 	}
 
-	// ABI-encode the TypedDataSign struct fields and hash.
-	typedDataSignStructHash := crypto.Keccak256(
-		abiEncodeTypedDataSign(
-			contentsHash,
-			chainID,
-			common.HexToAddress(typedData.Message["signer"].(string)),
-		),
-	)
-
-	// EIP-712 final digest: 0x19 || 0x01 || domainSeparator || typedDataSignStructHash.
-	var digestInput [66]byte
-	digestInput[0] = 0x19
-	digestInput[1] = 0x01
-	copy(digestInput[2:34], domainSeparator)
-	copy(digestInput[34:66], typedDataSignStructHash)
-	digest := crypto.Keccak256(digestInput[:])
-
-	// Sign the digest.
-	sig, err := crypto.Sign(digest, signer.PrivateKey())
-	if err != nil {
-		return "", fmt.Errorf("sign poly1271 digest: %w", err)
+	// Present the nested EIP-712 structure to wallets, never an opaque hash.
+	nestedTypes := make(apitypes.Types, len(typedData.Types)+1)
+	for name, fields := range typedData.Types {
+		nestedTypes[name] = fields
 	}
-	sig[64] += 27 // EIP-155 recovery ID
+	nestedTypes["TypedDataSign"] = []apitypes.Type{
+		{Name: "contents", Type: "Order"},
+		{Name: "name", Type: "string"},
+		{Name: "version", Type: "string"},
+		{Name: "chainId", Type: "uint256"},
+		{Name: "verifyingContract", Type: "address"},
+		{Name: "salt", Type: "bytes32"},
+	}
+	nested := apitypes.TypedData{
+		Types: nestedTypes, PrimaryType: "TypedDataSign", Domain: typedData.Domain,
+		Message: apitypes.TypedDataMessage{
+			"contents": typedData.Message, "name": depositWalletName,
+			"version": depositWalletVersion, "chainId": strconv.FormatInt(chainID, 10),
+			"verifyingContract": typedData.Message["signer"], "salt": zeroBytes32,
+		},
+	}
+	sig, err := signer.SignTypedData(ctx, nested)
+	if err != nil {
+		return "", fmt.Errorf("sign poly1271 typed data: %w", err)
+	}
 
 	// Build the wrapped signature: 0x || innerSig || domainSep || contentsHash || typeString || typeLen(u16 BE).
 	orderTypeBytes := []byte(orderTypeString)
@@ -256,38 +258,6 @@ func signPoly1271Order(
 	wrapped = appendHex(wrapped, []byte{byte(typeLen >> 8), byte(typeLen)})
 
 	return string(wrapped), nil
-}
-
-// abiEncodeTypedDataSign ABI-encodes the fields of the Solady TypedDataSign
-// struct: (bytes32 contents, string name, string version, uint256 chainId,
-//
-//	address verifyingContract, bytes32 salt).
-//
-// Each field is padded to 32 bytes. The tuple has 7 elements:
-//   - keccak256(soladyTypeString) (type hash)
-//   - contentsHash
-//   - keccak256(depositWalletName)
-//   - keccak256(depositWalletVersion)
-//   - chainId
-//   - signer address
-//   - salt (zero)
-func abiEncodeTypedDataSign(contentsHash []byte, chainID int64, signer common.Address) []byte {
-	buf := make([]byte, 32*7)
-	// [0:32] keccak256(soladyTypeString) — the EIP-712 type hash
-	copy(buf[0:32], crypto.Keccak256([]byte(soladyTypeString)))
-	// [32:64] contents hash (hashStruct of the Order)
-	copy(buf[32:64], contentsHash)
-	// [64:96] keccak256(depositWalletName)
-	copy(buf[64:96], crypto.Keccak256([]byte(depositWalletName)))
-	// [96:128] keccak256(depositWalletVersion)
-	copy(buf[96:128], crypto.Keccak256([]byte(depositWalletVersion)))
-	// [128:160] chainId (uint256, right-aligned)
-	chainIDBytes := new(big.Int).SetInt64(chainID).Bytes()
-	copy(buf[160-len(chainIDBytes):160], chainIDBytes)
-	// [160:192] signer address (20 bytes, left-padded to 32)
-	copy(buf[192-20:192], signer.Bytes())
-	// [192:224] salt (bytes32) = zero
-	return buf
 }
 
 // appendHex appends the hex encoding of data (no 0x prefix) to dst.

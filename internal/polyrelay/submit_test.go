@@ -56,7 +56,7 @@ func (s *orchServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func testGaslessConfig(typ RelayerTransactionType) GaslessConfig {
 	return GaslessConfig{
 		WalletType:           typ,
-		Signer:               addrRepeat(0x01),
+		Signer:               common.HexToAddress(vectorAddressHex),
 		Wallet:               addrRepeat(0x02),
 		ChainID:              big.NewInt(137),
 		ProxyFactory:         addrRepeat(0x10),
@@ -394,9 +394,9 @@ func TestPrepareGaslessValidation(t *testing.T) {
 			"",
 		); !errors.Is(
 			err,
-			ErrNilKey,
+			ErrNilSigner,
 		) {
-			t.Fatalf("err = %v, want ErrNilKey", err)
+			t.Fatalf("err = %v, want ErrNilSigner", err)
 		}
 	})
 	t.Run("empty calls", func(t *testing.T) {

@@ -426,6 +426,7 @@ func TestComboQuoterExactQuoteAmounts(t *testing.T) {
 		request := comboQuoteRequest()
 		request.Direction = tc.direction
 		quote, err := client.buildComboQuoterQuote(
+			t.Context(),
 			request,
 			ComboRFQQuoteResponse{Price: "0.333333", Source: tc.source},
 		)
@@ -440,12 +441,16 @@ func TestComboQuoterExactQuoteAmounts(t *testing.T) {
 	}
 	request := comboQuoteRequest()
 	request.RequestedSize = ComboRFQRequestedSize{Unit: RFQSizeUnitNotional, Value: "1"}
-	quote, err := client.buildComboQuoterQuote(request, ComboRFQQuoteResponse{Price: "0.333333"})
+	quote, err := client.buildComboQuoterQuote(
+		t.Context(),
+		request,
+		ComboRFQQuoteResponse{Price: "0.333333"},
+	)
 	if err != nil || quote.SizeE6 != "3000003" {
 		t.Fatalf("notional size: %+v %v", quote, err)
 	}
 	for _, response := range []ComboRFQQuoteResponse{{Price: "0"}, {Price: "1"}, {Price: "0.0000001"}, {Price: "0.5", Size: "0"}, {Price: "0.5", Source: "future"}, {Price: "0.000001", Source: ComboQuoteInventory, Size: "0.000001"}} {
-		if _, err := client.buildComboQuoterQuote(request, response); err == nil {
+		if _, err := client.buildComboQuoterQuote(t.Context(), request, response); err == nil {
 			t.Fatalf("accepted invalid quote %+v", response)
 		}
 	}
@@ -481,7 +486,7 @@ func TestComboSigningIndependentFixtures(t *testing.T) {
 			Builder:       zeroBytes32,
 			Metadata:      zeroBytes32,
 		}
-		if err := client.signComboOrder(&order, "0xe3333700cA9d93003F00f0F71f8515005F6c00Aa"); err != nil {
+		if err := client.signComboOrder(t.Context(), &order, "0xe3333700cA9d93003F00f0F71f8515005F6c00Aa"); err != nil {
 			t.Fatal(err)
 		}
 		if order.Signature != tc.signature {

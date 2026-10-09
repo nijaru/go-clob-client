@@ -105,7 +105,7 @@ func (c *SignerClient) addAuthHeaders(
 		if nonce != nil {
 			value = *nonce
 		}
-		return polyauth.L1Headers(c.signer, c.chainID, timestamp, value)
+		return polyauth.L1Headers(ctx, c.signer, c.chainID, timestamp, value)
 	default:
 		return nil, fmt.Errorf(
 			"this client only supports L1 auth, please upgrade to an AuthenticatedClient",

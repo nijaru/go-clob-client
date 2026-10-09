@@ -112,7 +112,7 @@ func (c *AuthenticatedClient) ExecuteCollateralReturnPlan(
 			requestCtx,
 			c.RelayerTransport(),
 			cfg,
-			c.signer.PrivateKey(),
+			c.signer,
 			calls,
 			collateralReturnMetadata,
 		)
@@ -127,8 +127,9 @@ func (c *AuthenticatedClient) ExecuteCollateralReturnPlan(
 			)
 			if buildErr != nil {
 				corrected, err := polyrelay.CorrectDepositNonce(
+					requestCtx,
 					cfg,
-					c.signer.PrivateKey(),
+					c.signer,
 					envelope,
 					buildErr,
 				)

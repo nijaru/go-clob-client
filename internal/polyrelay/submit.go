@@ -2,7 +2,6 @@ package polyrelay
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"math/big"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
+	"github.com/nijaru/go-clob-client/signing"
 )
 
 // Relayer orchestration constants, mirroring py-sdk defaults.
@@ -114,12 +114,15 @@ func PrepareGasless(
 	ctx context.Context,
 	t *Transport,
 	cfg GaslessConfig,
-	key *ecdsa.PrivateKey,
+	key *signing.Wallet,
 	calls []TransactionCall,
 	metadata string,
 ) (*Handle, error) {
 	if key == nil {
-		return nil, ErrNilKey
+		return nil, ErrNilSigner
+	}
+	if cfg.Signer != key.Address() {
+		return nil, fmt.Errorf("polyrelay: signer address mismatch")
 	}
 	if len(calls) == 0 {
 		return nil, ErrEmptyCalls
@@ -188,7 +191,7 @@ func submitForWalletType(
 	ctx context.Context,
 	t *Transport,
 	cfg GaslessConfig,
-	key *ecdsa.PrivateKey,
+	key *signing.Wallet,
 	calls []TransactionCall,
 	metadata string,
 ) (ExecuteResponse, error) {
@@ -200,7 +203,7 @@ func submitForWalletType(
 	if submitErr == nil {
 		return response, nil
 	}
-	corrected, err := CorrectDepositNonce(cfg, key, payload, submitErr)
+	corrected, err := CorrectDepositNonce(ctx, cfg, key, payload, submitErr)
 	if err != nil {
 		return ExecuteResponse{}, err
 	}
@@ -217,12 +220,15 @@ func BuildGaslessSubmit(
 	ctx context.Context,
 	t *Transport,
 	cfg GaslessConfig,
-	key *ecdsa.PrivateKey,
+	key *signing.Wallet,
 	calls []TransactionCall,
 	metadata string,
 ) (*SubmitRequest, error) {
 	if key == nil {
-		return nil, ErrNilKey
+		return nil, ErrNilSigner
+	}
+	if cfg.Signer != key.Address() {
+		return nil, fmt.Errorf("polyrelay: signer address mismatch")
 	}
 	if len(calls) == 0 {
 		return nil, ErrEmptyCalls
@@ -247,7 +253,7 @@ func buildDepositSubmit(
 	ctx context.Context,
 	t *Transport,
 	cfg GaslessConfig,
-	key *ecdsa.PrivateKey,
+	key *signing.Wallet,
 	calls []TransactionCall,
 	metadata string,
 ) (*SubmitRequest, error) {
@@ -256,7 +262,7 @@ func buildDepositSubmit(
 		return nil, err
 	}
 	deadline := big.NewInt(time.Now().Unix() + DepositWalletDeadlineS)
-	sig, err := Sign(TransactionTypeWallet, key, RelayRequest{
+	sig, err := Sign(ctx, TransactionTypeWallet, key, RelayRequest{
 		Wallet:   cfg.Wallet,
 		Calls:    calls,
 		Nonce:    params.Nonce,
@@ -288,7 +294,7 @@ func buildProxySubmit(
 	ctx context.Context,
 	t *Transport,
 	cfg GaslessConfig,
-	key *ecdsa.PrivateKey,
+	key *signing.Wallet,
 	calls []TransactionCall,
 	metadata string,
 ) (*SubmitRequest, error) {
@@ -304,7 +310,7 @@ func buildProxySubmit(
 	}
 	relay := params.Address
 	gasLimit := estimateProxyGasLimit(ctx, cfg, cfg.Signer, to, data)
-	sig, err := Sign(TransactionTypeProxy, key, RelayRequest{
+	sig, err := Sign(ctx, TransactionTypeProxy, key, RelayRequest{
 		Signer:   cfg.Signer,
 		To:       to,
 		Data:     data,
@@ -336,7 +342,7 @@ func buildSafeSubmit(
 	ctx context.Context,
 	t *Transport,
 	cfg GaslessConfig,
-	key *ecdsa.PrivateKey,
+	key *signing.Wallet,
 	calls []TransactionCall,
 	metadata string,
 ) (*SubmitRequest, error) {
@@ -348,7 +354,7 @@ func buildSafeSubmit(
 	if err != nil {
 		return nil, err
 	}
-	sig, err := Sign(TransactionTypeSafe, key, RelayRequest{
+	sig, err := Sign(ctx, TransactionTypeSafe, key, RelayRequest{
 		Wallet:    cfg.Wallet,
 		To:        target,
 		Data:      data,

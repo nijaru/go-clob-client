@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 )
 
 // Vectors are generated from py-clob-client's reference signing modules and
@@ -19,7 +19,7 @@ const vectorAddressHex = "0xF3F53fD15F3D5C773e84F1A1827c7ECdBC08ADA0"
 
 func TestKeyDerivesExpectedAddress(t *testing.T) {
 	t.Parallel()
-	got := crypto.PubkeyToAddress(mustKey(t).PublicKey)
+	got := mustKey(t).Address()
 	if want := common.HexToAddress(vectorAddressHex); got != want {
 		t.Fatalf("address = %s, want %s (key mismatch invalidates all vectors)", got, want)
 	}
@@ -50,7 +50,7 @@ func TestProxyDigestAndSign(t *testing.T) {
 		t.Fatalf("proxy digest = %s, want %s", got, wantHash)
 	}
 
-	sig, err := Sign(TransactionTypeProxy, mustKey(t), req)
+	sig, err := Sign(t.Context(), TransactionTypeProxy, mustKey(t), req)
 	if err != nil {
 		t.Fatalf("Sign PROXY: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestSafeDigestAndSign(t *testing.T) {
 		t.Fatalf("safe digest = %s, want %s", got, wantDigest)
 	}
 
-	sig, err := Sign(TransactionTypeSafe, mustKey(t), req)
+	sig, err := Sign(t.Context(), TransactionTypeSafe, mustKey(t), req)
 	if err != nil {
 		t.Fatalf("Sign SAFE: %v", err)
 	}
@@ -126,16 +126,20 @@ func TestDepositDigestAndSign(t *testing.T) {
 		ChainID:  big.NewInt(137),
 	}
 
-	digest, err := depositDigest(&req)
+	data, err := depositTypedData(&req)
 	if err != nil {
-		t.Fatalf("depositDigest: %v", err)
+		t.Fatal(err)
+	}
+	digest, _, err := apitypes.TypedDataAndHash(data)
+	if err != nil {
+		t.Fatal(err)
 	}
 	const wantDigest = "0x88e19ae7c7f5990d5152240660d62863bf9572df60e2134cf6020c4b22c5df0a"
 	if got := common.BytesToHash(digest).Hex(); got != wantDigest {
 		t.Fatalf("deposit digest = %s, want %s", got, wantDigest)
 	}
 
-	sig, err := Sign(TransactionTypeWallet, mustKey(t), req)
+	sig, err := Sign(t.Context(), TransactionTypeWallet, mustKey(t), req)
 	if err != nil {
 		t.Fatalf("Sign WALLET: %v", err)
 	}
@@ -151,17 +155,17 @@ func TestSignValidatesInput(t *testing.T) {
 	t.Parallel()
 	key := mustKey(t)
 
-	t.Run("nil key", func(t *testing.T) {
+	t.Run("nil signer", func(t *testing.T) {
 		t.Parallel()
-		_, err := Sign(TransactionTypeWallet, nil, RelayRequest{})
-		if !errors.Is(err, ErrNilKey) {
-			t.Fatalf("err = %v, want ErrNilKey", err)
+		_, err := Sign(t.Context(), TransactionTypeWallet, nil, RelayRequest{})
+		if !errors.Is(err, ErrNilSigner) {
+			t.Fatalf("err = %v, want ErrNilSigner", err)
 		}
 	})
 
 	t.Run("unknown type", func(t *testing.T) {
 		t.Parallel()
-		_, err := Sign("NOPE", key, RelayRequest{})
+		_, err := Sign(t.Context(), "NOPE", key, RelayRequest{})
 		if !errors.Is(err, ErrUnknownType) {
 			t.Fatalf("err = %v, want ErrUnknownType", err)
 		}
@@ -175,7 +179,7 @@ func TestSignValidatesInput(t *testing.T) {
 			Deadline: big.NewInt(2),
 			ChainID:  big.NewInt(137),
 		}
-		_, err := Sign(TransactionTypeWallet, key, req)
+		_, err := Sign(t.Context(), TransactionTypeWallet, key, req)
 		if !errors.Is(err, ErrEmptyBatch) {
 			t.Fatalf("err = %v, want ErrEmptyBatch", err)
 		}
@@ -190,7 +194,7 @@ func TestSignValidatesInput(t *testing.T) {
 			), GasPrice: big.NewInt(0), GasLimit: big.NewInt(0), Nonce: big.NewInt(0),
 			RelayHub: addrRepeat(0x33), Relay: addrRepeat(0x44),
 		}
-		_, err := Sign(TransactionTypeProxy, key, req)
+		_, err := Sign(t.Context(), TransactionTypeProxy, key, req)
 		if !errors.Is(err, ErrNegativeValue) {
 			t.Fatalf("err = %v, want ErrNegativeValue", err)
 		}
@@ -204,7 +208,7 @@ func TestSignValidatesInput(t *testing.T) {
 			GasFee: big.NewInt(0), GasPrice: big.NewInt(0), GasLimit: big.NewInt(0), Nonce: tooBig,
 			RelayHub: addrRepeat(0x33), Relay: addrRepeat(0x44),
 		}
-		_, err := Sign(TransactionTypeProxy, key, req)
+		_, err := Sign(t.Context(), TransactionTypeProxy, key, req)
 		if !errors.Is(err, ErrOverflow) {
 			t.Fatalf("err = %v, want ErrOverflow", err)
 		}
@@ -217,7 +221,7 @@ func TestSignValidatesInput(t *testing.T) {
 			GasFee: nil, GasPrice: big.NewInt(0), GasLimit: big.NewInt(0), Nonce: big.NewInt(0),
 			RelayHub: addrRepeat(0x33), Relay: addrRepeat(0x44),
 		}
-		_, err := Sign(TransactionTypeProxy, key, req)
+		_, err := Sign(t.Context(), TransactionTypeProxy, key, req)
 		if !errors.Is(err, ErrNilValue) {
 			t.Fatalf("err = %v, want ErrNilValue", err)
 		}
@@ -237,7 +241,7 @@ func TestSignValidatesInput(t *testing.T) {
 			},
 			Nonce: big.NewInt(1), Deadline: big.NewInt(2), ChainID: big.NewInt(137),
 		}
-		_, err := Sign(TransactionTypeWallet, key, req)
+		_, err := Sign(t.Context(), TransactionTypeWallet, key, req)
 		if !errors.Is(err, ErrNilValue) {
 			t.Fatalf("err = %v, want ErrNilValue", err)
 		}
@@ -252,7 +256,7 @@ func TestSignValidatesInput(t *testing.T) {
 			Data: nil, Value: big.NewInt(0), Operation: 0, Nonce: big.NewInt(1),
 			// ChainID intentionally nil
 		}
-		_, err := Sign(TransactionTypeSafe, key, req)
+		_, err := Sign(t.Context(), TransactionTypeSafe, key, req)
 		if !errors.Is(err, ErrNilValue) {
 			t.Fatalf("err = %v, want ErrNilValue", err)
 		}
@@ -266,7 +270,7 @@ func TestSignValidatesInput(t *testing.T) {
 			Nonce:  big.NewInt(1), ChainID: big.NewInt(137),
 			// Deadline intentionally nil
 		}
-		_, err := Sign(TransactionTypeWallet, key, req)
+		_, err := Sign(t.Context(), TransactionTypeWallet, key, req)
 		if !errors.Is(err, ErrNilValue) {
 			t.Fatalf("err = %v, want ErrNilValue", err)
 		}

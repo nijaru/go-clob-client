@@ -187,7 +187,7 @@ func (c *AuthenticatedClient) PrepareGaslessTransaction(
 		ctx,
 		c.RelayerTransport(),
 		cfg,
-		c.signer.PrivateKey(),
+		c.signer,
 		calls,
 		metadata,
 	)

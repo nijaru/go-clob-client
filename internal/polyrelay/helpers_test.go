@@ -1,11 +1,10 @@
 package polyrelay
 
 import (
-	"crypto/ecdsa"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/nijaru/go-clob-client/signing"
 )
 
 // Shared test helpers used by signer_test, encode_test, and payload_test.
@@ -14,13 +13,17 @@ import (
 // (RFC 6979) signatures are the parity vectors in signer_test.go.
 const vectorKeyHex = "4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c"
 
-func mustKey(t *testing.T) *ecdsa.PrivateKey {
+func mustKey(t *testing.T) *signing.Wallet {
 	t.Helper()
-	key, err := crypto.HexToECDSA(vectorKeyHex)
+	local, err := signing.NewLocalSigner(vectorKeyHex)
 	if err != nil {
-		t.Fatalf("parse key: %v", err)
+		t.Fatal(err)
 	}
-	return key
+	wallet, err := signing.NewWallet(local)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return wallet
 }
 
 // addrRepeat returns an address filled with a single repeated byte.

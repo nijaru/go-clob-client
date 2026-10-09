@@ -183,7 +183,7 @@ func (c *SignerClient) broadcastWalletCall(
 			Data:      call.Data,
 		},
 	)
-	signed, err := types.SignTx(tx, types.LatestSignerForChainID(chainID), c.signer.PrivateKey())
+	signed, err := c.signer.SignTransaction(ctx, chainID, tx)
 	if err != nil {
 		return nil, fmt.Errorf("wallet: sign: %w", err)
 	}

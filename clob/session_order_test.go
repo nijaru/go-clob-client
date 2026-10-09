@@ -36,6 +36,7 @@ func TestDepositOrderOwnerAndSessionSignatures(t *testing.T) {
 			}
 			cfg, _ := getContractConfig(PolygonChainID)
 			inner, err := signPoly1271Order(
+				t.Context(),
 				client.signer,
 				buildOrderTypedData(PolygonChainID, "3", cfg.ExchangeV3, *order),
 				PolygonChainID,
@@ -107,6 +108,7 @@ func TestComboAcceptDepositIdentityAndUint256(t *testing.T) {
 	}
 	cfg, _ := getContractConfig(PolygonChainID)
 	want, err := signPoly1271Order(
+		t.Context(),
 		client.signer,
 		buildOrderTypedData(PolygonChainID, "3", cfg.ExchangeV3, order.typedOrder()),
 		PolygonChainID,
