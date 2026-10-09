@@ -91,12 +91,15 @@ func TestActivityAndWinnerKinds(t *testing.T) {
 		activity.Raw != nil {
 		t.Fatalf("lost combo trade fields: %+v", activity)
 	}
-	raw = `{"type":"FUTURE_CREDIT","new_field":{"reason":"test"}}`
+	raw = `{"type":"FUTURE_CREDIT","name":"","timestamp":1785425912,"new_field":{"reason":"test"},"price":{"unit":"USD","value":"1"},"size":[1,2],"outcome_index":{"new":"shape"}}`
 	if err := jsonv2.Unmarshal([]byte(raw), &activity); err != nil {
 		t.Fatal(err)
 	}
-	if string(activity.Raw) != raw {
-		t.Fatal("unknown wallet event was discarded")
+	if string(activity.Raw) != raw || activity.Type != "FUTURE_CREDIT" ||
+		activity.Timestamp.IsZero() ||
+		activity.Name != nil ||
+		activity.Price != nil {
+		t.Fatal("unknown wallet event or its common envelope was discarded")
 	}
 	if err := jsonv2.Unmarshal([]byte(`{"type":"TRADE"}`), &activity); err == nil {
 		t.Fatal("accepted an incomplete known trade")

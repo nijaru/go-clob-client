@@ -1,6 +1,7 @@
 package data
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 )
@@ -36,16 +37,26 @@ type Activity struct {
 }
 
 func (a *Activity) UnmarshalJSON(raw []byte) error {
+	raw = bytes.TrimSpace(raw)
 	if len(raw) == 0 || raw[0] != '{' {
 		return fmt.Errorf("data: activity must be an object")
 	}
-	type wire Activity
-	var value wire
-	if err := json.Unmarshal(raw, &value); err != nil {
+	var discriminator struct {
+		Type json.RawMessage `json:"type"`
+	}
+	if err := json.Unmarshal(raw, &discriminator); err != nil {
 		return err
 	}
+	var activityType ActivityType
+	if len(discriminator.Type) > 0 && discriminator.Type[0] == '"' {
+		if err := json.Unmarshal(discriminator.Type, &activityType); err != nil {
+			return err
+		}
+	}
+	type wire Activity
+	var value wire
 	known := false
-	switch value.Type {
+	switch activityType {
 	case ActivityTypeTrade, ActivityTypeSplit, ActivityTypeMerge, ActivityTypeRedeem,
 		ActivityTypeReward, ActivityTypeConversion, ActivityTypeMigration,
 		ActivityTypeDeposit, ActivityTypeWithdrawal, ActivityTypeYield,
@@ -53,6 +64,9 @@ func (a *Activity) UnmarshalJSON(raw []byte) error {
 		known = true
 	}
 	if known {
+		if err := json.Unmarshal(raw, &value); err != nil {
+			return err
+		}
 		var required struct {
 			Wallet          *string    `json:"proxy_wallet"`
 			Timestamp       *Timestamp `json:"timestamp"`
@@ -78,7 +92,30 @@ func (a *Activity) UnmarshalJSON(raw []byte) error {
 			return fmt.Errorf("data: incomplete trade activity")
 		}
 	} else {
-		value.Raw = append(json.RawMessage(nil), raw...)
+		// Future variants may reuse financial field names with different shapes.
+		// Only their common envelope is understood; the rest stays in Raw.
+		var envelope struct {
+			Wallet                string     `json:"proxy_wallet"`
+			Timestamp             *Timestamp `json:"timestamp"`
+			TransactionHash       string     `json:"transaction_hash"`
+			Name                  *string    `json:"name"`
+			Pseudonym             *string    `json:"pseudonym"`
+			Bio                   *string    `json:"bio"`
+			ProfileImage          *string    `json:"profile_image"`
+			ProfileImageOptimized *string    `json:"profile_image_optimized"`
+		}
+		if err := json.Unmarshal(raw, &envelope); err != nil {
+			return err
+		}
+		value = wire{
+			Type: activityType, Wallet: envelope.Wallet, TransactionHash: envelope.TransactionHash,
+			Name: envelope.Name, Pseudonym: envelope.Pseudonym, Bio: envelope.Bio,
+			ProfileImage: envelope.ProfileImage, ProfileImageOptimized: envelope.ProfileImageOptimized,
+			Raw: append(json.RawMessage(nil), raw...),
+		}
+		if envelope.Timestamp != nil {
+			value.Timestamp = *envelope.Timestamp
+		}
 	}
 	if value.OutcomeIndex != nil && *value.OutcomeIndex == 999 {
 		value.OutcomeIndex = nil
