@@ -32,18 +32,12 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-	client, err := clob.NewAuthenticatedClient(clob.Config{
+	client, err := clob.NewSignerClient(clob.Config{
 		ChainID: clob.PolygonChainID, PrivateKey: os.Getenv("POLYMARKET_PRIVATE_KEY"), SignatureType: clob.SignatureTypePoly1271, FunderAddress: os.Getenv("POLYMARKET_FUNDER"), BuilderAuth: builder,
-		Credentials: &clob.Credentials{
-			Key:        os.Getenv("POLYMARKET_API_KEY"),
-			Secret:     os.Getenv("POLYMARKET_API_SECRET"),
-			Passphrase: os.Getenv("POLYMARKET_API_PASSPHRASE"),
-		},
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer client.Close()
 	wallet, err := clob.NewWalletOperations(client, clob.WalletOperationsConfig{})
 	if err != nil {
 		log.Fatal(err)

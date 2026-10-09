@@ -26,7 +26,7 @@ var (
 // returned handle waits for relayer confirmation, not an actual chain receipt;
 // use WaitWalletTransactionReceipt for independent receipt verification.
 // Submissions preserve WithRelayerAuth; the initial deployment probe is public.
-func (c *AuthenticatedClient) DeploySafeWallet(
+func (c *SignerClient) DeploySafeWallet(
 	ctx context.Context,
 	metadata string,
 ) (*GaslessTransactionHandle, error) {

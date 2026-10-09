@@ -7,7 +7,8 @@
 //
 //   - [Client] — read-only, no credentials required.
 //   - [SignerClient] — extends Client with L1 Ethereum-signed methods (order
-//     creation, API key management). Accepts a local or external Ethereum signer.
+//     creation, API key management, wallet operations and relaying). Accepts a
+//     local or external Ethereum signer; wallet operations need no CLOB credentials.
 //   - [AuthenticatedClient] — extends SignerClient with L2 API-key methods
 //     (posting orders, managing positions, heartbeats). Requires a signer and
 //     CLOB API credentials. Relayer and builder authentication are separate.

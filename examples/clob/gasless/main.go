@@ -49,22 +49,16 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-	client, err := clob.NewAuthenticatedClient(clob.Config{
+	client, err := clob.NewSignerClient(clob.Config{
 		BuilderAuth:   builder,
 		ChainID:       clob.PolygonChainID,
 		PrivateKey:    key,
 		SignatureType: clob.SignatureTypePolyProxy, // or PolyGnosisSafe / Poly1271
 		FunderAddress: funder,
-		Credentials: &clob.Credentials{
-			Key:        os.Getenv("POLYMARKET_API_KEY"),
-			Secret:     os.Getenv("POLYMARKET_API_SECRET"),
-			Passphrase: os.Getenv("POLYMARKET_API_PASSPHRASE"),
-		},
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer client.Close()
 
 	// Approve the configured exchange or adapter to spend collateral. The
 	// spender is deliberately an environment variable because the correct

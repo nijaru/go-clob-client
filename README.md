@@ -66,8 +66,9 @@ go run ./examples/clob/read_only
 
 ## Event-market trading
 
-CLOB has public, signing and authenticated views. API-key bootstrap requires L1
-Ethereum signing; posting and account operations use L2 credentials. Builder and
+CLOB has public, signing and authenticated views. Wallet, relayer and collateral
+operations use the signing view without CLOB credentials. API-key bootstrap
+requires L1 Ethereum signing; posting and account operations use L2 credentials. Builder and
 relayer credentials are separate from CLOB credentials. `Config.Signer` accepts
 an external/hardware EOA signer; `PrivateKey` is a mutually exclusive local-key
 convenience. Signatures are verified against the pinned EOA, including low-S and
@@ -248,8 +249,9 @@ It supports credential creation/resumption/revocation, account/history reads,
 notifications/ADL, GTD, TP/SL and trailing exits, cancellation/risk, TWAP/chase,
 builders, internal transfers and explicit collateral workflows. Owner and delegated
 signers use the shared verified signing boundary. The managed collateral adapter
-still requires CLOB credentials; externally managed calls can use the independent
-owner/sender boundary. See
+uses the signing client without CLOB credentials; smart wallets authenticate
+separately with relayer API keys or builder credentials. Externally managed calls
+can also use the independent owner/sender boundary. See
 [the perps guide](perps/README.md) for signing, reconciliation and wallet limits.
 
 `NewMarketStream(ctx)` pools public filters with independently cancellable handles.

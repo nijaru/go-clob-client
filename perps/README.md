@@ -75,9 +75,9 @@ RPC URL must be explicit. Transactions accepts `clob.Config.Signer` or
 Safe/proxy execution needs `signing.MessageSigner`; deposit-wallet batches and
 Safe creation use typed-data signing. Unsupported capabilities fail without
 sending.
-The reused CLOB authenticated constructor still requires genuine CLOB L2
-credentials, even for collateral-only execution; gasless wallets also require
-separate `BuilderAuth`. Perps credentials are neither CLOB nor relayer credentials.
+The transaction engine uses `clob.NewSignerClient`, without CLOB L2 credentials.
+Smart wallets require separate relayer authentication: context-selected
+`RelayerAPIKey` or `BuilderAuth`. Perps credentials are not relayer credentials.
 Unsigned `OwnerClient.PrepareDeposit` needs none of those execution credentials.
 
 - `PrepareCollateralApproval` prepares an exact allowance; zero revokes.
@@ -186,8 +186,8 @@ rather than a single-item wrapper, is not counted as a missing capability.
 
 ## Remaining gaps and limitations
 
-- **Wallet lifecycle still has limits.** The managed adapter accepts external
-  signers but still requires CLOB L2 credentials through the CLOB constructor.
+- **Wallet lifecycle still has limits.** Managed execution accepts external
+  signers without CLOB credentials; smart wallets require separate relayer auth.
   Proxy deployment is not supplied. Safe creation is explicit; deposit-wallet
   creation is explicit and beacon-only.
   Constructors use offline derivation; deployed legacy-wallet discovery is

@@ -11,23 +11,23 @@ import (
 )
 
 // WalletOperationsConfig selects the market-discovery endpoint. RPC and HTTP
-// ownership remain with the authenticated client; this facade starts no tasks.
+// ownership remain with the signing client; construction starts no tasks.
 type WalletOperationsConfig struct{ GammaHost string }
 
 // WalletOperations resolves market protocol and routes position operations to
 // the collateral adapters or native V2 router. The lower-level CTF methods
 // remain available for explicit collateral/partition calls (Rust parity).
 type WalletOperations struct {
-	client  *AuthenticatedClient
+	client  *SignerClient
 	markets *polyhttp.Client
 }
 
 func NewWalletOperations(
-	client *AuthenticatedClient,
+	client *SignerClient,
 	cfg WalletOperationsConfig,
 ) (*WalletOperations, error) {
 	if client == nil {
-		return nil, fmt.Errorf("wallet: nil authenticated client")
+		return nil, fmt.Errorf("wallet: nil signing client")
 	}
 	if cfg.GammaHost == "" {
 		cfg.GammaHost = "https://gamma-api.polymarket.com"

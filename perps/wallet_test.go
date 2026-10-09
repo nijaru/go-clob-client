@@ -157,7 +157,6 @@ func collateralConfig(t *testing.T, rpc string, kind clob.SignatureType) Collate
 		},
 		Transactions: clob.Config{
 			PrivateKey:    fixturePrivateKey,
-			Credentials:   &clob.Credentials{Key: "clob", Secret: "c2VjcmV0", Passphrase: "p"},
 			BuilderAuth:   builder,
 			RPCURL:        rpc,
 			SignatureType: kind,

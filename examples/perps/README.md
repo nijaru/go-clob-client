@@ -46,8 +46,8 @@ construct a managed execution client or deploy anything.
 Mutations require explicit `-action approve`, `deposit`, `approve-deposit`, or
 `deploy`. Deployment selects Safe or beacon creation according to `-wallet`.
 Use your own signer, verified contracts and `RPC_URL`; managed execution also
-requires real `CLOB_API_KEY`, `CLOB_API_SECRET`, `CLOB_API_PASSPHRASE` and, for
-smart wallets, separate `BUILDER_API_KEY`, `BUILDER_API_SECRET`, and
+does not require CLOB credentials. Smart wallets use separate
+`BUILDER_API_KEY`, `BUILDER_API_SECRET`, and
 `BUILDER_API_PASSPHRASE`. The example passes `clob.Config.Signer`, not exported
 key material; replace `signing.NewLocalSigner` with your device/service signer.
 EOA sends use its `signing.TransactionSigner` capability with SDK broadcasting,

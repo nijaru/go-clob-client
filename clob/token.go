@@ -326,7 +326,7 @@ func (c *SignerClient) SetupTradingApprovals(ctx context.Context) ([]TxReceipt, 
 // SetupTradingApprovalsGasless reads and batches the missing trading approvals
 // through the configured proxy, Safe, or deposit wallet. It returns nil,nil
 // when all required approvals are already present.
-func (c *AuthenticatedClient) SetupTradingApprovalsGasless(
+func (c *SignerClient) SetupTradingApprovalsGasless(
 	ctx context.Context,
 	metadata string,
 ) (*GaslessTransactionHandle, error) {
@@ -362,7 +362,7 @@ func (c *SignerClient) requireEOATokenOperation() error {
 
 // ApproveERC20 sends an ERC-20 approval directly from an EOA.
 //
-// For proxy, Safe, and deposit-wallet accounts use AuthenticatedClient's
+// For proxy, Safe, and deposit-wallet accounts use the signing client's
 // ApproveERC20Gasless method so the transaction is executed by the configured
 // wallet rather than the signing EOA.
 func (c *SignerClient) ApproveERC20(
@@ -423,7 +423,7 @@ func (c *SignerClient) TransferERC20(
 
 // ApproveERC20Gasless submits an ERC-20 approval through the configured
 // proxy, Safe, or deposit wallet.
-func (c *AuthenticatedClient) ApproveERC20Gasless(
+func (c *SignerClient) ApproveERC20Gasless(
 	ctx context.Context,
 	req ERC20ApprovalRequest,
 	metadata string,
@@ -441,7 +441,7 @@ func (c *AuthenticatedClient) ApproveERC20Gasless(
 
 // ApproveERC1155ForAllGasless submits an ERC-1155 operator approval through
 // the configured proxy, Safe, or deposit wallet.
-func (c *AuthenticatedClient) ApproveERC1155ForAllGasless(
+func (c *SignerClient) ApproveERC1155ForAllGasless(
 	ctx context.Context,
 	req ERC1155ApprovalForAllRequest,
 	metadata string,
@@ -459,7 +459,7 @@ func (c *AuthenticatedClient) ApproveERC1155ForAllGasless(
 
 // TransferERC20Gasless submits an ERC-20 transfer through the configured
 // proxy, Safe, or deposit wallet.
-func (c *AuthenticatedClient) TransferERC20Gasless(
+func (c *SignerClient) TransferERC20Gasless(
 	ctx context.Context,
 	req ERC20TransferRequest,
 	metadata string,

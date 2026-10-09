@@ -43,6 +43,8 @@ type SignerClient struct {
 	signatureType SignatureType
 	funderAddress string
 	saltGenerator func() (uint64, error)
+	builderMu     sync.RWMutex
+	builderAuth   BuilderAuth
 }
 
 // AuthenticatedClient extends the base client with methods requiring API credentials (L2).
@@ -51,7 +53,6 @@ type AuthenticatedClient struct {
 	authMu            sync.RWMutex
 	creds             *Credentials
 	decodedSecret     []byte
-	builderAuth       BuilderAuth
 	heartbeatID       string
 	heartbeatInterval time.Duration
 	heartbeatCancel   context.CancelFunc
@@ -69,7 +70,8 @@ func NewClient(config Config) (*Client, error) {
 	return newBase(config), nil
 }
 
-// NewSignerClient creates a signing CLOB client with L1 Ethereum auth.
+// NewSignerClient creates a client for L1 signing and wallet operations.
+// CLOB credentials are not required; construction performs no remote requests.
 func NewSignerClient(config Config) (*SignerClient, error) {
 	if config.PrivateKey == "" && config.Signer == nil {
 		return nil, fmt.Errorf("PrivateKey or Signer is required")
@@ -108,7 +110,6 @@ func NewAuthenticatedClient(config Config) (*AuthenticatedClient, error) {
 		SignerClient:      sc,
 		creds:             new(*config.Credentials),
 		decodedSecret:     decodedSecret,
-		builderAuth:       config.BuilderAuth,
 		heartbeatInterval: config.HeartbeatInterval,
 	}
 	base.http.Headers = authClient.addAuthHeaders
@@ -185,6 +186,7 @@ func newSignerFrom(base *Client, config Config) (*SignerClient, error) {
 		signatureType: config.SignatureType,
 		funderAddress: funderAddress,
 		saltGenerator: generateSalt,
+		builderAuth:   config.BuilderAuth,
 	}
 	base.http.Headers = sc.addAuthHeaders
 	base.gatewayHTTP.Headers = sc.addAuthHeaders
@@ -271,10 +273,10 @@ func (c *SignerClient) AsAuthenticatedWithInterval(
 			signatureType: c.signatureType,
 			funderAddress: c.funderAddress,
 			saltGenerator: c.saltGenerator,
+			builderAuth:   builder,
 		},
 		creds:             &creds,
 		decodedSecret:     decodedSecret,
-		builderAuth:       builder,
 		heartbeatInterval: heartbeatInterval,
 	}
 	ac.http.Headers = ac.addAuthHeaders

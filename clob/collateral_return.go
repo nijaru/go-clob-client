@@ -24,7 +24,7 @@ const (
 // PlanCollateralReturn builds an inspectable plan for returning redundant
 // conditional-position value to the authenticated wallet's collateral.
 // Planning is server-side and can take up to two minutes for large wallets.
-func (c *AuthenticatedClient) PlanCollateralReturn(
+func (c *SignerClient) PlanCollateralReturn(
 	ctx context.Context,
 ) (*CollateralReturnPlan, error) {
 	wallet, err := c.collateralReturnWallet()
@@ -59,7 +59,7 @@ type collateralReturnSubmitRequest struct {
 // ExecuteCollateralReturnPlan signs and submits the exact router call carried
 // by a previously planned collateral return. It does not recompute the plan
 // or submit approvals. Call Handle.Wait to observe the relayer transaction.
-func (c *AuthenticatedClient) ExecuteCollateralReturnPlan(
+func (c *SignerClient) ExecuteCollateralReturnPlan(
 	ctx context.Context,
 	plan CollateralReturnPlan,
 ) (*GaslessTransactionHandle, error) {
@@ -161,7 +161,7 @@ func (c *AuthenticatedClient) ExecuteCollateralReturnPlan(
 	return nil, fmt.Errorf("collateral return submit retry loop exhausted")
 }
 
-func (c *AuthenticatedClient) collateralReturnWallet() (common.Address, error) {
+func (c *SignerClient) collateralReturnWallet() (common.Address, error) {
 	switch c.signatureType {
 	case SignatureTypePolyProxy, SignatureTypePolyGnosisSafe, SignatureTypePoly1271:
 	default:
@@ -173,7 +173,7 @@ func (c *AuthenticatedClient) collateralReturnWallet() (common.Address, error) {
 	return common.HexToAddress(c.funderAddress), nil
 }
 
-func (c *AuthenticatedClient) collateralReturnHTTP() *polyhttp.Client {
+func (c *SignerClient) collateralReturnHTTP() *polyhttp.Client {
 	httpClient := *c.http.HTTPClient
 	if httpClient.Timeout > 0 && httpClient.Timeout < collateralReturnRequestTimeout {
 		httpClient.Timeout = collateralReturnRequestTimeout

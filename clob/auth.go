@@ -36,16 +36,17 @@ func (c *AuthenticatedClient) Credentials() *Credentials {
 }
 
 // PromoteToBuilder upgrades the client with builder credentials, enabling builder-authenticated requests.
-func (c *AuthenticatedClient) PromoteToBuilder(auth BuilderAuth) {
-	c.authMu.Lock()
-	defer c.authMu.Unlock()
+func (c *SignerClient) PromoteToBuilder(auth BuilderAuth) {
+	c.builderMu.Lock()
+	defer c.builderMu.Unlock()
 	c.builderAuth = auth
 }
 
 // SetCredentials updates the API credentials used for authenticated requests.
-// It re-derives the decoded HMAC secret from creds.Secret so subsequent L2 and
-// relayer requests sign with the new key. If the secret is not valid base64 the
-// existing credentials are left unchanged and an error is returned. Safe to
+// It re-derives the decoded HMAC secret from creds.Secret so subsequent CLOB L2
+// requests sign with the new key. Relayer and builder authentication are independent.
+// If the secret is not valid base64, existing credentials are left unchanged and
+// an error is returned. Safe to
 // call concurrently with in-flight requests.
 func (c *AuthenticatedClient) SetCredentials(creds Credentials) error {
 	decodedSecret, err := decodeCredentials(creds)
@@ -77,12 +78,12 @@ func (c *AuthenticatedClient) credentials() *Credentials {
 func (c *AuthenticatedClient) authSnapshot() (*Credentials, []byte, BuilderAuth) {
 	c.authMu.RLock()
 	defer c.authMu.RUnlock()
-	return c.creds, c.decodedSecret, c.builderAuth
+	return c.creds, c.decodedSecret, c.getBuilderAuth()
 }
 
-func (c *AuthenticatedClient) getBuilderAuth() BuilderAuth {
-	c.authMu.RLock()
-	defer c.authMu.RUnlock()
+func (c *SignerClient) getBuilderAuth() BuilderAuth {
+	c.builderMu.RLock()
+	defer c.builderMu.RUnlock()
 	return c.builderAuth
 }
 
@@ -158,7 +159,7 @@ func (c *AuthenticatedClient) addAuthHeaders(
 	}
 }
 
-func (c *AuthenticatedClient) builderHeaders(
+func (c *SignerClient) builderHeaders(
 	ctx context.Context,
 	method, path string,
 	body []byte,
@@ -177,7 +178,7 @@ func (c *AuthenticatedClient) builderHeaders(
 	})
 }
 
-func (c *AuthenticatedClient) builderOnlyHeaders(
+func (c *SignerClient) builderOnlyHeaders(
 	ctx context.Context,
 	method, path string,
 	body []byte,

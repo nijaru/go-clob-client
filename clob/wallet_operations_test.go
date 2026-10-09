@@ -122,7 +122,10 @@ func TestWalletPositionRoutingAndBalances(t *testing.T) {
 				}),
 			)
 			t.Cleanup(market.Close)
-			ops, err := NewWalletOperations(client, WalletOperationsConfig{GammaHost: market.URL})
+			ops, err := NewWalletOperations(
+				client.SignerClient,
+				WalletOperationsConfig{GammaHost: market.URL},
+			)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -215,7 +218,7 @@ func TestWalletComboSubmissionAndPositionRedemption(t *testing.T) {
 	client := newSessionOwner(t, server.URL)
 	rpc := walletBalanceRPC(t, client.WalletAddress(), 6, 4)
 	client.rpcURL = rpc.URL
-	ops, _ := NewWalletOperations(client, WalletOperationsConfig{})
+	ops, _ := NewWalletOperations(client.SignerClient, WalletOperationsConfig{})
 	legs := []*big.Int{nativeTestPosition(2, 1), nativeTestPosition(1, 0)}
 	combo, err := DeriveComboPositions(legs)
 	if err != nil {

@@ -4,7 +4,7 @@ import "context"
 
 // SplitPositionGasless executes the same raw CTF calldata as SplitPosition,
 // through the configured proxy, Safe or Deposit Wallet.
-func (c *AuthenticatedClient) SplitPositionGasless(
+func (c *SignerClient) SplitPositionGasless(
 	ctx context.Context,
 	req SplitPositionRequest,
 	metadata string,
@@ -21,7 +21,7 @@ func (c *AuthenticatedClient) SplitPositionGasless(
 }
 
 // MergePositionsGasless merges raw CTF positions through the smart wallet.
-func (c *AuthenticatedClient) MergePositionsGasless(
+func (c *SignerClient) MergePositionsGasless(
 	ctx context.Context,
 	req MergePositionsRequest,
 	metadata string,
@@ -38,7 +38,7 @@ func (c *AuthenticatedClient) MergePositionsGasless(
 }
 
 // RedeemPositionsGasless redeems raw CTF positions through the smart wallet.
-func (c *AuthenticatedClient) RedeemPositionsGasless(
+func (c *SignerClient) RedeemPositionsGasless(
 	ctx context.Context,
 	req RedeemPositionsRequest,
 	metadata string,
@@ -55,7 +55,7 @@ func (c *AuthenticatedClient) RedeemPositionsGasless(
 }
 
 // RedeemNegRiskGasless redeems the two NegRiskAdapter outcome balances.
-func (c *AuthenticatedClient) RedeemNegRiskGasless(
+func (c *SignerClient) RedeemNegRiskGasless(
 	ctx context.Context,
 	req RedeemNegRiskRequest,
 	metadata string,

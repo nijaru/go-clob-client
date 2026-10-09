@@ -294,7 +294,7 @@ func TestExternalCollateralExecutionAndIncompleteReconciliation(t *testing.T) {
 		t.Fatalf("unsupported external transaction signing: %v", err)
 	}
 	cfg.Transactions.Credentials = nil
-	if _, err := NewCollateralWallet(cfg); err == nil {
-		t.Fatal("missing real CLOB credentials accepted")
+	if _, err := NewCollateralWallet(cfg); err != nil {
+		t.Fatalf("unrelated CLOB credentials required by wallet execution: %v", err)
 	}
 }

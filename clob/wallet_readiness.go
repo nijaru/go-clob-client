@@ -28,7 +28,7 @@ type WalletReadiness struct {
 	Transaction *TransactionOutcome
 }
 
-func (c *AuthenticatedClient) requireDepositWalletDeploymentTarget() error {
+func (c *SignerClient) requireDepositWalletDeploymentTarget() error {
 	if c.signatureType != SignatureTypePoly1271 {
 		return ErrWalletDeploymentIdentity
 	}
@@ -48,7 +48,7 @@ func (c *AuthenticatedClient) requireDepositWalletDeploymentTarget() error {
 // requires no remote request. Undeployed proxy, legacy UUPS, and session-signer
 // wallets are not created. It does not verify chain receipts, grant approvals,
 // or wait for CLOB balances/session-key indexing.
-func (c *AuthenticatedClient) EnsureWalletReady(
+func (c *SignerClient) EnsureWalletReady(
 	ctx context.Context,
 	metadata string,
 ) (*WalletReadiness, error) {
@@ -97,7 +97,7 @@ func (c *AuthenticatedClient) EnsureWalletReady(
 // WaitWalletDeployed waits for the relayer's deployment view of this wallet.
 // It does not prove transaction confirmation or CLOB/indexer readiness. An EOA
 // is immediately ready. Failed reads never count as a deployed wallet.
-func (c *AuthenticatedClient) WaitWalletDeployed(ctx context.Context) error {
+func (c *SignerClient) WaitWalletDeployed(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}

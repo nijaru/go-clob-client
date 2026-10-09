@@ -44,7 +44,7 @@ func (s SignatureType) relayerWalletType() (polyrelay.RelayerTransactionType, er
 // RelayerTransport returns a relayer transport backed by a polyhttp client
 // pointed at the relayer host with context-selected auth. Each call builds a fresh
 // transport; construction is cheap.
-func (c *AuthenticatedClient) RelayerTransport() *RelayerTransport {
+func (c *SignerClient) RelayerTransport() *RelayerTransport {
 	return polyrelay.NewTransport(&polyhttp.Client{
 		BaseURL:    c.relayerHost,
 		HTTPClient: c.http.HTTPClient,
@@ -56,7 +56,7 @@ func (c *AuthenticatedClient) RelayerTransport() *RelayerTransport {
 // relayerHeaders emits exactly one auth scheme. Builder signatures cover the
 // method + bare path + body, excluding query strings. API-key auth requires no
 // timestamp or CLOB server-time request.
-func (c *AuthenticatedClient) relayerHeaders(
+func (c *SignerClient) relayerHeaders(
 	ctx context.Context,
 	method, path string,
 	body []byte,
@@ -102,7 +102,7 @@ func (c *AuthenticatedClient) relayerHeaders(
 
 // gaslessConfig builds the polyrelay config from the client's chain + wallet
 // state, validating the wallet type is supported on this chain.
-func (c *AuthenticatedClient) gaslessConfig() (polyrelay.GaslessConfig, error) {
+func (c *SignerClient) gaslessConfig() (polyrelay.GaslessConfig, error) {
 	walletType, err := c.signatureType.relayerWalletType()
 	if err != nil {
 		return polyrelay.GaslessConfig{}, err
@@ -158,7 +158,7 @@ func (c *AuthenticatedClient) gaslessConfig() (polyrelay.GaslessConfig, error) {
 
 // estimateProxyGas estimates gas for a proxy submission via eth_estimateGas.
 // Errors fall back to the relayer default (200000) inside polyrelay.
-func (c *AuthenticatedClient) estimateProxyGas(
+func (c *SignerClient) estimateProxyGas(
 	ctx context.Context,
 	from, to common.Address,
 	data []byte,
@@ -174,7 +174,7 @@ func (c *AuthenticatedClient) estimateProxyGas(
 // PrepareGaslessTransaction signs and submits a batch of calls through the
 // relayer for the client's wallet type, retrying transient submit failures.
 // The returned Handle is polled (or Wait-ed) for confirmation.
-func (c *AuthenticatedClient) PrepareGaslessTransaction(
+func (c *SignerClient) PrepareGaslessTransaction(
 	ctx context.Context,
 	calls []TransactionCall,
 	metadata string,
@@ -196,7 +196,7 @@ func (c *AuthenticatedClient) PrepareGaslessTransaction(
 // DeployDepositWallet submits an unsigned WALLET-CREATE for the configured
 // owner's beacon Deposit Wallet. It cannot deploy a different wallet from the
 // one used by this client. Confirmation is explicit via the returned handle.
-func (c *AuthenticatedClient) DeployDepositWallet(
+func (c *SignerClient) DeployDepositWallet(
 	ctx context.Context,
 	metadata string,
 ) (*GaslessTransactionHandle, error) {
@@ -219,7 +219,7 @@ func (c *AuthenticatedClient) DeployDepositWallet(
 // using context-selected relayer auth. It does not prove chain confirmation or
 // trading readiness. Use IsWalletDeployedAt for a public unauthenticated probe,
 // or IsDepositWalletDeployed for an EOA-derived deposit wallet probe.
-func (c *AuthenticatedClient) IsWalletDeployed(ctx context.Context) (bool, error) {
+func (c *SignerClient) IsWalletDeployed(ctx context.Context) (bool, error) {
 	cfg, err := c.gaslessConfig()
 	if err != nil {
 		return false, err

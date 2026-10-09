@@ -11,8 +11,8 @@ import (
 )
 
 // CollateralWalletConfig binds the perps owner to CLOB's existing transaction
-// engine. Transactions accepts a signing.Signer or local PrivateKey, and still
-// requires CLOB credentials. Smart wallets require separate relayer auth, selected
+// engine. Transactions accepts a signing.Signer or local PrivateKey; CLOB L2
+// credentials are not required. Smart wallets require relayer auth, selected
 // by context or BuilderAuth. EOA sends use signing.TransactionSigner or optional
 // wallet-owned signing.TransactionSender; Safe/proxy relay signing uses
 // signing.MessageSigner.
@@ -30,7 +30,7 @@ type CollateralWalletConfig struct {
 // this optional transaction adapter.
 type CollateralWallet struct {
 	*OwnerClient
-	transactions *clob.AuthenticatedClient
+	transactions *clob.SignerClient
 	rpcURL       string
 	walletType   clob.SignatureType
 }
@@ -70,7 +70,7 @@ func NewCollateralWallet(config CollateralWalletConfig) (*CollateralWallet, erro
 		}
 		cfg.FunderAddress = wallet.Hex()
 	}
-	client, err := clob.NewAuthenticatedClient(cfg)
+	client, err := clob.NewSignerClient(cfg)
 	if err != nil {
 		return nil, err
 	}

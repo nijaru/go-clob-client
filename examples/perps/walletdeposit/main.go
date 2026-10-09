@@ -143,20 +143,12 @@ func run() error {
 			return err
 		}
 	}
-	if os.Getenv("CLOB_API_KEY") == "" || os.Getenv("CLOB_API_SECRET") == "" ||
-		os.Getenv("CLOB_API_PASSPHRASE") == "" {
-		return fmt.Errorf("managed execution still requires real CLOB L2 credentials")
-	}
 	wallet, err := perps.NewCollateralWallet(perps.CollateralWalletConfig{
 		Owner: ownerConfig,
 		Transactions: clob.Config{
 			ChainID: *chain, Signer: signer, SignatureType: signature,
 			FunderAddress: walletAddress, RPCURL: os.Getenv("RPC_URL"),
 			RelayerHost: os.Getenv("RELAYER_HOST"), BuilderAuth: builder,
-			Credentials: &clob.Credentials{
-				Key: os.Getenv("CLOB_API_KEY"), Secret: os.Getenv("CLOB_API_SECRET"),
-				Passphrase: os.Getenv("CLOB_API_PASSPHRASE"),
-			},
 		},
 	})
 	if err != nil {

@@ -128,13 +128,13 @@ func (c *SignerClient) waitWalletTransactionReceipt(
 // an EOA sequence is not atomic. On error a nonnil handle retains any confirmed
 // prefix and every send attempt, including external attempts without a hash.
 // Never blindly retry the whole sequence; inspect the handle and reconcile first.
-func (c *AuthenticatedClient) ExecuteWalletTransaction(
+func (c *SignerClient) ExecuteWalletTransaction(
 	ctx context.Context,
 	calls []TransactionCall,
 	metadata string,
 ) (*WalletTransactionHandle, error) {
 	if c.signatureType == SignatureTypeEOA {
-		return c.SignerClient.ExecuteEOACalls(ctx, calls)
+		return c.ExecuteEOACalls(ctx, calls)
 	}
 	if len(calls) == 0 {
 		return nil, fmt.Errorf("%w: no calls", ErrInvalidPositionOperation)
@@ -153,7 +153,7 @@ func (c *AuthenticatedClient) ExecuteWalletTransaction(
 		TransactionHash: h.TransactionHash,
 		RequestedCalls:  len(calls),
 		relayer:         h,
-		signer:          c.SignerClient,
+		signer:          c,
 	}, nil
 }
 

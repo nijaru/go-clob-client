@@ -46,7 +46,7 @@ func WithRelayerAuth(ctx context.Context, cfg RelayerAuthConfig) (context.Contex
 	return context.WithValue(ctx, relayerAuthContextKey{}, cfg), nil
 }
 
-func (c *AuthenticatedClient) relayerAuth(ctx context.Context) RelayerAuthConfig {
+func (c *SignerClient) relayerAuth(ctx context.Context) RelayerAuthConfig {
 	if cfg, ok := ctx.Value(relayerAuthContextKey{}).(RelayerAuthConfig); ok {
 		return cfg
 	}
