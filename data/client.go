@@ -25,6 +25,9 @@ type Config struct {
 
 // Client reads the current Data API. It is safe for concurrent use provided
 // the configured HTTP transport is. It performs no signing or trading writes.
+// Indexed JSON reads retry HTTP 429 twice, honoring server retry delays (one second
+// when absent). Delays over five seconds propagate without retrying; the caller's
+// context bounds requests and waits. Accounting downloads are not retried.
 type Client struct{ http *polyhttp.Client }
 
 func NewClient(config Config) (*Client, error) {
@@ -112,7 +115,7 @@ func getPage[T any](
 			NextCursor json.RawMessage `json:"next_cursor"`
 		} `json:"pagination"`
 	}
-	if err := c.http.GetJSON(ctx, path, q, polyhttp.AuthNone, &envelope); err != nil {
+	if err := c.getReadJSON(ctx, path, q, &envelope); err != nil {
 		return empty, err
 	}
 	if len(envelope.Data) == 0 || envelope.Data[0] != '[' || envelope.Pagination == nil ||
@@ -146,7 +149,7 @@ func getValue[T any](
 	var envelope struct {
 		Data json.RawMessage `json:"data"`
 	}
-	if err := c.http.GetJSON(ctx, path, q, polyhttp.AuthNone, &envelope); err != nil {
+	if err := c.getReadJSON(ctx, path, q, &envelope); err != nil {
 		return nil, err
 	}
 	if len(envelope.Data) == 0 {
