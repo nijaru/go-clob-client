@@ -229,13 +229,19 @@ Data v2 exposes server `HasMore`/`NextCursor`; row count is not completion. Iter
 follow opaque cursors, detect cycles and stop without prefetch after cancellation
 or an early break. `data/legacy` is a separate import, never an automatic fallback.
 Financial wire decimals retain their digits; accounting ZIPs stream to a
-caller-owned writer. Unknown wallet activity keeps its raw payload.
+caller-owned writer. Indexed JSON reads retry HTTP 429 twice, with cancellable
+waits and a five-second server-delay ceiling; accounting downloads do not retry.
+Known combo IDs normalize to structural condition IDs; unknown wallet activity
+keeps its raw payload.
 
 Gamma provides offset and query-bound keyset discovery. Comment offsets count
 roots, not replies. Offset-only comments cap at 200 and search at 100 pages;
 iterators report incomplete enumeration instead of silently claiming exhaustion.
-See [Gamma package documentation](https://pkg.go.dev/github.com/nijaru/go-clob-client/gamma)
-for filter/keyset eligibility and optional-field limitations.
+Nullable state retains unknown versus explicit false/zero, financial decimals
+remain exact, and `OutcomeDetails` pairs legacy and native assets by wire index.
+Timestamps normalize Gamma's ISO/PostgreSQL forms to UTC. See
+[Gamma package documentation](https://pkg.go.dev/github.com/nijaru/go-clob-client/gamma)
+for filter/keyset eligibility and wire models.
 
 Bridge uses `NewClient`, full uint64 chain IDs, canonical uint256 base-unit amounts
 and lossless USD estimates. `CreateDepositAddress`/`CreateWithdrawalAddress`
@@ -251,7 +257,10 @@ builders, internal transfers and explicit collateral workflows. Owner and delega
 signers use the shared verified signing boundary. The managed collateral adapter
 uses the signing client without CLOB credentials; smart wallets authenticate
 separately with relayer API keys or builder credentials. Externally managed calls
-can also use the independent owner/sender boundary. See
+can also use the independent owner/sender boundary. An optional
+`signing.TransactionWaiter` reconciles fee replacements while verifying signed
+call intent and mined receipt identity; original submission hashes remain intact.
+See
 [the perps guide](perps/README.md) for signing, reconciliation and wallet limits.
 
 `NewMarketStream(ctx)` pools public filters with independently cancellable handles.
@@ -260,7 +269,8 @@ explicit error, not silent update loss. Book reconstruction and resync backfill
 remain caller-owned. Timestamp-only histories report nonprogress when exhaustive
 retrieval cannot be proven.
 
-Legacy CLOB WebSocket/RTDS feeds remain available. `realtime` separately implements
+Legacy CLOB WebSocket/RTDS feeds remain available. RTDS shares broad wire topics,
+filters local interests independently, and exposes generic `Unsubscribe`. `realtime` separately implements
 Polybolt's authenticated crypto/equity spot and fixed 60-second TWAP feeds with
 pooled filters, acknowledgements, snapshots and provider provenance. Requested
 provider and actual source are distinct. `sports` is a public all-games feed, not
