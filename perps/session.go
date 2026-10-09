@@ -184,6 +184,7 @@ func (c *AuthenticatedClient) OpenSession(
 		done:           make(chan struct{}),
 		heartbeatDone:  make(chan struct{}),
 		chainID:        c.chainID,
+		signer:         c.signer,
 		webSocketURL:   webSocketURL,
 		channels:       channels,
 		pending:        make(map[int]chan sessionResponse),
@@ -192,12 +193,6 @@ func (c *AuthenticatedClient) OpenSession(
 		sequences:      make(map[string]int64),
 	}
 	session.lastMessage.Store(time.Now().UnixNano())
-	session.signer, err = c.delegatedSigner()
-	if err != nil {
-		cancel()
-		_ = conn.Close(websocket.StatusPolicyViolation, "invalid signing key")
-		return nil, err
-	}
 	if err := session.handshake(ctx, conn, c.credentials, channels); err != nil {
 		cancel()
 		_ = conn.Close(websocket.StatusPolicyViolation, "authentication failed")

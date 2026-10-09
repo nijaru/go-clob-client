@@ -72,7 +72,11 @@ relayer credentials are separate from CLOB credentials. `Config.Signer` accepts
 an external/hardware EOA signer; `PrivateKey` is a mutually exclusive local-key
 convenience. Signatures are verified against the pinned EOA, including low-S and
 recovery-byte checks; deposit-wallet wrapping signs nested EIP-712 data rather
-than asking a hardware wallet to authorize an opaque hash.
+than asking a hardware wallet to authorize an opaque hash. EOAs can expose either
+verified transaction signing with SDK-owned broadcasting, or wallet-owned
+`TransactionSender` for nonce, gas and sending. An opaque returned hash does not
+prove signed intent; its sender owns correct execution. Known and unknown-hash
+send failures remain inspectable uncertainty, never automatic retries.
 
 ```go
 client, err := clob.NewAuthenticatedClient(clob.Config{
@@ -171,8 +175,9 @@ plans remain explicit. A collateral-return plan may cover only one chunk: confir
 it before obtaining the next plan.
 
 Smart-wallet calls relay one atomic batch. EOA batches are sequential and
-**not atomic**; failure can leave approvals or a confirmed prefix behind. Submission
-returns handles. Call `Wait(ctx)` or `WaitReceipt(ctx)` explicitly; relayer registry
+**not atomic**; failure can leave approvals or a confirmed prefix behind. A nonnil
+handle may accompany an error: retain its `Submissions` and reconcile before
+retrying. Call `Wait(ctx)` or `WaitReceipts(ctx)` explicitly; relayer registry
 visibility, mined receipts, CLOB indexing and perps ledger credit are different
 states. Deployment is not approval, funding or order readiness.
 
@@ -241,7 +246,10 @@ performs only public reads unless `-deposit-wallet` explicitly enables registrat
 Perps has separate credentials, REST/WebSocket protocols and owner/session signing.
 It supports credential creation/resumption/revocation, account/history reads,
 notifications/ADL, GTD, TP/SL and trailing exits, cancellation/risk, TWAP/chase,
-builders, internal transfers and explicit collateral workflows. See
+builders, internal transfers and explicit collateral workflows. Owner and delegated
+signers use the shared verified signing boundary. The managed collateral adapter
+still requires CLOB credentials; externally managed calls can use the independent
+owner/sender boundary. See
 [the perps guide](perps/README.md) for signing, reconciliation and wallet limits.
 
 `NewMarketStream(ctx)` pools public filters with independently cancellable handles.

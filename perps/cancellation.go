@@ -30,10 +30,7 @@ func (c *AuthenticatedClient) CancelAllOrders(
 	} else {
 		rawArgs = []any{}
 	}
-	signer, err := c.delegatedSigner()
-	if err != nil {
-		return err
-	}
+	signer := c.signer
 	command, err := makePerpsSignedCommand(
 		ctx,
 		signer,

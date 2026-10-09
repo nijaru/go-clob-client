@@ -12,8 +12,10 @@ import (
 
 // CollateralWalletConfig binds the perps owner to CLOB's existing transaction
 // engine. Transactions accepts a signing.Signer or local PrivateKey, and still
-// requires CLOB credentials; smart wallets also require BuilderAuth. EOA sends
-// require signing.TransactionSigner, and Safe/proxy sends signing.MessageSigner.
+// requires CLOB credentials. Smart wallets require separate relayer auth, selected
+// by context or BuilderAuth. EOA sends use signing.TransactionSigner or optional
+// wallet-owned signing.TransactionSender; Safe/proxy relay signing uses
+// signing.MessageSigner.
 // None of these credentials is perps auth.
 // Owner.Wallet may be omitted to use the derived transaction wallet.
 // A missing Poly1271 funder selects the current beacon derivation offline;

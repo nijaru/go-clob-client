@@ -94,10 +94,7 @@ func (c *AuthenticatedClient) signedREST(
 	expiry int64,
 	out any,
 ) error {
-	signer, err := c.delegatedSigner()
-	if err != nil {
-		return err
-	}
+	signer := c.signer
 	body, err := makePerpsSignedCommand(
 		ctx,
 		signer,

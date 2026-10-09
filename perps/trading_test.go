@@ -169,10 +169,7 @@ func TestAutoCancelSignsAndSendsAuthenticatedREST(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewAuthenticated: %v", err)
 	}
-	signer, err := client.delegatedSigner()
-	if err != nil {
-		t.Fatalf("delegatedSigner: %v", err)
-	}
+	signer := client.signer
 	session := &Session{client: client, chainID: 31337, signer: signer}
 	if err := session.ArmAutoCancel(
 		t.Context(),
@@ -204,7 +201,7 @@ func TestAutoCancelDailyLimitIsClassified(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewAuthenticated: %v", err)
 	}
-	signer, _ := client.delegatedSigner()
+	signer := client.signer
 	session := &Session{client: client, chainID: 31337, signer: signer}
 	err = session.ArmAutoCancel(t.Context(), time.Now().Add(10*time.Second).UnixMilli(), 0)
 	if !errors.Is(err, ErrPerpsAutoCancelDailyLimit) {

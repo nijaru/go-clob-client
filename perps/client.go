@@ -141,10 +141,6 @@ func (c *AuthenticatedClient) Credentials() PerpsCredentials {
 	return c.credentials
 }
 
-func (c *AuthenticatedClient) delegatedSigner() (*signing.Wallet, error) {
-	return c.signer, nil
-}
-
 func (c *AuthenticatedClient) getAuthenticatedJSON(
 	ctx context.Context,
 	path string,
