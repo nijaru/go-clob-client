@@ -1,9 +1,11 @@
 package rtds
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sync"
 	"time"
 
@@ -30,7 +32,6 @@ type Client struct {
 
 	msgs         chan *RtdsMessage
 	errs         chan error
-	stop         chan struct{}
 	ctx          context.Context
 	cancel       context.CancelFunc
 	connCancel   context.CancelFunc
@@ -39,7 +40,7 @@ type Client struct {
 
 	autoReconnect bool
 	subsMu        sync.RWMutex
-	subs          []Subscription
+	subs          []registration
 	creds         *Credentials
 
 	heartbeatInterval time.Duration
@@ -60,7 +61,6 @@ func NewClient(url string, logger *slog.Logger) *Client {
 		logger:            logger.With("pkg", "rtds"),
 		msgs:              make(chan *RtdsMessage, 1024),
 		errs:              make(chan error, 100),
-		stop:              make(chan struct{}),
 		ctx:               ctx,
 		cancel:            cancel,
 		autoReconnect:     true,
@@ -73,7 +73,11 @@ func NewClient(url string, logger *slog.Logger) *Client {
 func (c *Client) WithCredentials(creds *Credentials) *Client {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.creds = creds
+	c.creds = nil
+	if creds != nil {
+		snapshot := *creds
+		c.creds = &snapshot
+	}
 	return c
 }
 
@@ -98,6 +102,9 @@ func (c *Client) connect(ctx context.Context) error {
 
 	loopCtx, cancel := context.WithCancel(c.ctx)
 
+	// Serialize publishing the connection and replay with registration changes.
+	c.subsMu.Lock()
+	defer c.subsMu.Unlock()
 	c.mu.Lock()
 	if c.closed || c.conn != nil {
 		closed := c.closed
@@ -121,13 +128,14 @@ func (c *Client) connect(ctx context.Context) error {
 	}
 
 	pongs := make(chan time.Time, 1)
-	go c.readLoop(loopCtx, conn, done, pongs)
+	go func() {
+		defer cancel()
+		defer conn.CloseNow()
+		c.readLoop(loopCtx, conn, done, pongs)
+	}()
 	go c.heartbeatLoop(loopCtx, conn, pongs)
 
-	// Resubscribe if reconnecting
-	c.subsMu.RLock()
-	subs := append([]Subscription(nil), c.subs...)
-	c.subsMu.RUnlock()
+	subs := serverSubscriptions(c.subs)
 
 	if len(subs) > 0 {
 		c.logger.Debug("resubscribing to topics", "count", len(subs))
@@ -136,7 +144,7 @@ func (c *Client) connect(ctx context.Context) error {
 			Subscriptions: subs,
 		}
 		if err := c.sendJSON(ctx, req); err != nil {
-			c.logger.Error("resubscribe failed", "error", err)
+			return fmt.Errorf("resubscribe: %w", err)
 		}
 	}
 
@@ -169,21 +177,23 @@ func (c *Client) Close() error {
 	conn := c.conn
 	c.mu.Unlock()
 
-	close(c.stop)
 	if cancel != nil {
 		cancel()
 	}
 	if connCancel != nil {
 		connCancel()
 	}
+	var err error
 	if conn != nil {
-		err := conn.Close(websocket.StatusNormalClosure, "")
-		if done != nil {
-			<-done
-		}
-		return err
+		err = conn.Close(websocket.StatusNormalClosure, "")
 	}
-	return nil
+	if done != nil {
+		<-done
+	}
+	c.subsMu.Lock()
+	c.subs = nil
+	c.subsMu.Unlock()
+	return err
 }
 
 // Messages returns a channel of received RTDS messages.
@@ -196,17 +206,43 @@ func (c *Client) Errors() <-chan error {
 	return c.errs
 }
 
-// Subscribe adds a new subscription.
+// Subscribe registers a local interest. Each call owns one registration; use
+// Unsubscribe with the same subscription to release it. Messages contains the
+// union of matching interests, with each incoming message delivered once.
+// Filters narrow messages locally; the server receives one broad subscription
+// per topic/type. Registrations made while disconnected are replayed on Connect.
+// On a write error the registration is retained for reconnect and the error is
+// returned to the caller.
 func (c *Client) Subscribe(ctx context.Context, sub Subscription) error {
-	c.subsMu.Lock()
-	c.subs = append(c.subs, sub)
-	c.subsMu.Unlock()
-
-	req := SubscriptionRequest{
-		Action:        ActionSubscribe,
-		Subscriptions: []Subscription{sub},
+	entry, err := newRegistration(sub)
+	if err != nil {
+		return err
 	}
-	return c.sendJSON(ctx, req)
+	c.subsMu.Lock()
+	defer c.subsMu.Unlock()
+	c.mu.Lock()
+	closed := c.closed
+	c.mu.Unlock()
+	if closed {
+		return fmt.Errorf("client closed")
+	}
+	for _, existing := range c.subs {
+		if existing.sub.Topic == entry.sub.Topic && existing.sub.Type == entry.sub.Type &&
+			!sameCredentials(existing.sub.CLOBAuth, entry.sub.CLOBAuth) {
+			return fmt.Errorf(
+				"rtds: conflicting credentials for topic/type %s/%s",
+				sub.Topic,
+				sub.Type,
+			)
+		}
+	}
+	before := serverSubscriptions(c.subs)
+	c.subs = append(c.subs, entry)
+	return c.syncSubscriptions(
+		ctx,
+		ActionSubscribe,
+		serverDifference(serverSubscriptions(c.subs), before),
+	)
 }
 
 // SubscribeCryptoPrices subscribes to Binance crypto prices.
@@ -234,8 +270,7 @@ func (c *Client) SubscribeChainlinkPrices(ctx context.Context, symbol string) er
 }
 
 // SubscribeChainlinkTWAP subscribes broadly to a supported Chainlink TWAP
-// window. Filter the typed messages by Symbol locally when needed; RTDS
-// replaces the prior topic filter when a second filtered subscription is sent.
+// window. Use Subscribe with a symbol filter to narrow messages locally.
 func (c *Client) SubscribeChainlinkTWAP(
 	ctx context.Context,
 	window ChainlinkTWAPWindowSeconds,
@@ -296,10 +331,14 @@ func (c *Client) readLoop(
 				return
 			}
 			c.mu.Lock()
-			if c.conn == conn {
+			current := c.conn == conn
+			if current {
 				c.conn = nil
 			}
 			c.mu.Unlock()
+			if !current {
+				return
+			}
 			c.logger.Error("read error", "error", err)
 
 			if c.autoReconnect {
@@ -323,29 +362,16 @@ func (c *Client) readLoop(
 			continue
 		}
 
-		// RTDS can return a single message or an array of messages
-		if len(data) == 0 {
-			continue
-		}
-
-		// Handle whitespace keepalive (like " ")
-		isWhitespace := true
-		for _, b := range data {
-			if b != ' ' && b != '\n' && b != '\r' && b != '\t' {
-				isWhitespace = false
-				break
-			}
-		}
-		if isWhitespace {
-			continue
-		}
-
 		c.handleData(ctx, data)
 	}
 }
 
 func (c *Client) handleData(ctx context.Context, data []byte) {
-	// Try array first
+	data = bytes.TrimSpace(data)
+	if len(data) == 0 {
+		return
+	}
+	// RTDS can return a single message or an array of messages.
 	if data[0] == '[' {
 		var msgs []*RtdsMessage
 		if err := json.Unmarshal(data, &msgs); err != nil {
@@ -366,6 +392,21 @@ func (c *Client) handleData(ctx context.Context, data []byte) {
 }
 
 func (c *Client) dispatch(ctx context.Context, m *RtdsMessage) {
+	if m == nil {
+		return
+	}
+	c.subsMu.RLock()
+	matched := false
+	for _, entry := range c.subs {
+		if entry.matches(m) {
+			matched = true
+			break
+		}
+	}
+	c.subsMu.RUnlock()
+	if !matched {
+		return
+	}
 	select {
 	case c.msgs <- m:
 	case <-ctx.Done():
@@ -411,7 +452,8 @@ func (c *Client) heartbeatLoop(
 					return
 				}
 				c.logger.Error("ping failed", "error", err)
-				c.scheduleReconnect()
+				// The reader owns connection loss and reconnect scheduling.
+				_ = conn.CloseNow()
 				return
 			}
 
@@ -433,21 +475,28 @@ func (c *Client) heartbeatLoop(
 				}
 			case <-timeout.C:
 				_ = conn.Close(websocket.StatusPolicyViolation, "heartbeat timeout")
-				c.scheduleReconnect()
 				return
 			}
 		}
 	}
 }
 
-// UnsubscribeCryptoPrices unsubscribes from crypto price updates.
-func (c *Client) UnsubscribeCryptoPrices(ctx context.Context) error {
-	return c.unsubscribe(ctx, "crypto_prices", "update")
+// UnsubscribeCryptoPrices releases one interest for the given symbols.
+func (c *Client) UnsubscribeCryptoPrices(ctx context.Context, symbols []string) error {
+	sub := Subscription{Topic: "crypto_prices", Type: "update"}
+	if len(symbols) > 0 {
+		sub.Filters = symbols
+	}
+	return c.Unsubscribe(ctx, sub)
 }
 
-// UnsubscribeChainlinkPrices unsubscribes from Chainlink price feed updates.
-func (c *Client) UnsubscribeChainlinkPrices(ctx context.Context) error {
-	return c.unsubscribe(ctx, "crypto_prices_chainlink", "*")
+// UnsubscribeChainlinkPrices releases one interest for the given symbol.
+func (c *Client) UnsubscribeChainlinkPrices(ctx context.Context, symbol string) error {
+	sub := Subscription{Topic: "crypto_prices_chainlink", Type: "*"}
+	if symbol != "" {
+		sub.Filters = map[string]string{"symbol": symbol}
+	}
+	return c.Unsubscribe(ctx, sub)
 }
 
 // UnsubscribeChainlinkTWAP unsubscribes from one Chainlink TWAP window.
@@ -459,7 +508,7 @@ func (c *Client) UnsubscribeChainlinkTWAP(
 	if err != nil {
 		return err
 	}
-	return c.unsubscribe(ctx, topic, "update")
+	return c.Unsubscribe(ctx, Subscription{Topic: topic, Type: "update"})
 }
 
 // UnsubscribeChainlinkTWAP30Seconds unsubscribes from the 30-second TWAP feed.
@@ -472,39 +521,55 @@ func (c *Client) UnsubscribeChainlinkTWAP60Seconds(ctx context.Context) error {
 	return c.UnsubscribeChainlinkTWAP(ctx, ChainlinkTWAP60Seconds)
 }
 
-// UnsubscribeComments unsubscribes from comment events.
-func (c *Client) UnsubscribeComments(ctx context.Context, commentType CommentType) error {
+// UnsubscribeComments releases one comment interest with the given credentials.
+// As in SubscribeComments, nil uses the client's configured credentials.
+func (c *Client) UnsubscribeComments(
+	ctx context.Context,
+	commentType CommentType,
+	auth *Credentials,
+) error {
 	msgType := string(commentType)
 	if msgType == "" {
 		msgType = "*"
 	}
-	return c.unsubscribe(ctx, "comments", msgType)
+	if auth == nil {
+		c.mu.Lock()
+		auth = c.creds
+		c.mu.Unlock()
+	}
+	return c.Unsubscribe(ctx, Subscription{Topic: "comments", Type: msgType, CLOBAuth: auth})
 }
 
-// unsubscribe sends an unsubscribe request for the given topic and removes it from the tracked subs.
-func (c *Client) unsubscribe(ctx context.Context, topic, msgType string) error {
+// Unsubscribe releases one registration equal to sub (including filters and
+// credentials). Other registrations, even identical ones, remain active. A
+// missing registration is a no-op. On a write error the local release remains
+// effective and reconnect replays only the remaining interests.
+func (c *Client) Unsubscribe(ctx context.Context, sub Subscription) error {
+	entry, err := newRegistration(sub)
+	if err != nil {
+		return err
+	}
 	c.subsMu.Lock()
-	var remaining []Subscription
-	var removed []Subscription
-	for _, s := range c.subs {
-		if s.Topic == topic && (msgType == "" || s.Type == msgType) {
-			removed = append(removed, s)
-		} else {
-			remaining = append(remaining, s)
+	defer c.subsMu.Unlock()
+	before := serverSubscriptions(c.subs)
+	for i, existing := range c.subs {
+		if existing.identity == entry.identity {
+			c.subs = slices.Delete(c.subs, i, i+1)
+			break
 		}
 	}
-	c.subs = remaining
-	c.subsMu.Unlock()
+	return c.syncSubscriptions(
+		ctx,
+		ActionUnsubscribe,
+		serverDifference(before, serverSubscriptions(c.subs)),
+	)
+}
 
-	if len(removed) == 0 {
+func (c *Client) syncSubscriptions(ctx context.Context, action Action, subs []Subscription) error {
+	if len(subs) == 0 || !c.IsConnected() {
 		return nil
 	}
-
-	req := SubscriptionRequest{
-		Action:        ActionUnsubscribe,
-		Subscriptions: removed,
-	}
-	return c.sendJSON(ctx, req)
+	return c.sendJSON(ctx, SubscriptionRequest{Action: action, Subscriptions: subs})
 }
 
 // IsConnected reports whether the client has an active WebSocket connection.
@@ -528,7 +593,8 @@ func chainlinkTWAPTopic(window ChainlinkTWAPWindowSeconds) (string, error) {
 	}
 }
 
-// SubscriptionCount returns the number of active subscriptions.
+// SubscriptionCount returns the number of local registrations, including
+// duplicate interests and registrations awaiting connection.
 func (c *Client) SubscriptionCount() int {
 	c.subsMu.RLock()
 	defer c.subsMu.RUnlock()
@@ -547,7 +613,13 @@ func (c *Client) sendJSON(ctx context.Context, v any) error {
 	if conn == nil {
 		return fmt.Errorf("not connected")
 	}
-	return conn.Write(ctx, websocket.MessageText, data)
+	if err := conn.Write(ctx, websocket.MessageText, data); err != nil {
+		// A partial write leaves server state uncertain. Reconnect from the
+		// authoritative local registrations rather than retrying a delta.
+		_ = conn.CloseNow()
+		return err
+	}
+	return nil
 }
 
 func (c *Client) reportError(err error) {
@@ -561,7 +633,11 @@ func (c *Client) attemptReconnect() {
 	defer func() {
 		c.mu.Lock()
 		c.reconnecting = false
+		retry := !c.closed && c.conn == nil
 		c.mu.Unlock()
+		if retry {
+			c.scheduleReconnect()
+		}
 	}()
 
 	backoff := 1 * time.Second

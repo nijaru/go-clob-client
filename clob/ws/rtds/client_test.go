@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -225,9 +226,13 @@ func TestRTDSClient(t *testing.T) {
 						}
 					}
 
+					msgType := sub.Type
+					if msgType == "*" {
+						msgType = "update"
+					}
 					resp := RtdsMessage{
 						Topic:     sub.Topic,
-						Type:      "update",
+						Type:      msgType,
 						Timestamp: time.Now().UnixMilli(),
 					}
 					resp.Payload, _ = json.Marshal(payload)
@@ -313,16 +318,18 @@ func TestRTDSReconnect(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
-	connCount := 0
+	var connCount atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		connCount++
+		current := connCount.Add(1)
 		conn, err := websocket.Accept(w, r, nil)
 		if err != nil {
 			return
 		}
 
+		defer conn.CloseNow()
+
 		// If it's the first connection, close it immediately to trigger reconnect
-		if connCount == 1 {
+		if current == 1 {
 			conn.Close(websocket.StatusGoingAway, "bye")
 			return
 		}
@@ -338,7 +345,7 @@ func TestRTDSReconnect(t *testing.T) {
 				if err := json.Unmarshal(data, &req); err == nil {
 					resp := RtdsMessage{
 						Topic: req.Subscriptions[0].Topic,
-						Type:  "reconnected",
+						Type:  req.Subscriptions[0].Type,
 					}
 					respData, _ := json.Marshal(resp)
 					conn.Write(r.Context(), websocket.MessageText, respData)
@@ -352,8 +359,10 @@ func TestRTDSReconnect(t *testing.T) {
 	client := NewClient(url, nil)
 	t.Cleanup(func() { client.Close() })
 
-	// Pre-add a subscription so it resubscribes on reconnect
-	client.subs = append(client.subs, Subscription{Topic: "reconnect_test", Type: "test"})
+	// Register through the public API before connecting, then replay on reconnect.
+	if err := client.Subscribe(ctx, Subscription{Topic: "reconnect_test", Type: "test"}); err != nil {
+		t.Fatal(err)
+	}
 
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("initial connect failed: %v", err)
@@ -365,15 +374,15 @@ func TestRTDSReconnect(t *testing.T) {
 		if msg.Topic != "reconnect_test" {
 			t.Errorf("expected topic reconnect_test, got %s", msg.Topic)
 		}
-		if msg.Type != "reconnected" {
-			t.Errorf("expected type reconnected, got %s", msg.Type)
+		if msg.Type != "test" {
+			t.Errorf("expected type test, got %s", msg.Type)
 		}
 	case <-ctx.Done():
-		t.Fatalf("timed out waiting for reconnect message, connCount: %d", connCount)
+		t.Fatalf("timed out waiting for reconnect message, connCount: %d", connCount.Load())
 	}
 
-	if connCount < 2 {
-		t.Errorf("expected at least 2 connections, got %d", connCount)
+	if connCount.Load() < 2 {
+		t.Errorf("expected at least 2 connections, got %d", connCount.Load())
 	}
 }
 
@@ -382,11 +391,10 @@ func TestRTDSHeartbeatTimeoutTriggersReconnect(t *testing.T) {
 	defer cancel()
 
 	reconnected := make(chan struct{}, 1)
-	connCount := 0
+	var connCount atomic.Int32
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		connCount++
-		current := connCount
+		current := connCount.Add(1)
 
 		conn, err := websocket.Accept(w, r, nil)
 		if err != nil {
@@ -429,10 +437,10 @@ func TestRTDSHeartbeatTimeoutTriggersReconnect(t *testing.T) {
 	select {
 	case <-reconnected:
 	case <-ctx.Done():
-		t.Fatalf("timed out waiting for reconnect, connCount=%d", connCount)
+		t.Fatalf("timed out waiting for reconnect, connCount=%d", connCount.Load())
 	}
 
-	if connCount < 2 {
-		t.Fatalf("expected reconnect after heartbeat timeout, connCount=%d", connCount)
+	if connCount.Load() < 2 {
+		t.Fatalf("expected reconnect after heartbeat timeout, connCount=%d", connCount.Load())
 	}
 }

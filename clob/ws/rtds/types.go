@@ -32,7 +32,13 @@ type Credentials struct {
 	Passphrase string `json:"passphrase"`
 }
 
-// Subscription represents an individual topic subscription.
+// Subscription represents a local topic/type interest. Type "*" matches all
+// message types. Filters may be a []string of symbols or a JSON object whose
+// fields must match the payload; empty filters match every payload. Object
+// matching is exact (including JSON number spelling), and missing fields do
+// not match. Opaque server-side substring filters are not supported by Client.
+// Client snapshots filters and credentials and sends broad wire subscriptions;
+// MarshalJSON remains available for direct RTDS wire-format serialization.
 type Subscription struct {
 	Topic    string       `json:"topic"`
 	Type     string       `json:"type"`
