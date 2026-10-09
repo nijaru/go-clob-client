@@ -18,6 +18,7 @@ import (
 
 type walletRPCFixture struct {
 	mu              sync.Mutex
+	receiptOnly     bool
 	sent            []common.Hash
 	failPreparation int
 	failSend        int
@@ -38,6 +39,10 @@ func (f *walletRPCFixture) serve(t *testing.T, w http.ResponseWriter, r *http.Re
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.receiptOnly && req.Method != "eth_getTransactionReceipt" {
+		t.Errorf("external wallet path made SDK RPC call %s", req.Method)
+		return
+	}
 	var result any
 	rpcError := false
 	switch req.Method {

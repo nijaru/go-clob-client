@@ -32,21 +32,15 @@ func (c *SignerClient) sendContractTxAndWait(
 	data []byte,
 	label string,
 ) (*types.Receipt, error) {
-	signed, err := c.broadcastWalletCall(ctx, tokenCall(to, data))
+	hash, err := c.broadcastWalletCall(ctx, tokenCall(to, data))
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", label, err)
 	}
-	ec, err := c.dialRPC(ctx)
+	receipt, err := c.waitWalletTransactionReceipt(ctx, hash.Hex())
 	if err != nil {
-		return nil, fmt.Errorf("%s: dial receipt rpc: %w", label, err)
-	}
-	defer ec.Close()
-	receipt, err := waitForReceipt(ctx, ec, signed.Hash(), label)
-	if err != nil {
-		return nil, err
-	}
-	if receipt.Status == types.ReceiptStatusFailed {
-		return nil, fmt.Errorf("%s: transaction %s reverted", label, signed.Hash().Hex())
+		sendErr := walletSubmissionError(hash, false, err)
+		sendErr.Submission.ConfirmedReceipt = receipt
+		return receipt, fmt.Errorf("%s: %w", label, sendErr)
 	}
 	return receipt, nil
 }

@@ -43,8 +43,9 @@ var (
 	ErrTransactionSigningUnsupported = errors.New("signing: transaction signing unsupported")
 )
 
-// Wallet pins an EOA address once and verifies every signature against it before
-// returning it. Its optional methods return capability errors when unsupported.
+// Wallet pins an EOA address once and verifies signatures returned by signing
+// methods. Opaque TransactionSender broadcasts cannot be signature-verified.
+// Its optional methods return capability errors when unsupported.
 type Wallet struct {
 	signer  Signer
 	address common.Address
@@ -66,6 +67,11 @@ func NewWallet(signer Signer) (*Wallet, error) {
 	address := signer.Address()
 	if address == (common.Address{}) {
 		return nil, ErrInvalidSigner
+	}
+	// Reuse an existing boundary: wrapping Wallet would falsely expose all of
+	// its optional methods as capabilities of the underlying signer.
+	if wallet, ok := signer.(*Wallet); ok {
+		return wallet, nil
 	}
 	return &Wallet{signer: signer, address: address}, nil
 }
