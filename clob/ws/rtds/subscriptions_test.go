@@ -2,6 +2,7 @@ package rtds
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -13,6 +14,21 @@ import (
 	"github.com/coder/websocket"
 	json "github.com/go-json-experiment/json"
 )
+
+func TestCancelledSubscriptionDoesNotSurviveReconnect(t *testing.T) {
+	client := NewClient("", nil)
+	t.Cleanup(func() { _ = client.Close() })
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if err := client.SubscribeChainlinkPrices(ctx, "btc"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled subscribe: %v", err)
+	}
+	// Disconnected subscriptions normally replay on Connect; cancellation must
+	// not leave an interest that later starts a feed the caller abandoned.
+	if len(serverSubscriptions(client.subs)) != 0 {
+		t.Fatal("cancelled interest will replay")
+	}
+}
 
 // This fixture models RTDS's replacement semantics: each subscribe replaces
 // the filter for its topic/type, rather than adding another symbol interest.

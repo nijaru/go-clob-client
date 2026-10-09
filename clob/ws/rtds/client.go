@@ -214,12 +214,18 @@ func (c *Client) Errors() <-chan error {
 // On a write error the registration is retained for reconnect and the error is
 // returned to the caller.
 func (c *Client) Subscribe(ctx context.Context, sub Subscription) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	entry, err := newRegistration(sub)
 	if err != nil {
 		return err
 	}
 	c.subsMu.Lock()
 	defer c.subsMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	c.mu.Lock()
 	closed := c.closed
 	c.mu.Unlock()
