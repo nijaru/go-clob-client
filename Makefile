@@ -1,9 +1,9 @@
 .PHONY: fmt vet test build tidy check
 
 fmt:
-	@files="$$(git ls-files '*.go')"; \
+	@files="$$(git ls-files --cached --others --exclude-standard '*.go')"; \
 	if [ -z "$$files" ]; then \
-		echo "no tracked Go files to format"; \
+		echo "no Go files to format"; \
 	else \
 		goimports -w $$files; \
 		golines --base-formatter gofumpt -w $$files; \
