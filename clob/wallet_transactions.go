@@ -3,6 +3,7 @@ package clob
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -12,44 +13,78 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-// WalletTransactionHandle is a broadcast EOA or submitted gasless transaction.
-// Wait is explicit and cancellable; cancelling a wait cannot undo a submission.
-// It holds no open RPC connection and starts no background goroutine.
+// WalletTransactionSubmission records one EOA send attempt. BroadcastUncertain
+// means the RPC send failed, not that the transaction was rejected: reconcile
+// its locally computed hash before retrying. ConfirmedReceipt is the valid mined
+// receipt observed during execution, including a revert; nil means unconfirmed.
 type WalletTransactionHandle struct {
 	TransactionID   string
 	TransactionHash string
+	Submissions     []WalletTransactionSubmission
+	RequestedCalls  int
 	relayer         *GaslessTransactionHandle
 	signer          *SignerClient
 }
 
 func (h *WalletTransactionHandle) Wait(ctx context.Context) (*TransactionOutcome, error) {
+	if h == nil || h.signer == nil {
+		return nil, fmt.Errorf("wallet: no transaction to wait for")
+	}
 	if h.relayer != nil {
 		return h.relayer.Wait(ctx)
 	}
-	receipt, err := h.signer.waitWalletTransactionReceipt(ctx, h.TransactionHash)
+	receipt, err := h.WaitReceipt(ctx)
 	if err != nil {
 		return nil, err
 	}
 	return &TransactionOutcome{TransactionHash: receipt.TxHash.Hex()}, nil
 }
 
-// WaitReceipt first confirms through the existing EOA/relayer handle, then
-// waits for the actual on-chain receipt. Neither step waits for CLOB indexing.
-// A receipt lookup error cannot undo a transaction already confirmed by Wait.
+// WaitReceipt waits for all submitted EOA calls or the atomic relayer batch and
+// returns the last collected receipt, even alongside an error. Use WaitReceipts
+// to reconcile the entire sequence. Neither method waits for CLOB indexing,
+// reorg finality, or ERC-20 return-value checks.
 func (h *WalletTransactionHandle) WaitReceipt(ctx context.Context) (*types.Receipt, error) {
-	if h.relayer == nil {
-		return h.signer.waitWalletTransactionReceipt(ctx, h.TransactionHash)
-	}
-	outcome, err := h.Wait(ctx)
-	if err != nil {
+	receipts, err := h.WaitReceipts(ctx)
+	if len(receipts) == 0 {
 		return nil, err
 	}
-	return h.signer.waitWalletTransactionReceipt(ctx, outcome.TransactionHash)
+	return receipts[len(receipts)-1], err
 }
 
-// WaitWalletTransactionReceipt waits for an on-chain receipt for an outcome,
-// including an explicitly deployed wallet. Unlike a relayer status, the receipt
-// includes logs and block metadata. A missing/invalid hash cannot prove success.
+func (h *WalletTransactionHandle) WaitReceipts(ctx context.Context) ([]*types.Receipt, error) {
+	if h == nil || h.signer == nil {
+		return nil, fmt.Errorf("wallet: no transaction to wait for")
+	}
+	if h.relayer != nil {
+		outcome, err := h.relayer.Wait(ctx)
+		if err != nil {
+			return nil, err
+		}
+		receipt, err := h.signer.waitWalletTransactionReceipt(ctx, outcome.TransactionHash)
+		if receipt == nil {
+			return nil, err
+		}
+		return []*types.Receipt{receipt}, err
+	}
+	if len(h.Submissions) == 0 || h.RequestedCalls < len(h.Submissions) {
+		return nil, fmt.Errorf("wallet: no valid EOA submissions to wait for")
+	}
+	receipts := make([]*types.Receipt, 0, len(h.Submissions))
+	for _, submission := range h.Submissions {
+		receipt, err := h.signer.waitWalletTransactionReceipt(ctx, submission.TransactionHash)
+		if receipt != nil {
+			receipts = append(receipts, receipt)
+		}
+		if err != nil {
+			return receipts, err
+		}
+	}
+	if len(h.Submissions) != h.RequestedCalls {
+		return receipts, ErrWalletTransactionIncomplete
+	}
+	return receipts, nil
+}
 func (c *AuthenticatedClient) WaitWalletTransactionReceipt(
 	ctx context.Context,
 	outcome TransactionOutcome,
@@ -62,7 +97,8 @@ func (c *SignerClient) waitWalletTransactionReceipt(
 	hash string,
 ) (*types.Receipt, error) {
 	decoded, err := hex.DecodeString(strings.TrimPrefix(hash, "0x"))
-	if err != nil || !strings.HasPrefix(hash, "0x") || len(decoded) != common.HashLength {
+	if err != nil || !strings.HasPrefix(hash, "0x") || len(decoded) != common.HashLength ||
+		common.BytesToHash(decoded) == (common.Hash{}) {
 		return nil, fmt.Errorf("wallet: receipt requires a valid transaction hash")
 	}
 	ec, err := c.dialRPC(ctx)
@@ -75,14 +111,16 @@ func (c *SignerClient) waitWalletTransactionReceipt(
 		return nil, err
 	}
 	if receipt.Status == types.ReceiptStatusFailed {
-		return nil, fmt.Errorf("%w: %s reverted", ErrWalletTransactionFailed, hash)
+		return receipt, fmt.Errorf("%w: %s reverted", ErrWalletTransactionFailed, hash)
 	}
 	return receipt, nil
 }
 
 // ExecuteWalletTransaction executes calls in order. Smart wallets relay one
 // atomic batch. EOAs confirm each preceding call before broadcasting the last;
-// an EOA sequence is not atomic and a failure may leave a completed prefix.
+// an EOA sequence is not atomic. On error a nonnil handle retains any confirmed
+// prefix and every attempted send hash, including uncertain broadcasts. Never
+// blindly retry the whole sequence; inspect the handle and reconcile first.
 func (c *AuthenticatedClient) ExecuteWalletTransaction(
 	ctx context.Context,
 	calls []TransactionCall,
@@ -104,20 +142,32 @@ func (c *AuthenticatedClient) ExecuteWalletTransaction(
 		return &WalletTransactionHandle{
 			TransactionID:   h.TransactionID,
 			TransactionHash: h.TransactionHash,
+			RequestedCalls:  len(calls),
 			relayer:         h,
 			signer:          c.SignerClient,
 		}, nil
 	}
-	var handle *WalletTransactionHandle
+	handle := &WalletTransactionHandle{RequestedCalls: len(calls), signer: c.SignerClient}
 	for i, call := range calls {
 		tx, err := c.broadcastWalletCall(ctx, call)
-		if err != nil {
-			return nil, fmt.Errorf("wallet: broadcast call %d of %d: %w", i+1, len(calls), err)
+		if tx != nil {
+			handle.TransactionHash = tx.Hash().Hex()
+			handle.Submissions = append(handle.Submissions, WalletTransactionSubmission{
+				TransactionHash:    handle.TransactionHash,
+				BroadcastUncertain: err != nil,
+			})
 		}
-		handle = &WalletTransactionHandle{TransactionHash: tx.Hash().Hex(), signer: c.SignerClient}
+		if err != nil {
+			if len(handle.Submissions) == 0 {
+				handle = nil
+			}
+			return handle, fmt.Errorf("wallet: broadcast call %d of %d: %w", i+1, len(calls), err)
+		}
 		if i+1 < len(calls) {
-			if _, err := handle.Wait(ctx); err != nil {
-				return nil, fmt.Errorf("wallet: confirm call %d of %d: %w", i+1, len(calls), err)
+			receipt, err := c.waitWalletTransactionReceipt(ctx, handle.TransactionHash)
+			handle.Submissions[i].ConfirmedReceipt = receipt
+			if err != nil {
+				return handle, fmt.Errorf("wallet: confirm call %d of %d: %w", i+1, len(calls), err)
 			}
 		}
 	}
@@ -188,7 +238,15 @@ func (c *SignerClient) broadcastWalletCall(
 		return nil, fmt.Errorf("wallet: sign: %w", err)
 	}
 	if err := ec.SendTransaction(ctx, signed); err != nil {
-		return nil, fmt.Errorf("wallet: broadcast: %w", err)
+		return signed, fmt.Errorf("wallet: broadcast: %w", err)
 	}
 	return signed, nil
 }
+
+type WalletTransactionSubmission struct {
+	TransactionHash    string
+	BroadcastUncertain bool
+	ConfirmedReceipt   *types.Receipt
+}
+
+var ErrWalletTransactionIncomplete = errors.New("wallet: not all requested calls were submitted")

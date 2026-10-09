@@ -76,6 +76,7 @@ func TestEOAWalletTransactionSequence(t *testing.T) {
 				Status:      types.ReceiptStatusSuccessful,
 				TxHash:      hash,
 				BlockNumber: big.NewInt(1),
+				BlockHash:   common.HexToHash("0xabc"),
 				Logs:        []*types.Log{},
 			}
 		default:
@@ -100,11 +101,20 @@ func TestEOAWalletTransactionSequence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(handle.Submissions) != 2 || handle.RequestedCalls != 2 ||
+		handle.Submissions[0].ConfirmedReceipt == nil ||
+		handle.Submissions[1].ConfirmedReceipt != nil {
+		t.Fatalf("EOA sequence records: %+v", handle)
+	}
 	if sent.Load() != 2 || confirmations.Load() != 1 {
 		t.Fatal("submission should confirm only the preceding call")
 	}
-	for _, call := range calls {
+	for i, call := range calls {
 		tx := <-transactions
+		if handle.Submissions[i].TransactionHash != tx.Hash().Hex() ||
+			handle.Submissions[i].BroadcastUncertain {
+			t.Fatalf("known broadcast not retained: %+v", handle.Submissions[i])
+		}
 		if tx.To() == nil || *tx.To() != call.To || tx.Value().Cmp(call.Value) != 0 ||
 			string(tx.Data()) != string(call.Data) {
 			t.Fatal("broadcast changed EVM call")
@@ -116,7 +126,7 @@ func TestEOAWalletTransactionSequence(t *testing.T) {
 	}
 	outcome, err := handle.Wait(t.Context())
 	if err != nil || outcome.TransactionHash != handle.TransactionHash ||
-		confirmations.Load() != 2 {
+		confirmations.Load() != 3 {
 		t.Fatalf("explicit wait: %+v %v", outcome, err)
 	}
 }

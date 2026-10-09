@@ -53,7 +53,9 @@ func (c *SignerClient) sendContractTxAndWait(
 
 // waitForReceipt polls for a transaction receipt every 250ms — matching alloy's
 // default HTTP polling interval. NotFound is expected until the tx is mined and
-// is retried silently; any other error propagates immediately.
+// is retried silently; any other error propagates immediately. Only a matching
+// mined receipt with an exact success/revert status is trusted. Reverts are
+// returned intact so callers can retain the receipt while reporting failure.
 func waitForReceipt(
 	ctx context.Context,
 	ec *ethclient.Client,
@@ -69,6 +71,23 @@ func waitForReceipt(
 		case <-ticker.C:
 			receipt, err := ec.TransactionReceipt(ctx, txHash)
 			if err == nil {
+				if receipt.TxHash != txHash || receipt.BlockNumber == nil ||
+					receipt.BlockNumber.Sign() < 0 || receipt.BlockHash == (common.Hash{}) {
+					return nil, fmt.Errorf(
+						"%s: invalid receipt identity or mined block for %s",
+						label,
+						txHash.Hex(),
+					)
+				}
+				if receipt.Status != types.ReceiptStatusSuccessful &&
+					receipt.Status != types.ReceiptStatusFailed {
+					return nil, fmt.Errorf(
+						"%s: invalid receipt status %d for %s",
+						label,
+						receipt.Status,
+						txHash.Hex(),
+					)
+				}
 				return receipt, nil
 			}
 			if !errors.Is(err, ethereum.NotFound) {

@@ -58,6 +58,7 @@ func TestGaslessWalletReceipt(t *testing.T) {
 			Status:      receiptStatus.Load(),
 			TxHash:      hash,
 			BlockNumber: big.NewInt(42),
+			BlockHash:   common.HexToHash("0xabc"),
 			Logs: []*types.Log{
 				{Address: common.HexToAddress("0x1"), Topics: []common.Hash{}, Data: []byte{}},
 			},
@@ -93,7 +94,7 @@ func TestGaslessWalletReceipt(t *testing.T) {
 	) {
 		t.Fatalf("reverted receipt: %v", err)
 	}
-	for _, badHash := range []string{"", "0x1", "0x" + fmt.Sprintf("%064s", "z")} {
+	for _, badHash := range []string{"", "0x1", common.Hash{}.Hex(), "0x" + fmt.Sprintf("%064s", "z")} {
 		if _, err := client.WaitWalletTransactionReceipt(ctx, TransactionOutcome{TransactionHash: badHash}); err == nil {
 			t.Fatal("invalid receipt hash accepted")
 		}
