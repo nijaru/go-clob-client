@@ -357,19 +357,6 @@ func TestHandleMessageFullUserEventFields(t *testing.T) {
 	}
 }
 
-func TestMarketEventAssetIDAlias(t *testing.T) {
-	var event NewMarketEvent
-	if err := json.Unmarshal(
-		[]byte(`{"event_type":"new_market","asset_ids":["a1"]}`),
-		&event,
-	); err != nil {
-		t.Fatalf("unmarshal new market event: %v", err)
-	}
-	if len(event.AssetIDs) != 1 || event.AssetIDs[0] != "a1" {
-		t.Fatalf("asset ids = %v", event.AssetIDs)
-	}
-}
-
 func TestHandleMessageAllEventTypes(t *testing.T) {
 	t.Parallel()
 

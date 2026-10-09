@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	json "github.com/go-json-experiment/json"
+	"github.com/go-json-experiment/json/jsontext"
 
 	"github.com/nijaru/go-clob-client/clob"
 )
@@ -446,33 +447,40 @@ type EventMessage struct {
 // NewMarketEvent is emitted when a new market is created.
 type NewMarketEvent struct {
 	BaseEvent
-	ID           string        `json:"id"`
-	Question     string        `json:"question"`
-	Market       string        `json:"market"`
-	Slug         string        `json:"slug"`
-	Description  string        `json:"description"`
-	AssetIDs     []string      `json:"assets_ids"`
-	Outcomes     []string      `json:"outcomes"`
-	EventMessage *EventMessage `json:"event_message,omitzero"`
-	Timestamp    string        `json:"timestamp"`
+	ID               string              `json:"id"`
+	Question         string              `json:"question"`
+	Market           string              `json:"market"`
+	Slug             string              `json:"slug"`
+	Description      string              `json:"description"`
+	AssetIDs         []string            `json:"assets_ids"`
+	Outcomes         []string            `json:"outcomes"`
+	EventMessage     *EventMessage       `json:"event_message,omitzero"`
+	Timestamp        string              `json:"timestamp"`
+	ConditionID      string              `json:"condition_id,omitzero"`
+	CLOBTokenIDs     []string            `json:"clob_token_ids,omitzero"`
+	Tags             []string            `json:"tags,omitzero"`
+	Active           *bool               `json:"active,omitzero"`
+	SportsMarketType string              `json:"sports_market_type,omitzero"`
+	Line             *clob.DecimalString `json:"line,omitzero"`
+	// GameStartTime preserves the epoch-millisecond wire value (number or string).
+	GameStartTime         clob.DecimalString  `json:"game_start_time,omitzero"`
+	OrderPriceMinTickSize *clob.DecimalString `json:"order_price_min_tick_size,omitzero"`
+	GroupItemTitle        string              `json:"group_item_title,omitzero"`
+	TakerBaseFee          *clob.DecimalString `json:"taker_base_fee,omitzero"`
+	FeesEnabled           *bool               `json:"fees_enabled,omitzero"`
+	FeeSchedule           jsontext.Value      `json:"fee_schedule,omitzero"`
 }
 
-// UnmarshalJSON accepts both the current assets_ids spelling and the older
-// asset_ids spelling used by some market-event payloads.
+// UnmarshalJSON accepts assets_ids, asset_ids and token_ids, in that order.
+// Presence, not non-emptiness, selects the authoritative spelling.
 func (e *NewMarketEvent) UnmarshalJSON(data []byte) error {
 	type alias NewMarketEvent
 	var value alias
 	if err := json.Unmarshal(data, &value); err != nil {
 		return err
 	}
-	if len(value.AssetIDs) == 0 {
-		var legacy struct {
-			AssetIDs []string `json:"asset_ids"`
-		}
-		if err := json.Unmarshal(data, &legacy); err != nil {
-			return err
-		}
-		value.AssetIDs = legacy.AssetIDs
+	if err := decodeMarketAlias(data, &value.AssetIDs, "assets_ids", "asset_ids", "token_ids"); err != nil {
+		return err
 	}
 	*e = NewMarketEvent(value)
 	return nil
@@ -490,28 +498,39 @@ type MarketResolvedEvent struct {
 	Outcomes       []string      `json:"outcomes,omitzero"`
 	WinningAssetID string        `json:"winning_asset_id"`
 	WinningOutcome string        `json:"winning_outcome"`
+	Tags           []string      `json:"tags,omitzero"`
 	EventMessage   *EventMessage `json:"event_message,omitzero"`
 	Timestamp      string        `json:"timestamp"`
 }
 
-// UnmarshalJSON accepts both the current assets_ids spelling and the older
-// asset_ids spelling used by some market-event payloads.
+// UnmarshalJSON accepts market asset aliases with the current wire keys taking
+// precedence even when explicitly empty or null.
 func (e *MarketResolvedEvent) UnmarshalJSON(data []byte) error {
 	type alias MarketResolvedEvent
 	var value alias
 	if err := json.Unmarshal(data, &value); err != nil {
 		return err
 	}
-	if len(value.AssetIDs) == 0 {
-		var legacy struct {
-			AssetIDs []string `json:"asset_ids"`
-		}
-		if err := json.Unmarshal(data, &legacy); err != nil {
-			return err
-		}
-		value.AssetIDs = legacy.AssetIDs
+	if err := decodeMarketAlias(data, &value.AssetIDs, "assets_ids", "asset_ids", "token_ids"); err != nil {
+		return err
+	}
+	if err := decodeMarketAlias(data, &value.WinningAssetID, "winning_asset_id", "winning_token_id"); err != nil {
+		return err
 	}
 	*e = MarketResolvedEvent(value)
+	return nil
+}
+
+func decodeMarketAlias(data []byte, dst any, keys ...string) error {
+	var fields map[string]jsontext.Value
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	for _, key := range keys {
+		if raw, ok := fields[key]; ok {
+			return json.Unmarshal(raw, dst)
+		}
+	}
 	return nil
 }
 

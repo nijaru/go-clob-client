@@ -444,23 +444,13 @@ func TestComboMarketsSurface(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		data, _ := json.Marshal(ComboMarketsPage{
-			Markets: []ComboMarket{
-				{
-					ID:            "market-1",
-					ConditionID:   "0xabc",
-					Slug:          "test-market",
-					Title:         "Test Market",
-					Outcomes:      []string{"Yes", "No"},
-					OutcomePrices: []string{"0.65", "0.35"},
-					PositionIDs:   []string{"pos-yes", "pos-no"},
-					Volume:        100000,
-					Tags:          []string{"politics", "election"},
-				},
-			},
-			NextCursor: "next-page",
-		})
-		w.Write(data)
+		// Pinned Combo wire schema includes pending, independently of our types.
+		w.Write([]byte(`{"markets":[{
+			"id":"market-1","condition_id":"0xabc","pending":true,
+			"slug":"test-market","title":"Test Market","outcomes":["Yes","No"],
+			"outcome_prices":["0.65","0.35"],"position_ids":["pos-yes","pos-no"],
+			"volume":100000,"tags":["politics","election"]
+		}],"next_cursor":"next-page"}`))
 	}))
 	defer server.Close()
 
@@ -488,6 +478,9 @@ func TestComboMarketsSurface(t *testing.T) {
 	}
 	if m.ConditionID != "0xabc" {
 		t.Errorf("condition ID = %q, want 0xabc", m.ConditionID)
+	}
+	if !m.Pending {
+		t.Error("pending Combo enablement must survive response decoding")
 	}
 
 	outcomes, err := m.ParsedOutcomes()

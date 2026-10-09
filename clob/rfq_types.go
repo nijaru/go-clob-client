@@ -402,6 +402,9 @@ type ComboMarket struct {
 	Image         string   `json:"image"`
 	Volume        float64  `json:"volume"`
 	Tags          []string `json:"tags"`
+
+	// Pending reports whether Combo enablement is still pending.
+	Pending bool `json:"pending"`
 }
 
 // ParsedOutcomes returns the yes/no outcome pair.
