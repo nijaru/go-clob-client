@@ -7,10 +7,10 @@
 //
 //   - [Client] — read-only, no credentials required.
 //   - [SignerClient] — extends Client with L1 Ethereum-signed methods (order
-//     creation, API key management). Requires a private key.
+//     creation, API key management). Accepts a local or external Ethereum signer.
 //   - [AuthenticatedClient] — extends SignerClient with L2 API-key methods
-//     (posting orders, managing positions, heartbeats). Requires a private key
-//     and API credentials.
+//     (posting orders, managing positions, heartbeats). Requires a signer and
+//     CLOB API credentials. Relayer and builder authentication are separate.
 //
 // # Creating a client
 //
@@ -35,7 +35,12 @@
 //
 // Heartbeats are opt-in: call c.StartHeartbeats(ctx) to maintain order liveness.
 // Canceling ctx stops the loop; StopHeartbeats(ctx) joins it and allows restart.
-// Close or Shutdown(ctx) joins it and permanently closes that lifecycle.
+// Close or Shutdown(ctx) joins it and permanently closes only that lifecycle;
+// foreground requests and retained authenticated references remain usable.
+// Config.Signer accepts signing.Signer without private-key export. Optional
+// personal-message and transaction capabilities are required by the corresponding
+// relayer or EOA operation. Config.PrivateKey is a mutually exclusive local-key
+// convenience. Returned signatures are checked against the pinned EOA identity.
 //
 // # Pagination iterators
 //

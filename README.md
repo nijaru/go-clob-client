@@ -33,6 +33,7 @@ go get github.com/nijaru/go-clob-client@latest
 | [`perps`](perps/README.md) | Perpetuals markets, credentials, accounts, trading, execution and collateral |
 | [`realtime`](https://pkg.go.dev/github.com/nijaru/go-clob-client/realtime) | Authenticated Polybolt crypto/equity spot and 60-second TWAP streams |
 | [`sports`](sports/README.md) | Public live game-result streams |
+| [`signing`](https://pkg.go.dev/github.com/nijaru/go-clob-client/signing) | Context-aware local/external Ethereum signing capabilities |
 
 Constructors do not start heartbeats, deploy wallets, grant approvals or submit
 transactions. Network operations take contexts; streams and transaction handles
@@ -67,7 +68,11 @@ go run ./examples/clob/read_only
 
 CLOB has public, signing and authenticated views. API-key bootstrap requires L1
 Ethereum signing; posting and account operations use L2 credentials. Builder and
-relayer credentials are separate from CLOB credentials.
+relayer credentials are separate from CLOB credentials. `Config.Signer` accepts
+an external/hardware EOA signer; `PrivateKey` is a mutually exclusive local-key
+convenience. Signatures are verified against the pinned EOA, including low-S and
+recovery-byte checks; deposit-wallet wrapping signs nested EIP-712 data rather
+than asking a hardware wallet to authorize an opaque hash.
 
 ```go
 client, err := clob.NewAuthenticatedClient(clob.Config{
@@ -154,6 +159,10 @@ See the [local quoter example](examples/clob/combo_rfq_quoter/main.go).
 Wallet identity is not interchangeable with signer identity. Funder derivation and
 owner/session checks depend on the chosen scheme and supported chain. Constructors
 use explicit/offline identity; remote discovery and readiness are separate calls.
+`DiscoverDepositWallet` selects a deployed legacy wallet first, otherwise its beacon
+derivation, without changing client identity. `IsWalletDeployedAt` is an explicit
+public probe. Safe and beacon creation are explicit, owner-bound operations;
+standalone proxy and legacy/session-target creation have no evidenced public flow.
 
 `WalletOperations` resolves market protocol and prepares/routes split, merge and
 redeem operations for legacy CTF, native V2 positions and combos. Token approvals,
