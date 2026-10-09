@@ -256,7 +256,7 @@ func TestBuilderEarningsUseServerSnapshotCursor(t *testing.T) {
 			}
 			_, _ = w.Write(
 				[]byte(
-					`{"start_timestamp":100,"end_timestamp":200,"as_of_sequence":7,"data":[{"earning_id":1,"trade_id":1,"order_id":2,"instrument_id":1,"trader":"` + fixtureProxy + `","buy":true,"price":"100","quantity":"1","side":"taker","timestamp":100,"sequence":7,"notional":"100","fee_asset":"USDC","fee":"0.02","builder_fee":"0.01","total_fee":"0.03","fee_rate":"0.0001"}],"more":true,"cursor":"snapshot-page"}`,
+					`{"start_timestamp":100,"end_timestamp":200,"as_of_sequence":7,"data":[{"earning_id":"receipt:opaque/01", "trade_id":1,"order_id":2,"instrument_id":1,"trader":"` + fixtureProxy + `","buy":true,"price":"100","quantity":"1","side":"taker","timestamp":100,"sequence":7,"notional":"100","fee_asset":"USDC","fee":"0.02","builder_fee":"0.01","total_fee":"0.03","fee_rate":"0.0001"}],"more":true,"cursor":"snapshot-page"}`,
 				),
 			)
 		default:
@@ -277,6 +277,9 @@ func TestBuilderEarningsUseServerSnapshotCursor(t *testing.T) {
 		if err != nil {
 			lastErr = err
 			break
+		}
+		if len(items) != 1 || items[0].EarningID != "receipt:opaque/01" {
+			t.Fatalf("opaque earning identity lost: %+v", items)
 		}
 		count += len(items)
 	}

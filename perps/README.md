@@ -47,7 +47,9 @@ A session follows its context and reconnects/resubscribes automatically. Consume
 both `Events()` and `Errors()`. Typed `AsOrder`, `AsFills`, `AsPortfolio` and other
 `As*` decoders coexist with raw event JSON. Book events are deltas. Reconnect and
 sequence-gap events require caller-owned backfill/snapshot recovery. Notification
-and builder-receipt sequences are sparse, not contiguous; a server notification
+and builder-receipt sequences are sparse, not contiguous. Deduplicate overlapping
+builder history and `AsBuilderFills` updates by the nonempty opaque string
+`PerpsBuilderEarning.EarningID`, not by trade ID or sequence; a server notification
 resync must be backfilled from the last successfully processed notification,
 **not** from the highest dropped sequence in the resync frame.
 

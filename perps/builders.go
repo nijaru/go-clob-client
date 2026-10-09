@@ -2,6 +2,7 @@ package perps
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"iter"
 	"net/http"
@@ -31,7 +32,9 @@ type PerpsBuilderApproval struct {
 	Sequence        int64  `json:"sequence"`
 }
 type PerpsBuilderEarning struct {
-	EarningID     int64  `json:"earning_id"`
+	// EarningID is an opaque nonempty receipt identity, not a trade ID or sequence.
+	// Use it to deduplicate overlapping REST backfill and builderFills updates.
+	EarningID     string `json:"earning_id"`
 	TradeID       int64  `json:"trade_id"`
 	OrderID       int    `json:"order_id"`
 	InstrumentID  int    `json:"instrument_id"`
@@ -50,6 +53,20 @@ type PerpsBuilderEarning struct {
 	TotalFee      string `json:"total_fee"`
 	FeeRate       string `json:"fee_rate"`
 }
+
+func (e *PerpsBuilderEarning) UnmarshalJSON(data []byte) error {
+	type wire PerpsBuilderEarning
+	var out wire
+	if err := json.Unmarshal(data, &out); err != nil {
+		return err
+	}
+	if out.EarningID == "" {
+		return fmt.Errorf("perps: builder earning requires a nonempty earning_id")
+	}
+	*e = PerpsBuilderEarning(out)
+	return nil
+}
+
 type BuilderReportingWindow struct {
 	Start        int64 `json:"start_timestamp"`
 	End          int64 `json:"end_timestamp"`
