@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	json "github.com/go-json-experiment/json"
-	"github.com/quagmt/udecimal"
 )
 
 func TestTypedReadOnlySurfaces(t *testing.T) {
@@ -161,7 +160,7 @@ func TestTypedReadOnlySurfaces(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get price history: %v", err)
 	}
-	if len(history) != 1 || history[0].P.Cmp(udecimal.MustParse("0.42")) != 0 {
+	if len(history) != 1 || history[0].P.String() != "0.42" {
 		t.Fatalf("unexpected price history: %+v", history)
 	}
 

@@ -245,11 +245,15 @@ func (c *Client) fetchOrderMarketMetadata(
 			}
 		}
 	}
+	feeInfo, err := feeInfoFromMarket(*market)
+	if err != nil {
+		return orderMarketMetadata{}, fmt.Errorf("market %s fee: %w", conditionID, err)
+	}
 	return orderMarketMetadata{
 		ConditionID: conditionID,
 		TickSize:    TickSize(market.MinTickSize),
 		NegRisk:     market.NegRisk,
-		FeeInfo:     feeInfoFromMarket(*market),
+		FeeInfo:     feeInfo,
 		TokenIDs:    tokenIDs,
 	}, nil
 }
@@ -274,14 +278,15 @@ func validateOrderMarketToken(
 	return value, nil
 }
 
-func feeInfoFromMarket(market ClobMarketInfoResponse) FeeInfo {
+func feeInfoFromMarket(market ClobMarketInfoResponse) (FeeInfo, error) {
 	if market.FeeDetails == nil {
-		return FeeInfo{}
+		return FeeInfo{}, nil
 	}
-	return FeeInfo{
-		Rate:     market.FeeDetails.Rate,
-		Exponent: market.FeeDetails.Exponent,
+	rate, err := market.FeeDetails.Rate.Decimal()
+	if err != nil {
+		return FeeInfo{}, err
 	}
+	return FeeInfo{Rate: rate, Exponent: market.FeeDetails.Exponent}, nil
 }
 
 func (c *Client) clearOrderMetadata(tokenID string) {

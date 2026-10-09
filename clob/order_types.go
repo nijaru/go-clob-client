@@ -246,12 +246,11 @@ func (o *OpenOrder) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("open order: decode object: %w", err)
 	}
 
-	// Accept the asset ID under the legacy token_id spelling when the
-	// current key is absent (py-sdk AliasChoices parity).
-	if raw, ok := fields["asset_id"]; !ok || isEmptyJSON(raw) {
-		if legacy, hasLegacy := fields["token_id"]; hasLegacy {
-			fields["asset_id"] = legacy
-		}
+	if err := normalizeResponseAsset(fields, "asset_id", "token_id"); err != nil {
+		return err
+	}
+	if err := normalizeResponseStrings(fields, "original_size", "size_matched", "price"); err != nil {
+		return err
 	}
 
 	createdAt, createdRaw, err := normalizeOrderTimestamp(fields["created_at"], false, false)
@@ -270,23 +269,14 @@ func (o *OpenOrder) UnmarshalJSON(data []byte) error {
 		fields["expiration"] = expirationRaw
 	}
 
-	o.CreatedAtTime = nil
-	o.ExpirationTime = nil
-
-	normalized, err := stdjson.Marshal(fields)
-	if err != nil {
-		return fmt.Errorf("open order: encode normalized object: %w", err)
-	}
 	type openOrderAlias OpenOrder
-	if err := stdjson.Unmarshal(normalized, (*openOrderAlias)(o)); err != nil {
+	var value openOrderAlias
+	if err := decodeResponseFields(fields, &value); err != nil {
 		return fmt.Errorf("open order: decode normalized object: %w", err)
 	}
-	if createdAt != nil {
-		o.CreatedAtTime = createdAt
-	}
-	if expiration != nil {
-		o.ExpirationTime = expiration
-	}
+	value.CreatedAtTime = createdAt
+	value.ExpirationTime = expiration
+	*o = OpenOrder(value)
 	return nil
 }
 
@@ -316,9 +306,9 @@ func normalizeOrderTimestamp(
 			}
 			return &moment, normalizedTimestampJSON(seconds, text, outputString), nil
 		}
-		var moment time.Time
-		if err := stdjson.Unmarshal(trimmed, &moment); err != nil {
-			return nil, nil, fmt.Errorf("expected epoch timestamp or RFC3339 string: %w", err)
+		moment, err := parseDateMoment(text)
+		if err != nil {
+			return nil, nil, fmt.Errorf("expected epoch, calendar date or RFC3339 string: %w", err)
 		}
 		return &moment, normalizedTimestampJSON(moment.Unix(), text, outputString), nil
 	}
@@ -362,50 +352,48 @@ func mustJSONText(value string) stdjson.RawMessage {
 
 // MakerOrder is the maker-side component of a trade.
 type MakerOrder struct {
-	OrderID       string `json:"order_id"`
-	Owner         string `json:"owner"`
-	MakerAddress  string `json:"maker_address"`
-	MatchedAmount string `json:"matched_amount"`
-	Price         string `json:"price"`
-	FeeRateBps    string `json:"fee_rate_bps"`
-	AssetID       string `json:"asset_id"`
-	Outcome       string `json:"outcome"`
-	Side          Side   `json:"side"`
+	OrderID       string         `json:"order_id"`
+	Owner         string         `json:"owner"`
+	MakerAddress  string         `json:"maker_address"`
+	MatchedAmount string         `json:"matched_amount"`
+	Price         string         `json:"price"`
+	FeeRateBps    string         `json:"fee_rate_bps"`
+	AssetID       string         `json:"asset_id"`
+	Outcome       string         `json:"outcome"`
+	Side          Side           `json:"side"`
+	BuilderFee    *DecimalString `json:"builder_fee,omitzero"`
+	BuilderCode   *string        `json:"builder_code,omitzero"`
 }
 
-// UnmarshalJSON accepts the asset ID under the legacy token_id spelling in
-// addition to asset_id (py-sdk AliasChoices parity).
 func (m *MakerOrder) UnmarshalJSON(data []byte) error {
 	type alias MakerOrder
-	var value alias
-	if err := json.Unmarshal(data, &value); err != nil {
+	fields, err := responseFields(data)
+	if err != nil {
 		return err
 	}
-	if value.AssetID == "" {
-		var legacy struct {
-			AssetID string `json:"token_id"`
-		}
-		if err := json.Unmarshal(data, &legacy); err != nil {
-			return err
-		}
-		value.AssetID = legacy.AssetID
+	if err := normalizeResponseAsset(fields, "asset_id", "token_id"); err != nil {
+		return err
 	}
-	*m = MakerOrder(value)
-	return nil
+	if err := normalizeResponseStrings(fields, "matched_amount", "price", "fee_rate_bps"); err != nil {
+		return err
+	}
+	return decodeResponseFields(fields, (*alias)(m))
 }
 
 // Trade is an authenticated user trade record.
 type Trade struct {
-	ID              string       `json:"id"`
-	TakerOrderID    string       `json:"taker_order_id"`
-	Market          string       `json:"market"`
-	AssetID         string       `json:"asset_id"`
-	Side            Side         `json:"side"`
-	Size            string       `json:"size"`
-	FeeRateBps      string       `json:"fee_rate_bps"`
-	Price           string       `json:"price"`
-	Status          string       `json:"status"`
+	ID           string `json:"id"`
+	TakerOrderID string `json:"taker_order_id"`
+	Market       string `json:"market"`
+	AssetID      string `json:"asset_id"`
+	Side         Side   `json:"side"`
+	Size         string `json:"size"`
+	FeeRateBps   string `json:"fee_rate_bps"`
+	Price        string `json:"price"`
+	Status       string `json:"status"`
+	// Numeric epochs normalize to RFC3339Nano; calendar and ISO strings are retained.
 	MatchTime       string       `json:"match_time"`
+	MatchTimeNano   string       `json:"match_time_nano,omitzero"`
 	LastUpdate      string       `json:"last_update"`
 	Outcome         string       `json:"outcome"`
 	BucketIndex     int64        `json:"bucket_index"`
@@ -423,21 +411,21 @@ type Trade struct {
 // addition to asset_id (py-sdk AliasChoices parity).
 func (t *Trade) UnmarshalJSON(data []byte) error {
 	type alias Trade
-	var value alias
-	if err := json.Unmarshal(data, &value); err != nil {
+	fields, err := responseFields(data)
+	if err != nil {
 		return err
 	}
-	if value.AssetID == "" {
-		var legacy struct {
-			AssetID string `json:"token_id"`
-		}
-		if err := json.Unmarshal(data, &legacy); err != nil {
-			return err
-		}
-		value.AssetID = legacy.AssetID
+	if err := normalizeResponseAsset(fields, "asset_id", "token_id"); err != nil {
+		return err
 	}
-	*t = Trade(value)
-	return nil
+	if err := normalizeResponseStrings(fields, "size", "price", "fee_rate_bps", "match_time_nano"); err != nil {
+		return err
+	}
+	if err := normalizeResponseDates(fields, false, "match_time", "last_update"); err != nil {
+		return err
+	}
+	aliasResponseField(fields, "error_msg", "err_msg")
+	return decodeResponseFields(fields, (*alias)(t))
 }
 
 // OrderArgs contains the inputs for building a limit order.

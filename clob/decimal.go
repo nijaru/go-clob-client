@@ -2,6 +2,7 @@ package clob
 
 import (
 	stdjson "encoding/json"
+	"fmt"
 
 	"github.com/quagmt/udecimal"
 )
@@ -27,7 +28,8 @@ func MustDec(s string) Decimal {
 
 // DecimalString preserves an API decimal exactly as it appeared on the wire.
 // It is useful for response fields whose precision may exceed udecimal's
-// arithmetic range or whose callers do not need local arithmetic.
+// arithmetic range or whose callers do not need local arithmetic. Scientific
+// notation is preserved. Use Decimal for explicit, exact order-math conversion.
 type DecimalString string
 
 func (d DecimalString) String() string {
@@ -38,6 +40,9 @@ func (d *DecimalString) UnmarshalJSON(data []byte) error {
 	value, err := decodeStringOrNumber(data)
 	if err != nil {
 		return err
+	}
+	if value != "" && !responseDecimalPattern.MatchString(value) {
+		return fmt.Errorf("invalid decimal %q", value)
 	}
 	*d = DecimalString(value)
 	return nil

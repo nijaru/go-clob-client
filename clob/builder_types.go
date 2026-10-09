@@ -30,7 +30,8 @@ type RemoteBuilderAuthConfig struct {
 
 // BuilderAPIKey is the metadata returned when listing builder API keys.
 type BuilderAPIKey struct {
-	Key       string `json:"key"`
+	Key string `json:"key"`
+	// Numeric key dates are epoch milliseconds and normalize to RFC3339Nano.
 	CreatedAt string `json:"createdAt,omitzero"`
 	RevokedAt string `json:"revokedAt,omitzero"`
 }
@@ -47,40 +48,39 @@ func (k *BuilderAPIKey) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 	type builderAPIKey BuilderAPIKey
-	var decoded builderAPIKey
-	if err := json.Unmarshal(trimmed, &decoded); err != nil {
-		return err
-	}
-	*k = BuilderAPIKey(decoded)
-	return nil
+	return unmarshalResponseDates(trimmed, (*builderAPIKey)(k), nil, true, "createdAt", "revokedAt")
 }
 
-// BuilderTrade is a builder-specific trade record.
+// BuilderTrade is a builder-specific trade record. Numeric MatchTime accepts
+// epoch seconds or milliseconds; CreatedAt and UpdatedAt use milliseconds.
+// Numeric dates normalize to RFC3339Nano.
 type BuilderTrade struct {
-	ID              string `json:"id"`
-	TradeType       string `json:"tradeType"`
-	TakerOrderHash  string `json:"takerOrderHash"`
-	Builder         string `json:"builder"`
-	Market          string `json:"market"`
-	AssetID         string `json:"assetId"`
-	Side            string `json:"side"`
-	Size            string `json:"size"`
-	SizeUSDC        string `json:"sizeUsdc"`
-	Price           string `json:"price"`
-	Status          string `json:"status"`
-	Outcome         string `json:"outcome"`
-	OutcomeIndex    int64  `json:"outcomeIndex"`
-	RequestID       string `json:"requestId"`
-	Error           string `json:"error,omitzero"`
-	Owner           string `json:"owner,omitzero"`
-	Maker           string `json:"maker,omitzero"`
-	TransactionHash string `json:"transactionHash,omitzero"`
-	MatchTime       string `json:"matchTime,omitzero"`
-	BucketIndex     int64  `json:"bucketIndex,omitzero"`
-	Fee             string `json:"fee,omitzero"`
-	FeeUSDC         string `json:"feeUsdc,omitzero"`
-	CreatedAt       string `json:"createdAt,omitzero"`
-	UpdatedAt       string `json:"updatedAt,omitzero"`
+	ID              string         `json:"id"`
+	TradeType       string         `json:"tradeType"`
+	TakerOrderHash  string         `json:"takerOrderHash"`
+	Builder         string         `json:"builder"`
+	Market          string         `json:"market"`
+	AssetID         string         `json:"assetId"`
+	Side            string         `json:"side"`
+	Size            string         `json:"size"`
+	SizeUSDC        string         `json:"sizeUsdc"`
+	Price           string         `json:"price"`
+	Status          string         `json:"status"`
+	Outcome         string         `json:"outcome"`
+	OutcomeIndex    int64          `json:"outcomeIndex"`
+	RequestID       string         `json:"requestId"`
+	Error           string         `json:"error,omitzero"`
+	Owner           string         `json:"owner,omitzero"`
+	Maker           string         `json:"maker,omitzero"`
+	TransactionHash string         `json:"transactionHash,omitzero"`
+	MatchTime       string         `json:"matchTime,omitzero"`
+	BucketIndex     int64          `json:"bucketIndex,omitzero"`
+	Fee             string         `json:"fee,omitzero"`
+	FeeUSDC         string         `json:"feeUsdc,omitzero"`
+	BuilderFee      *DecimalString `json:"builderFee,omitzero"`
+	BuilderCode     *string        `json:"builderCode,omitzero"`
+	CreatedAt       string         `json:"createdAt,omitzero"`
+	UpdatedAt       string         `json:"updatedAt,omitzero"`
 }
 
 // UnmarshalJSON accepts the official errMsg/err_msg failure fields as well
@@ -88,28 +88,25 @@ type BuilderTrade struct {
 // spellings in addition to assetId (py-sdk AliasChoices parity).
 func (t *BuilderTrade) UnmarshalJSON(data []byte) error {
 	type alias BuilderTrade
-	var wire struct {
-		*alias
-		ErrMsg      string `json:"errMsg"`
-		ErrMsgSnake string `json:"err_msg"`
-		AssetID     string `json:"asset_id"`
-		TokenID     string `json:"token_id"`
-	}
-	wire.alias = (*alias)(t)
-	if err := json.Unmarshal(data, &wire); err != nil {
+	fields, err := responseFields(data)
+	if err != nil {
 		return err
 	}
-	if wire.ErrMsg != "" {
-		t.Error = wire.ErrMsg
-	} else if wire.ErrMsgSnake != "" {
-		t.Error = wire.ErrMsgSnake
+	if err := normalizeResponseAsset(fields, "assetId", "asset_id", "token_id"); err != nil {
+		return err
 	}
-	if t.AssetID == "" {
-		if wire.AssetID != "" {
-			t.AssetID = wire.AssetID
-		} else {
-			t.AssetID = wire.TokenID
-		}
+	if err := normalizeResponseStrings(fields, "size", "sizeUsdc", "price", "fee", "feeUsdc"); err != nil {
+		return err
 	}
-	return nil
+	if err := normalizeResponseDates(fields, false, "matchTime"); err != nil {
+		return err
+	}
+	if err := normalizeResponseDates(fields, true, "createdAt", "updatedAt"); err != nil {
+		return err
+	}
+	aliasResponseField(fields, "errMsg", "err_msg", "error")
+	if raw, ok := fields["errMsg"]; ok {
+		fields["error"] = raw
+	}
+	return decodeResponseFields(fields, (*alias)(t))
 }

@@ -5,7 +5,6 @@ import (
 	stdjson "encoding/json" //nolint:depguard // compact CLOB market wire decoding
 	"fmt"
 
-	json "github.com/go-json-experiment/json"
 	"github.com/quagmt/udecimal"
 )
 
@@ -40,6 +39,12 @@ type Market struct {
 	IsFiftyFiftyOutcome  bool           `json:"is_50_50_outcome"`
 	Tokens               []OutcomeToken `json:"tokens"`
 	Tags                 []string       `json:"tags"`
+}
+
+func (m *Market) UnmarshalJSON(data []byte) error {
+	type alias Market
+	return unmarshalResponseStrings(data, (*alias)(m),
+		"minimum_order_size", "minimum_tick_size", "maker_base_fee", "taker_base_fee")
 }
 
 // SimplifiedMarket is a compact market representation used by sampling endpoints.
@@ -79,7 +84,7 @@ func (t *OutcomeToken) UnmarshalJSON(data []byte) error {
 	if len(id) == 0 || bytes.Equal(bytes.TrimSpace(id), []byte("null")) {
 		id = wire.AssetID
 	}
-	tokenID, err := decodeStringOrNumber(id)
+	tokenID, err := decodeAssetID(id)
 	if err != nil {
 		return fmt.Errorf("outcome token id: %w", err)
 	}
@@ -161,6 +166,11 @@ type OrderSummary struct {
 	Size  string `json:"size"`
 }
 
+func (s *OrderSummary) UnmarshalJSON(data []byte) error {
+	type alias OrderSummary
+	return unmarshalResponseStrings(data, (*alias)(s), "price", "size")
+}
+
 // OrderBookSummary is the typed response from the order book endpoint.
 type OrderBookSummary struct {
 	Market         string         `json:"market"`
@@ -179,26 +189,27 @@ type OrderBookSummary struct {
 // addition to asset_id (py-sdk AliasChoices parity for Poly V2 payloads).
 func (b *OrderBookSummary) UnmarshalJSON(data []byte) error {
 	type alias OrderBookSummary
-	var value alias
-	if err := json.Unmarshal(data, &value); err != nil {
+	fields, err := responseFields(data)
+	if err != nil {
 		return err
 	}
-	if value.AssetID == "" {
-		var legacy struct {
-			AssetID string `json:"token_id"`
-		}
-		if err := json.Unmarshal(data, &legacy); err != nil {
-			return err
-		}
-		value.AssetID = legacy.AssetID
+	if err := normalizeResponseAsset(fields, "asset_id", "token_id"); err != nil {
+		return err
 	}
-	*b = OrderBookSummary(value)
-	return nil
+	if err := normalizeResponseStrings(fields, "min_order_size", "tick_size", "last_trade_price"); err != nil {
+		return err
+	}
+	return decodeResponseFields(fields, (*alias)(b))
 }
 
 // TickSizeResponse reports the minimum supported market tick size.
 type TickSizeResponse struct {
 	MinimumTickSize TickSize `json:"minimum_tick_size"`
+}
+
+func (r *TickSizeResponse) UnmarshalJSON(data []byte) error {
+	type alias TickSizeResponse
+	return unmarshalResponseStrings(data, (*alias)(r), "minimum_tick_size")
 }
 
 // NegRiskResponse reports whether a token trades on a neg-risk market.
@@ -209,8 +220,8 @@ type NegRiskResponse struct {
 // FeeInfo holds V2 fee parameters for a market.
 // Fee is applied as: Rate * (price * (1 - price))^Exponent.
 //
-// Rate is kept as a decimal so fee calculations do not lose precision while
-// decoding the compact CLOB market response.
+// Rate is a bounded order-math decimal. REST responses preserve their wider
+// lexeme in FeeDetails; conversion to FeeInfo is exact or returns an error.
 type FeeInfo struct {
 	Rate     udecimal.Decimal `json:"rate"`
 	Exponent uint32           `json:"exponent"`
@@ -218,9 +229,9 @@ type FeeInfo struct {
 
 // FeeDetails is the wire format for fee info from /clob-markets.
 type FeeDetails struct {
-	Rate      udecimal.Decimal `json:"r"`
-	Exponent  uint32           `json:"e"`
-	TakerOnly bool             `json:"to"`
+	Rate      DecimalString `json:"r"`
+	Exponent  uint32        `json:"e"`
+	TakerOnly bool          `json:"to"`
 }
 
 // ClobMarketInfoResponse is the wire format for /clob-markets/{condition_id}.
@@ -233,95 +244,33 @@ type ClobMarketInfoResponse struct {
 	Tokens       []*ClobMarketToken `json:"t"`
 	// MakerBaseFee and TakerBaseFee are legacy V1 fields retained by the
 	// endpoint for older markets. They are optional and unused by V2 settlement.
-	MakerBaseFee *udecimal.Decimal `json:"mbf"`
-	TakerBaseFee *udecimal.Decimal `json:"tbf"`
-	RFQEnabled   bool              `json:"rfqe"`
+	MakerBaseFee           *DecimalString     `json:"mbf"`
+	TakerBaseFee           *DecimalString     `json:"tbf"`
+	RFQEnabled             bool               `json:"rfqe"`
+	Rewards                *ClobMarketRewards `json:"r"`
+	AcceptingOrders        *bool              `json:"ao"`
+	SecondsDelay           *int64             `json:"sd"`
+	GameStartTime          *string            `json:"gst"`
+	ClearBookOnStart       *bool              `json:"cbos"`
+	AcceptingOrderTime     *string            `json:"aot"`
+	TakerOrderDelayEnabled *bool              `json:"itode"`
+	BlockaidCheckEnabled   *bool              `json:"ibce"`
 }
 
 // UnmarshalJSON accepts the compact Rust/server wire shape, including numeric
 // tick and minimum-size values.
 func (r *ClobMarketInfoResponse) UnmarshalJSON(data []byte) error {
-	var wire struct {
-		ConditionID  string             `json:"c"`
-		MinTickSize  stdjson.RawMessage `json:"mts"`
-		MinOrderSize stdjson.RawMessage `json:"mos"`
-		NegRisk      bool               `json:"nr"`
-		FeeDetails   *FeeDetails        `json:"fd"`
-		Tokens       []*ClobMarketToken `json:"t"`
-		MakerBaseFee stdjson.RawMessage `json:"mbf"`
-		TakerBaseFee stdjson.RawMessage `json:"tbf"`
-		RFQEnabled   bool               `json:"rfqe"`
-	}
-	if err := stdjson.Unmarshal(data, &wire); err != nil {
-		return fmt.Errorf("clob market: decode object: %w", err)
-	}
-	minTickSize, err := decodeStringOrNumber(wire.MinTickSize)
-	if err != nil {
-		return fmt.Errorf("clob market mts: %w", err)
-	}
-	minOrderSize, err := decodeStringOrNumber(wire.MinOrderSize)
-	if err != nil {
-		return fmt.Errorf("clob market mos: %w", err)
-	}
-	makerBaseFee, err := decodeOptionalDecimal(wire.MakerBaseFee)
-	if err != nil {
-		return fmt.Errorf("clob market mbf: %w", err)
-	}
-	takerBaseFee, err := decodeOptionalDecimal(wire.TakerBaseFee)
-	if err != nil {
-		return fmt.Errorf("clob market tbf: %w", err)
-	}
-	*r = ClobMarketInfoResponse{
-		ConditionID:  wire.ConditionID,
-		MinTickSize:  minTickSize,
-		MinOrderSize: minOrderSize,
-		NegRisk:      wire.NegRisk,
-		FeeDetails:   wire.FeeDetails,
-		Tokens:       wire.Tokens,
-		MakerBaseFee: makerBaseFee,
-		TakerBaseFee: takerBaseFee,
-		RFQEnabled:   wire.RFQEnabled,
-	}
-	return nil
+	type alias ClobMarketInfoResponse
+	return unmarshalResponseStrings(data, (*alias)(r), "mts", "mos")
 }
 
-func (f *FeeDetails) UnmarshalJSON(data []byte) error {
-	var wire struct {
-		Rate      stdjson.RawMessage `json:"r"`
-		Exponent  uint32             `json:"e"`
-		TakerOnly bool               `json:"to"`
-	}
-	if err := stdjson.Unmarshal(data, &wire); err != nil {
-		return fmt.Errorf("fee details: decode object: %w", err)
-	}
-	rate, err := decodeDecimal(wire.Rate)
-	if err != nil {
-		return fmt.Errorf("fee details rate: %w", err)
-	}
-	*f = FeeDetails{Rate: rate, Exponent: wire.Exponent, TakerOnly: wire.TakerOnly}
-	return nil
-}
-
-func decodeDecimal(raw stdjson.RawMessage) (udecimal.Decimal, error) {
-	value, err := decodeStringOrNumber(raw)
-	if err != nil {
-		return udecimal.Zero, err
-	}
-	if value == "" {
-		return udecimal.Zero, nil
-	}
-	return udecimal.Parse(value)
-}
-
-func decodeOptionalDecimal(raw stdjson.RawMessage) (*udecimal.Decimal, error) {
-	if len(raw) == 0 || string(raw) == "null" {
-		return nil, nil
-	}
-	value, err := decodeDecimal(raw)
-	if err != nil {
-		return nil, err
-	}
-	return &value, nil
+// ClobMarketRewards is the nullable compact rewards configuration.
+type ClobMarketRewards struct {
+	MinSize            *DecimalString `json:"mi"`
+	MaxSpread          *DecimalString `json:"ma"`
+	Enabled            *bool          `json:"e"`
+	SkipMinOrderAge    *bool          `json:"smoa"`
+	MinOrderAgeSeconds *int64         `json:"moas"`
 }
 
 // ClobMarketToken is a token entry in the /clob-markets response.
@@ -336,7 +285,7 @@ func (t *ClobMarketToken) UnmarshalJSON(data []byte) error {
 	if err := stdjson.Unmarshal(data, &fields); err != nil {
 		return fmt.Errorf("clob market token: decode object: %w", err)
 	}
-	tokenID, err := decodeStringOrNumber(firstRaw(fields, "t", "token_id"))
+	tokenID, err := decodeAssetID(firstRaw(fields, "t", "token_id"))
 	if err != nil {
 		return fmt.Errorf("clob market token id: %w", err)
 	}
@@ -357,28 +306,26 @@ func firstRaw(fields map[string]stdjson.RawMessage, keys ...string) stdjson.RawM
 	return nil
 }
 
-func decodeStringOrNumber(raw stdjson.RawMessage) (string, error) {
-	if len(raw) == 0 || string(raw) == "null" {
-		return "", nil
-	}
-	var text string
-	if err := stdjson.Unmarshal(raw, &text); err == nil {
-		return text, nil
-	}
-	var number stdjson.Number
-	if err := stdjson.Unmarshal(raw, &number); err != nil {
-		return "", err
-	}
-	if number.String() == "" {
-		return "", fmt.Errorf("empty number")
-	}
-	return number.String(), nil
-}
-
 // BuilderFeeRateResponse reports the maker and taker fee rates for a builder code.
 type BuilderFeeRateResponse struct {
 	BuilderMakerFeeRateBps uint32 `json:"builder_maker_fee_rate_bps"`
 	BuilderTakerFeeRateBps uint32 `json:"builder_taker_fee_rate_bps"`
+}
+
+func (r *BuilderFeeRateResponse) UnmarshalJSON(data []byte) error {
+	type alias BuilderFeeRateResponse
+	fields, err := responseFields(data)
+	if err != nil {
+		return err
+	}
+	// Rust's canonical camel case takes precedence over the snake alias.
+	for _, pair := range [][2]string{{"builderMakerFeeRateBps", "builder_maker_fee_rate_bps"}, {"builderTakerFeeRateBps", "builder_taker_fee_rate_bps"}} {
+		aliasResponseField(fields, pair[0], pair[1])
+		if raw, ok := fields[pair[0]]; ok {
+			fields[pair[1]] = raw
+		}
+	}
+	return decodeResponseFields(fields, (*alias)(r))
 }
 
 // FeeRateResponse reports the base fee rate in BPS for a token.
@@ -434,21 +381,17 @@ type LastTradesPricesResponse struct {
 // to the legacy token_id key (py-sdk AliasChoices parity).
 func (r *LastTradesPricesResponse) UnmarshalJSON(data []byte) error {
 	type alias LastTradesPricesResponse
-	var value alias
-	if err := json.Unmarshal(data, &value); err != nil {
+	fields, err := responseFields(data)
+	if err != nil {
 		return err
 	}
-	if value.TokenID == "" {
-		var current struct {
-			AssetID string `json:"asset_id"`
-		}
-		if err := json.Unmarshal(data, &current); err != nil {
-			return err
-		}
-		value.TokenID = current.AssetID
+	if err := normalizeResponseAsset(fields, "token_id", "asset_id"); err != nil {
+		return err
 	}
-	*r = LastTradesPricesResponse(value)
-	return nil
+	if err := normalizeResponseStrings(fields, "price"); err != nil {
+		return err
+	}
+	return decodeResponseFields(fields, (*alias)(r))
 }
 
 // GeoblockResponse reports whether the current client IP is geographically blocked.
@@ -461,8 +404,8 @@ type GeoblockResponse struct {
 
 // MarketPrice is a single point in a market price-history response.
 type MarketPrice struct {
-	T int64            `json:"t"`
-	P udecimal.Decimal `json:"p"`
+	T int64         `json:"t"`
+	P DecimalString `json:"p"`
 }
 
 // PriceHistoryInterval controls the server-side time bucket for price-history queries.

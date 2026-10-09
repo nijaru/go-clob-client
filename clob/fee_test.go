@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	json "github.com/go-json-experiment/json"
-	"github.com/quagmt/udecimal"
 )
 
 func TestClobMarketInfoDecodesRustWire(t *testing.T) {
@@ -66,7 +65,7 @@ func TestGetFeeExponent(t *testing.T) {
 			case clobMarketEndpoint + "/cid":
 				data, _ := json.Marshal(ClobMarketInfoResponse{
 					ConditionID: "cid",
-					FeeDetails:  &FeeDetails{Rate: udecimal.MustParse("0.01"), Exponent: 3},
+					FeeDetails:  &FeeDetails{Rate: DecimalString("0.01"), Exponent: 3},
 				})
 				_, _ = w.Write(data)
 			default:

@@ -469,18 +469,18 @@ func (c *Client) GetClobMarket(
 }
 
 // GetFeeInfo returns V2 fee parameters (rate + exponent) for a token.
+// It returns an error if the response rate cannot be represented exactly in
+// bounded order math. GetClobMarket exposes the original lossless rate.
 func (c *Client) GetFeeInfo(ctx context.Context, tokenID string) (*FeeInfo, error) {
 	resp, err := c.getClobMarketForToken(ctx, tokenID)
 	if err != nil {
 		return nil, err
 	}
-	if resp.FeeDetails == nil {
-		return &FeeInfo{}, nil
+	info, err := feeInfoFromMarket(*resp)
+	if err != nil {
+		return nil, fmt.Errorf("market %s fee: %w", resp.ConditionID, err)
 	}
-	return &FeeInfo{
-		Rate:     resp.FeeDetails.Rate,
-		Exponent: resp.FeeDetails.Exponent,
-	}, nil
+	return &info, nil
 }
 
 // GetFeeExponent returns the V2 platform-fee exponent (fd.e) for a token.
