@@ -10,15 +10,15 @@ func TestClient_GetSeries(t *testing.T) {
 		if r.URL.Path != "/series/s-1" {
 			t.Errorf("path = %s", r.URL.Path)
 		}
-		writeJSON(w, Series{ID: "s-1", Title: "NBA Finals"})
+		writeJSON(w, Series{ID: "s-1", Title: ptr("NBA Finals")})
 	})
 
 	s, err := client.GetSeries(t.Context(), "s-1")
 	if err != nil {
 		t.Fatalf("GetSeries: %v", err)
 	}
-	if s.Title != "NBA Finals" {
-		t.Errorf("title = %s", s.Title)
+	if s.Title == nil || *s.Title != "NBA Finals" {
+		t.Errorf("title = %v", s.Title)
 	}
 }
 

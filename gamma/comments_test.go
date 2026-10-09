@@ -18,7 +18,7 @@ func TestClient_GetComments(t *testing.T) {
 		if q.Get("parent_entity_id") != "cid-1" {
 			t.Errorf("parent_entity_id = %q", q.Get("parent_entity_id"))
 		}
-		writeJSON(w, []Comment{{ID: "c-1", Body: "hello"}})
+		writeJSON(w, []Comment{{ID: "c-1", Body: ptr("hello")}})
 	})
 
 	comments, err := client.GetComments(
@@ -28,7 +28,7 @@ func TestClient_GetComments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetComments: %v", err)
 	}
-	if len(comments) != 1 || comments[0].Body != "hello" {
+	if len(comments) != 1 || (comments[0].Body == nil || *comments[0].Body != "hello") {
 		t.Errorf("comments = %+v", comments)
 	}
 }
@@ -38,7 +38,7 @@ func TestClient_GetComment(t *testing.T) {
 		if r.URL.Path != "/comments/c-1" {
 			t.Errorf("path = %s", r.URL.Path)
 		}
-		writeJSON(w, []Comment{{ID: "c-1", Body: "test"}})
+		writeJSON(w, []Comment{{ID: "c-1", Body: ptr("test")}})
 	})
 
 	comments, err := client.GetComment(t.Context(), "c-1")
@@ -55,14 +55,15 @@ func TestClient_GetCommentsByUserAddress(t *testing.T) {
 		if r.URL.Path != "/comments/user_address/0xabc" {
 			t.Errorf("path = %s", r.URL.Path)
 		}
-		writeJSON(w, []Comment{{ID: "c-1", UserAddress: "0xabc"}})
+		writeJSON(w, []Comment{{ID: "c-1", UserAddress: ptr("0xabc")}})
 	})
 
 	comments, err := client.GetCommentsByUserAddress(t.Context(), "0xabc")
 	if err != nil {
 		t.Fatalf("GetCommentsByUserAddress: %v", err)
 	}
-	if len(comments) != 1 || comments[0].UserAddress != "0xabc" {
+	if len(comments) != 1 ||
+		(comments[0].UserAddress == nil || *comments[0].UserAddress != "0xabc") {
 		t.Errorf("comments = %+v", comments)
 	}
 }
@@ -77,7 +78,7 @@ func TestClient_GetCommentsByUserAddressPageFilters(t *testing.T) {
 		if q.Get("ascending") != "false" || q.Get("order") != "created_at" {
 			t.Errorf("filters = ascending %q order %q", q.Get("ascending"), q.Get("order"))
 		}
-		writeJSON(w, []Comment{{ID: "c-1", UserAddress: "0xabc"}})
+		writeJSON(w, []Comment{{ID: "c-1", UserAddress: ptr("0xabc")}})
 	})
 
 	comments, err := client.GetCommentsByUserAddressPage(

@@ -10,14 +10,14 @@ func TestClient_GetMarket(t *testing.T) {
 		if r.URL.Path != "/markets/123" {
 			t.Errorf("path = %s, want /markets/123", r.URL.Path)
 		}
-		writeJSON(w, Market{ID: "123", Question: "Will it rain?"})
+		writeJSON(w, Market{ID: "123", Question: ptr("Will it rain?")})
 	})
 
 	m, err := client.GetMarket(t.Context(), "123")
 	if err != nil {
 		t.Fatalf("GetMarket: %v", err)
 	}
-	if m.ID != "123" || m.Question != "Will it rain?" {
+	if m.ID != "123" || (m.Question == nil || *m.Question != "Will it rain?") {
 		t.Errorf("market = %+v", m)
 	}
 }
@@ -55,15 +55,15 @@ func TestClient_GetMarketBySlug(t *testing.T) {
 		if raw := r.URL.RawQuery; raw != "" {
 			t.Errorf("expected no query, got %q", raw)
 		}
-		writeJSON(w, Market{ID: "123", Slug: "will-it-rain"})
+		writeJSON(w, Market{ID: "123", Slug: ptr("will-it-rain")})
 	})
 
 	m, err := client.GetMarketBySlug(t.Context(), "will-it-rain")
 	if err != nil {
 		t.Fatalf("GetMarketBySlug: %v", err)
 	}
-	if m.Slug != "will-it-rain" {
-		t.Errorf("slug = %s", m.Slug)
+	if m.Slug == nil || *m.Slug != "will-it-rain" {
+		t.Errorf("slug = %v", m.Slug)
 	}
 }
 

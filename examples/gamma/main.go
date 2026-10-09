@@ -25,7 +25,7 @@ func run() error {
 		return err
 	}
 	for _, event := range search.Results.Events {
-		fmt.Printf("Search: %s (%s)\n", event.Title, event.ID)
+		fmt.Printf("Search: %s (%s)\n", text(event.Title), event.ID)
 	}
 	fmt.Printf("Search has more: %t; boundary reached: %t\n", search.HasMore, search.LimitReached)
 
@@ -38,7 +38,7 @@ func run() error {
 		return err
 	}
 	for _, event := range page.Items {
-		fmt.Printf("Event: %s (%d markets)\n", event.Title, len(event.Markets))
+		fmt.Printf("Event: %s (%d markets)\n", text(event.Title), len(event.Markets))
 	}
 	if page.HasMore {
 		next, err := client.GetEventsPage(ctx, filters, page.NextCursor)
@@ -56,7 +56,7 @@ func run() error {
 		}
 		fmt.Printf(
 			"Market: %s; volume: %s; tokens: %v; V2 positions: %v\n",
-			market.Question,
+			text(market.Question),
 			market.Volume,
 			market.CLOBTokenIDs,
 			market.PositionIDs,
@@ -93,7 +93,7 @@ func run() error {
 		fmt.Printf(
 			"Sport: %s; optional name: %q; tags: %v\n",
 			sports[0].Sport,
-			sports[0].Name,
+			text(sports[0].Name),
 			sports[0].Tags,
 		)
 	}
@@ -101,3 +101,11 @@ func run() error {
 }
 
 func boolptr(value bool) *bool { return &value }
+
+// Missing display text is not an empty server value; this is only presentation.
+func text(value *string) string {
+	if value == nil {
+		return "(not supplied)"
+	}
+	return *value
+}

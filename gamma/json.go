@@ -52,9 +52,9 @@ func (m *Market) UnmarshalJSON(data []byte) error {
 		*field.target = items
 	}
 	if wire.SubmittedBy != nil {
-		value.SubmittedBy = *wire.SubmittedBy
+		value.SubmittedBy = wire.SubmittedBy
 	} else if wire.SubmittedByLegacy != nil {
-		value.SubmittedBy = *wire.SubmittedByLegacy
+		value.SubmittedBy = wire.SubmittedByLegacy
 	}
 	*m = Market(value)
 	return nil
@@ -140,11 +140,55 @@ func (e *Event) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("gamma event: %w", err)
 	}
 	if wire.PublishedAt != nil {
-		value.PublishedAt = *wire.PublishedAt
+		value.PublishedAt = wire.PublishedAt
 	} else if wire.PublishedAtLegacy != nil {
-		value.PublishedAt = *wire.PublishedAtLegacy
+		value.PublishedAt = wire.PublishedAtLegacy
 	}
 	*e = Event(value)
+	return nil
+}
+
+// UnmarshalJSON retains both Rust's camelCase and TS/Python's snake_case count.
+// A supplied camelCase value takes precedence, including explicit zero.
+func (s *SearchTag) UnmarshalJSON(data []byte) error {
+	type plain SearchTag
+	value := plain{}
+	wire := struct {
+		*plain
+		EventCount       *int `json:"eventCount"`
+		EventCountLegacy *int `json:"event_count"`
+	}{plain: &value}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return fmt.Errorf("gamma search tag: %w", err)
+	}
+	if wire.EventCount != nil {
+		value.EventCount = wire.EventCount
+	} else {
+		value.EventCount = wire.EventCountLegacy
+	}
+	*s = SearchTag(value)
+	return nil
+}
+
+// UnmarshalJSON uses the newer creatorUrl unless absent/null, then creatorURL.
+// Separate exact tags prevent encoding/json's case-insensitive last-key wins.
+func (c *EventCreator) UnmarshalJSON(data []byte) error {
+	type plain EventCreator
+	value := plain{}
+	wire := struct {
+		*plain
+		URL       *string `json:"creatorUrl"`
+		LegacyURL *string `json:"creatorURL"`
+	}{plain: &value}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return fmt.Errorf("gamma event creator: %w", err)
+	}
+	if wire.URL != nil {
+		value.CreatorURL = wire.URL
+	} else {
+		value.CreatorURL = wire.LegacyURL
+	}
+	*c = EventCreator(value)
 	return nil
 }
 

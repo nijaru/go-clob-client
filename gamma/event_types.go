@@ -2,55 +2,54 @@ package gamma
 
 import (
 	"encoding/json"
-	"time"
 )
 
 // Event represents a collection of markets.
 type Event struct {
 	ID               FlexibleID `json:"id"`
 	ParentEventID    FlexibleID `json:"parentEventId,omitzero"`
-	Ticker           string     `json:"ticker,omitzero"`
-	Slug             string     `json:"slug,omitzero"`
-	Title            string     `json:"title,omitzero"`
-	Subtitle         string     `json:"subtitle,omitzero"`
-	Description      string     `json:"description,omitzero"`
-	ResolutionSource string     `json:"resolutionSource,omitzero"`
-	ResolutionRules  string     `json:"resolutionRules,omitzero"`
+	Ticker           *string    `json:"ticker,omitzero"`
+	Slug             *string    `json:"slug,omitzero"`
+	Title            *string    `json:"title,omitzero"`
+	Subtitle         *string    `json:"subtitle,omitzero"`
+	Description      *string    `json:"description,omitzero"`
+	ResolutionSource *string    `json:"resolutionSource,omitzero"`
+	ResolutionRules  *string    `json:"resolutionRules,omitzero"`
 	Liquidity        Decimal    `json:"liquidity,omitzero"`
 	Volume           Decimal    `json:"volume,omitzero"`
 	Volume24h        Decimal    `json:"volume24hr,omitzero"`
 	Volume1wk        Decimal    `json:"volume1wk,omitzero"`
 	Volume1mo        Decimal    `json:"volume1mo,omitzero"`
 	Volume1yr        Decimal    `json:"volume1yr,omitzero"`
-	StartDate        *time.Time `json:"startDate,omitzero"`
-	EndDate          *time.Time `json:"endDate,omitzero"`
-	CreationDate     *time.Time `json:"creationDate,omitzero"`
-	Closed           bool       `json:"closed"`
-	Archived         bool       `json:"archived"`
-	Resolved         bool       `json:"resolved"`
-	Restricted       bool       `json:"restricted"`
-	Category         string     `json:"category,omitzero"`
-	Subcategory      string     `json:"subcategory,omitzero"`
-	Icon             string     `json:"icon,omitzero"`
-	Image            string     `json:"image,omitzero"`
-	Banner           string     `json:"banner,omitzero"`
+	StartDate        Timestamp  `json:"startDate,omitzero"`
+	EndDate          Timestamp  `json:"endDate,omitzero"`
+	CreationDate     Timestamp  `json:"creationDate,omitzero"`
+	Closed           *bool      `json:"closed,omitzero"`
+	Archived         *bool      `json:"archived,omitzero"`
+	Resolved         *bool      `json:"resolved,omitzero"`
+	Restricted       *bool      `json:"restricted,omitzero"`
+	Category         *string    `json:"category,omitzero"`
+	Subcategory      *string    `json:"subcategory,omitzero"`
+	Icon             *string    `json:"icon,omitzero"`
+	Image            *string    `json:"image,omitzero"`
+	Banner           *string    `json:"banner,omitzero"`
 	Markets          []Market   `json:"markets,omitzero"`
 	Tags             []Tag      `json:"tags,omitzero"`
 	Competitive      Decimal    `json:"competitive,omitzero"`
-	CommentCount     int        `json:"commentCount,omitzero"`
-	CommentsEnabled  bool       `json:"commentsEnabled"`
-	NegativeRisk     bool       `json:"negRisk"`
-	NegRiskMarketID  string     `json:"negRiskMarketID,omitzero"`
-	CreatedAt        time.Time  `json:"createdAt"`
-	UpdatedAt        time.Time  `json:"updatedAt"`
+	CommentCount     *int       `json:"commentCount,omitzero"`
+	CommentsEnabled  *bool      `json:"commentsEnabled,omitzero"`
+	NegativeRisk     *bool      `json:"negRisk,omitzero"`
+	NegRiskMarketID  *string    `json:"negRiskMarketID,omitzero"`
+	CreatedAt        Timestamp  `json:"createdAt,omitzero"`
+	UpdatedAt        Timestamp  `json:"updatedAt,omitzero"`
 
-	Featured                     bool                          `json:"featured"`
-	New                          bool                          `json:"new"`
-	SortBy                       string                        `json:"sortBy,omitzero"`
-	IsTemplate                   bool                          `json:"isTemplate"`
-	TemplateVariables            string                        `json:"templateVariables,omitzero"`
-	CreatedBy                    string                        `json:"createdBy,omitzero"`
-	UpdatedBy                    string                        `json:"updatedBy,omitzero"`
+	Featured                     *bool                         `json:"featured,omitzero"`
+	New                          *bool                         `json:"new,omitzero"`
+	SortBy                       *string                       `json:"sortBy,omitzero"`
+	IsTemplate                   *bool                         `json:"isTemplate,omitzero"`
+	TemplateVariables            *string                       `json:"templateVariables,omitzero"`
+	CreatedBy                    *string                       `json:"createdBy,omitzero"`
+	UpdatedBy                    *string                       `json:"updatedBy,omitzero"`
 	OpenInterest                 Decimal                       `json:"openInterest,omitzero"`
 	LiquidityAmm                 Decimal                       `json:"liquidityAmm,omitzero"`
 	LiquidityClob                Decimal                       `json:"liquidityClob,omitzero"`
@@ -59,69 +58,69 @@ type Event struct {
 	Series                       []Series                      `json:"series,omitzero"`
 	Categories                   []Category                    `json:"categories,omitzero"`
 	Collections                  []Collection                  `json:"collections,omitzero"`
-	Active                       bool                          `json:"active,omitzero"`
-	PublishedAt                  string                        `json:"publishedAt,omitzero"`
-	FeaturedImage                string                        `json:"featuredImage,omitzero"`
-	DisqusThread                 string                        `json:"disqusThread,omitzero"`
-	ParentEvent                  string                        `json:"parentEvent,omitzero"`
-	SportsradarMatchID           string                        `json:"sportsradarMatchId,omitzero"`
+	Active                       *bool                         `json:"active,omitzero"`
+	PublishedAt                  *string                       `json:"publishedAt,omitzero"`
+	FeaturedImage                *string                       `json:"featuredImage,omitzero"`
+	DisqusThread                 *string                       `json:"disqusThread,omitzero"`
+	ParentEvent                  *string                       `json:"parentEvent,omitzero"`
+	SportsradarMatchID           *string                       `json:"sportsradarMatchId,omitzero"`
 	TurnProviderID               FlexibleID                    `json:"turnProviderId,omitzero"`
-	EnableOrderBook              bool                          `json:"enableOrderBook,omitzero"`
-	ImageOptimized               ImageOptimization             `json:"imageOptimized,omitzero"`
-	IconOptimized                ImageOptimization             `json:"iconOptimized,omitzero"`
-	FeaturedImageOptimized       ImageOptimization             `json:"featuredImageOptimized,omitzero"`
-	CYOM                         bool                          `json:"cyom,omitzero"`
-	ClosedTime                   *time.Time                    `json:"closedTime,omitzero"`
-	ShowAllOutcomes              bool                          `json:"showAllOutcomes,omitzero"`
-	ShowMarketImages             bool                          `json:"showMarketImages,omitzero"`
-	AutomaticallyResolved        bool                          `json:"automaticallyResolved,omitzero"`
-	EnableNegRisk                bool                          `json:"enableNegRisk,omitzero"`
-	AutomaticallyActive          bool                          `json:"automaticallyActive,omitzero"`
-	EventDate                    string                        `json:"eventDate,omitzero"`
-	StartTime                    *time.Time                    `json:"startTime,omitzero"`
-	EventWeek                    int                           `json:"eventWeek,omitzero"`
-	SeriesSlug                   string                        `json:"seriesSlug,omitzero"`
-	Score                        string                        `json:"score,omitzero"`
-	Elapsed                      string                        `json:"elapsed,omitzero"`
-	Period                       string                        `json:"period,omitzero"`
-	Live                         bool                          `json:"live,omitzero"`
-	Ended                        bool                          `json:"ended,omitzero"`
-	FinishedTimestamp            *time.Time                    `json:"finishedTimestamp,omitzero"`
-	GmpChartMode                 string                        `json:"gmpChartMode,omitzero"`
+	EnableOrderBook              *bool                         `json:"enableOrderBook,omitzero"`
+	ImageOptimized               *ImageOptimization            `json:"imageOptimized,omitzero"`
+	IconOptimized                *ImageOptimization            `json:"iconOptimized,omitzero"`
+	FeaturedImageOptimized       *ImageOptimization            `json:"featuredImageOptimized,omitzero"`
+	CYOM                         *bool                         `json:"cyom,omitzero"`
+	ClosedTime                   Timestamp                     `json:"closedTime,omitzero"`
+	ShowAllOutcomes              *bool                         `json:"showAllOutcomes,omitzero"`
+	ShowMarketImages             *bool                         `json:"showMarketImages,omitzero"`
+	AutomaticallyResolved        *bool                         `json:"automaticallyResolved,omitzero"`
+	EnableNegRisk                *bool                         `json:"enableNegRisk,omitzero"`
+	AutomaticallyActive          *bool                         `json:"automaticallyActive,omitzero"`
+	EventDate                    *string                       `json:"eventDate,omitzero"`
+	StartTime                    Timestamp                     `json:"startTime,omitzero"`
+	EventWeek                    *int                          `json:"eventWeek,omitzero"`
+	SeriesSlug                   *string                       `json:"seriesSlug,omitzero"`
+	Score                        *string                       `json:"score,omitzero"`
+	Elapsed                      *string                       `json:"elapsed,omitzero"`
+	Period                       *string                       `json:"period,omitzero"`
+	Live                         *bool                         `json:"live,omitzero"`
+	Ended                        *bool                         `json:"ended,omitzero"`
+	FinishedTimestamp            Timestamp                     `json:"finishedTimestamp,omitzero"`
+	GmpChartMode                 *string                       `json:"gmpChartMode,omitzero"`
 	EventCreators                []EventCreator                `json:"eventCreators,omitzero"`
-	TweetCount                   int                           `json:"tweetCount,omitzero"`
+	TweetCount                   *int                          `json:"tweetCount,omitzero"`
 	Chats                        []Chat                        `json:"chats,omitzero"`
-	FeaturedOrder                int                           `json:"featuredOrder,omitzero"`
-	EstimateValue                bool                          `json:"estimateValue,omitzero"`
-	CantEstimate                 bool                          `json:"cantEstimate,omitzero"`
-	EstimatedValue               Decimal                       `json:"estimatedValue,omitzero"`
+	FeaturedOrder                *int                          `json:"featuredOrder,omitzero"`
+	EstimateValue                *bool                         `json:"estimateValue,omitzero"`
+	CantEstimate                 *bool                         `json:"cantEstimate,omitzero"`
+	EstimatedValue               ScalarText                    `json:"estimatedValue,omitzero"`
 	Templates                    []Template                    `json:"templates,omitzero"`
 	SpreadsMainLine              Decimal                       `json:"spreadsMainLine,omitzero"`
 	TotalsMainLine               Decimal                       `json:"totalsMainLine,omitzero"`
-	CarouselMap                  string                        `json:"carouselMap,omitzero"`
-	PendingDeployment            bool                          `json:"pendingDeployment,omitzero"`
-	Deploying                    bool                          `json:"deploying,omitzero"`
-	DeployingTimestamp           *time.Time                    `json:"deployingTimestamp,omitzero"`
-	ScheduledDeploymentTimestamp *time.Time                    `json:"scheduledDeploymentTimestamp,omitzero"`
-	GameStatus                   string                        `json:"gameStatus,omitzero"`
-	RequiresTranslation          bool                          `json:"requiresTranslation,omitzero"`
-	NegRiskAugmented             bool                          `json:"negRiskAugmented,omitzero"`
-	GameID                       int64                         `json:"gameId,omitzero"`
-	ElectionType                 string                        `json:"electionType,omitzero"`
-	CountryName                  string                        `json:"countryName,omitzero"`
-	Color                        string                        `json:"color,omitzero"`
-	CumulativeMarkets            bool                          `json:"cumulativeMarkets,omitzero"`
-	AwayTeamName                 string                        `json:"awayTeamName,omitzero"`
-	HomeTeamName                 string                        `json:"homeTeamName,omitzero"`
-	Version                      ProtocolVersion               `json:"version,omitzero"`
+	CarouselMap                  *string                       `json:"carouselMap,omitzero"`
+	PendingDeployment            *bool                         `json:"pendingDeployment,omitzero"`
+	Deploying                    *bool                         `json:"deploying,omitzero"`
+	DeployingTimestamp           Timestamp                     `json:"deployingTimestamp,omitzero"`
+	ScheduledDeploymentTimestamp Timestamp                     `json:"scheduledDeploymentTimestamp,omitzero"`
+	GameStatus                   *string                       `json:"gameStatus,omitzero"`
+	RequiresTranslation          *bool                         `json:"requiresTranslation,omitzero"`
+	NegRiskAugmented             *bool                         `json:"negRiskAugmented,omitzero"`
+	GameID                       *int64                        `json:"gameId,omitzero"`
+	ElectionType                 *string                       `json:"electionType,omitzero"`
+	CountryName                  *string                       `json:"countryName,omitzero"`
+	Color                        *string                       `json:"color,omitzero"`
+	CumulativeMarkets            *bool                         `json:"cumulativeMarkets,omitzero"`
+	AwayTeamName                 *string                       `json:"awayTeamName,omitzero"`
+	HomeTeamName                 *string                       `json:"homeTeamName,omitzero"`
+	Version                      *ProtocolVersion              `json:"version,omitzero"`
 	TagLabels                    []string                      `json:"tag_labels,omitzero"`
 	TagSlugs                     []string                      `json:"tag_slugs,omitzero"`
 	InternalUsers                []InternalUser                `json:"internalUsers,omitzero"`
-	RescheduledFromGameID        int                           `json:"rescheduledFromGameId,omitzero"`
+	RescheduledFromGameID        *int                          `json:"rescheduledFromGameId,omitzero"`
 	BestLines                    []BestLine                    `json:"bestLines,omitzero"`
-	LastHighlight                string                        `json:"lastHighlight,omitzero"`
-	LastHighlightType            string                        `json:"lastHighlightType,omitzero"`
-	LastHighlightAt              *time.Time                    `json:"lastHighlightAt,omitzero"`
+	LastHighlight                *string                       `json:"lastHighlight,omitzero"`
+	LastHighlightType            *string                       `json:"lastHighlightType,omitzero"`
+	LastHighlightAt              Timestamp                     `json:"lastHighlightAt,omitzero"`
 	EventMetadata                json.RawMessage               `json:"eventMetadata,omitzero"`
 	Teams                        []Team                        `json:"teams,omitzero"`
 	Sport                        *SportsMetadata               `json:"sport,omitzero"`

@@ -11,15 +11,15 @@ func TestClient_GetTag(t *testing.T) {
 		if r.URL.Path != "/tags/tag-1" {
 			t.Errorf("path = %s", r.URL.Path)
 		}
-		writeJSON(w, Tag{ID: "tag-1", Label: "Politics"})
+		writeJSON(w, Tag{ID: "tag-1", Label: ptr("Politics")})
 	})
 
 	tag, err := client.GetTag(t.Context(), "tag-1")
 	if err != nil {
 		t.Fatalf("GetTag: %v", err)
 	}
-	if tag.Label != "Politics" {
-		t.Errorf("label = %s", tag.Label)
+	if tag.Label == nil || *tag.Label != "Politics" {
+		t.Errorf("label = %v", tag.Label)
 	}
 }
 
@@ -28,15 +28,15 @@ func TestClient_GetTagBySlug(t *testing.T) {
 		if r.URL.Path != "/tags/slug/politics" {
 			t.Errorf("path = %s", r.URL.Path)
 		}
-		writeJSON(w, Tag{ID: "tag-1", Slug: "politics"})
+		writeJSON(w, Tag{ID: "tag-1", Slug: ptr("politics")})
 	})
 
 	tag, err := client.GetTagBySlug(t.Context(), "politics")
 	if err != nil {
 		t.Fatalf("GetTagBySlug: %v", err)
 	}
-	if tag.Slug != "politics" {
-		t.Errorf("slug = %s", tag.Slug)
+	if tag.Slug == nil || *tag.Slug != "politics" {
+		t.Errorf("slug = %v", tag.Slug)
 	}
 }
 
@@ -45,14 +45,14 @@ func TestClient_GetRelatedTags(t *testing.T) {
 		if r.URL.Path != "/tags/tag-1/related-tags" {
 			t.Errorf("path = %s", r.URL.Path)
 		}
-		writeJSON(w, []RelatedTag{{ID: "rt-1", TagID: "tag-1", Rank: 1}})
+		writeJSON(w, []RelatedTag{{ID: "rt-1", TagID: "tag-1", Rank: ptr(1)}})
 	})
 
 	tags, err := client.GetRelatedTags(t.Context(), "tag-1")
 	if err != nil {
 		t.Fatalf("GetRelatedTags: %v", err)
 	}
-	if len(tags) != 1 || tags[0].Rank != 1 {
+	if len(tags) != 1 || (tags[0].Rank == nil || *tags[0].Rank != 1) {
 		t.Errorf("tags = %+v", tags)
 	}
 }
@@ -79,14 +79,14 @@ func TestClient_GetTagsRelatedToTag(t *testing.T) {
 		if r.URL.Path != "/tags/tag-1/related-tags/tags" {
 			t.Errorf("path = %s", r.URL.Path)
 		}
-		writeJSON(w, []Tag{{ID: "t-1", Label: "Elections"}})
+		writeJSON(w, []Tag{{ID: "t-1", Label: ptr("Elections")}})
 	})
 
 	tags, err := client.GetTagsRelatedToTag(t.Context(), "tag-1")
 	if err != nil {
 		t.Fatalf("GetTagsRelatedToTag: %v", err)
 	}
-	if len(tags) != 1 || tags[0].Label != "Elections" {
+	if len(tags) != 1 || (tags[0].Label == nil || *tags[0].Label != "Elections") {
 		t.Errorf("tags = %+v", tags)
 	}
 }

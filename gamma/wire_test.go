@@ -32,7 +32,7 @@ func TestPinnedWireFixtures(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(sports) != 1 || sports[0].Sport != "ncaab" || sports[0].Name != "" ||
+		if len(sports) != 1 || sports[0].Sport != "ncaab" || sports[0].Name != nil ||
 			!slices.Equal(sports[0].Tags, []string{"1", "2", "3"}) {
 			t.Fatalf("sports: %+v", sports)
 		}
@@ -53,7 +53,7 @@ func TestPinnedWireFixtures(t *testing.T) {
 			m.RewardsMinSize != "10" ||
 			m.FeeSchedule == nil ||
 			m.FeeSchedule.Rate != "0.01" ||
-			m.FeeSchedule.TakerOnly ||
+			m.FeeSchedule.TakerOnly == nil || *m.FeeSchedule.TakerOnly ||
 			m.PositionIDs[0] != "POSITION-YES" ||
 			m.Events[0].ID != "EVENT-1" ||
 			m.Tags[0].ID != "TAG-1" {
@@ -74,15 +74,16 @@ func TestPinnedWireFixtures(t *testing.T) {
 		if err := json.Unmarshal(e.EventMetadata, &metadata); err != nil {
 			t.Fatal(err)
 		}
-		if e.Volume != "500" || e.Volume24h != "50" || e.OpenInterest != "200" || !e.NegativeRisk ||
-			e.NegRiskMarketID != "NRMID" ||
+		if e.Volume != "500" || e.Volume24h != "50" || e.OpenInterest != "200" ||
+			(e.NegativeRisk == nil || !*e.NegativeRisk) ||
+			(e.NegRiskMarketID == nil || *e.NegRiskMarketID != "NRMID") ||
 			e.Sport == nil ||
-			e.Sport.Name != "Ligue 1" ||
+			(e.Sport.Name == nil || *e.Sport.Name != "Ligue 1") ||
 			!slices.Equal(e.Sport.Tags, []string{"1", "2"}) ||
-			e.Teams[0].Ordering != "home" ||
+			(e.Teams[0].Ordering == nil || *e.Teams[0].Ordering != "home") ||
 			e.ExternalPartners[0].ID != 7 ||
 			e.ExternalPartners[0].Partner.ID != 1 ||
-			e.EventCreators[0].CreatorURL != "https://example.test/alice" ||
+			(e.EventCreators[0].CreatorURL == nil || *e.EventCreators[0].CreatorURL != "https://example.test/alice") ||
 			e.Series[0].Volume != "1000" ||
 			metadata["k"] != "v" {
 			t.Fatalf("event: %+v", e)
@@ -98,9 +99,9 @@ func TestMarketNumericAndPositionWire(t *testing.T) {
 		t.Fatal(err)
 	}
 	if m.VolumeNum != "9007199254740993.125" || m.LiquidityNum != "42.500" || m.BestBid != "0.45" ||
-		!m.NegativeRisk ||
-		m.NegRiskRequestID != "request-hash" ||
-		m.SubmittedBy != "author" ||
+		(m.NegativeRisk == nil || !*m.NegativeRisk) ||
+		(m.NegRiskRequestID == nil || *m.NegRiskRequestID != "request-hash") ||
+		(m.SubmittedBy == nil || *m.SubmittedBy != "author") ||
 		!slices.Equal(m.PositionIDs, []string{"yes-v2", "no-v2"}) {
 		t.Fatalf("market: %+v", m)
 	}
@@ -148,9 +149,10 @@ func TestOptionalSportsNameAndNestedCommentMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := comments[0]
-	if c.ParentEntityID != "123" || c.ParentCommentID != nil || c.TradeAsset != "pos-1" ||
-		c.Media[0].Provider != "giphy" ||
-		c.Profile.Positions[0].TokenID != "TOK-99" ||
+	if c.ParentEntityID != "123" || c.ParentCommentID != nil ||
+		(c.TradeAsset == nil || *c.TradeAsset != "pos-1") ||
+		(c.Media[0].Provider == nil || *c.Media[0].Provider != "giphy") ||
+		(c.Profile.Positions[0].TokenID == nil || *c.Profile.Positions[0].TokenID != "TOK-99") ||
 		c.Profile.Positions[0].PositionSize != "42" ||
 		c.Profile.ProfileImageOptimized.RelID != "1" {
 		t.Fatalf("comment: %+v", c)
@@ -170,7 +172,8 @@ func TestPublicProfileNullAndImageOptimization(t *testing.T) {
 	if err := json.Unmarshal([]byte(`{"profiles":[{"id":"p1","name":null,"profileImageOptimized":{"id":"img42","imageUrlOptimized":"https://example.test/i"}}]}`), &results); err != nil {
 		t.Fatal(err)
 	}
-	if results.Profiles[0].ProfileImageOptimized.ID != "img42" {
+	if results.Profiles[0].ProfileImageOptimized.ID == nil ||
+		*results.Profiles[0].ProfileImageOptimized.ID != "img42" {
 		t.Fatalf("profile: %+v", results.Profiles)
 	}
 }

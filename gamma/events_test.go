@@ -10,15 +10,15 @@ func TestClient_GetEvent(t *testing.T) {
 		if r.URL.Path != "/events/evt-1" {
 			t.Errorf("path = %s", r.URL.Path)
 		}
-		writeJSON(w, Event{ID: "evt-1", Title: "Test Event"})
+		writeJSON(w, Event{ID: "evt-1", Title: ptr("Test Event")})
 	})
 
 	ev, err := client.GetEvent(t.Context(), "evt-1")
 	if err != nil {
 		t.Fatalf("GetEvent: %v", err)
 	}
-	if ev.Title != "Test Event" {
-		t.Errorf("title = %s", ev.Title)
+	if ev.Title == nil || *ev.Title != "Test Event" {
+		t.Errorf("title = %v", ev.Title)
 	}
 }
 
@@ -27,15 +27,15 @@ func TestClient_GetEventBySlug(t *testing.T) {
 		if r.URL.Path != "/events/slug/test-event" {
 			t.Errorf("path = %s", r.URL.Path)
 		}
-		writeJSON(w, Event{ID: "1", Slug: "test-event"})
+		writeJSON(w, Event{ID: "1", Slug: ptr("test-event")})
 	})
 
 	ev, err := client.GetEventBySlug(t.Context(), "test-event")
 	if err != nil {
 		t.Fatalf("GetEventBySlug: %v", err)
 	}
-	if ev.Slug != "test-event" {
-		t.Errorf("slug = %s", ev.Slug)
+	if ev.Slug == nil || *ev.Slug != "test-event" {
+		t.Errorf("slug = %v", ev.Slug)
 	}
 }
 

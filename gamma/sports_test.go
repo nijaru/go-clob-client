@@ -10,14 +10,14 @@ func TestClient_GetTeams(t *testing.T) {
 		if r.URL.Path != "/teams" {
 			t.Errorf("path = %s", r.URL.Path)
 		}
-		writeJSON(w, []Team{{ID: 1, Name: "Lakers", League: "NBA"}})
+		writeJSON(w, []Team{{ID: 1, Name: ptr("Lakers"), League: ptr("NBA")}})
 	})
 
 	teams, err := client.GetTeams(t.Context())
 	if err != nil {
 		t.Fatalf("GetTeams: %v", err)
 	}
-	if len(teams) != 1 || teams[0].Name != "Lakers" {
+	if len(teams) != 1 || (teams[0].Name == nil || *teams[0].Name != "Lakers") {
 		t.Errorf("teams = %+v", teams)
 	}
 }
@@ -34,7 +34,7 @@ func TestClient_GetTeamsPage(t *testing.T) {
 		if q.Get("limit") != "5" {
 			t.Errorf("limit = %q", q.Get("limit"))
 		}
-		writeJSON(w, []Team{{ID: 1, Name: "Lakers"}})
+		writeJSON(w, []Team{{ID: 1, Name: ptr("Lakers")}})
 	})
 
 	teams, err := client.GetTeamsPage(t.Context(), TeamFilterParams{

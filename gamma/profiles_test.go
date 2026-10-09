@@ -13,14 +13,14 @@ func TestClient_GetPublicProfile(t *testing.T) {
 		if r.URL.Query().Get("address") != "0xabc" {
 			t.Errorf("address = %q", r.URL.Query().Get("address"))
 		}
-		writeJSON(w, PublicProfile{Address: "0xabc", Name: "Test User"})
+		writeJSON(w, PublicProfile{Address: ptr("0xabc"), Name: ptr("Test User")})
 	})
 
 	profile, err := client.GetPublicProfile(t.Context(), "0xabc")
 	if err != nil {
 		t.Fatalf("GetPublicProfile: %v", err)
 	}
-	if profile.Name != "Test User" {
-		t.Errorf("name = %s", profile.Name)
+	if profile.Name == nil || *profile.Name != "Test User" {
+		t.Errorf("name = %v", profile.Name)
 	}
 }

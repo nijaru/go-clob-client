@@ -10,12 +10,13 @@ import (
 )
 
 // Decimal preserves the exact text of Gamma's string-or-number decimal values.
-// The empty value represents an absent or null field, not zero. JSON encoding
+// The empty value represents absent, null or empty wire text, not zero. JSON encoding
 // uses a string, as with Gamma's volume and liquidity fields.
 type Decimal string
 
 func (d *Decimal) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+	if trimmed := bytes.TrimSpace(data); bytes.Equal(trimmed, []byte("null")) ||
+		bytes.Equal(trimmed, []byte(`""`)) {
 		*d = ""
 		return nil
 	}

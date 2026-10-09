@@ -14,9 +14,9 @@ func TestClient_Search(t *testing.T) {
 			t.Errorf("q = %q", r.URL.Query().Get("q"))
 		}
 		writeJSON(w, SearchResults{
-			Events: []Event{{ID: "123", Title: "Will it rain?"}},
+			Events: []Event{{ID: "123", Title: ptr("Will it rain?")}},
 			Tags: []SearchTag{
-				{ID: "tag-1", Label: "Weather", Slug: "weather", EventCount: 4},
+				{ID: ptr("tag-1"), Label: ptr("Weather"), Slug: ptr("weather"), EventCount: ptr(4)},
 			},
 			Pagination: &Pagination{HasMore: true, TotalResults: 2},
 		})
@@ -29,7 +29,8 @@ func TestClient_Search(t *testing.T) {
 	if len(results.Events) != 1 || results.Events[0].ID != "123" {
 		t.Errorf("events = %+v", results.Events)
 	}
-	if len(results.Tags) != 1 || results.Tags[0].Slug != "weather" {
+	if len(results.Tags) != 1 ||
+		(results.Tags[0].Slug == nil || *results.Tags[0].Slug != "weather") {
 		t.Errorf("tags = %+v", results.Tags)
 	}
 	if results.Pagination == nil || !results.Pagination.HasMore {
