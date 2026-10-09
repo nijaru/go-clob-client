@@ -50,11 +50,10 @@ func TestHeartbeatLifecycle(t *testing.T) {
 	defer server.Close()
 
 	client, err := NewAuthenticatedClient(Config{
-		Host:                 server.URL,
-		PrivateKey:           "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
-		Credentials:          &Credentials{Key: "key", Secret: "c2VjcmV0", Passphrase: "pass"},
-		HeartbeatInterval:    10 * time.Millisecond,
-		DisableAutoHeartbeat: true,
+		Host:              server.URL,
+		PrivateKey:        "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
+		Credentials:       &Credentials{Key: "key", Secret: "c2VjcmV0", Passphrase: "pass"},
+		HeartbeatInterval: 10 * time.Millisecond,
 	})
 	if err != nil {
 		t.Fatalf("new authenticated client: %v", err)
@@ -63,13 +62,13 @@ func TestHeartbeatLifecycle(t *testing.T) {
 		t.Fatal("heartbeats unexpectedly active")
 	}
 
-	if err := client.StartHeartbeats(); err != nil {
+	if err := client.StartHeartbeats(t.Context()); err != nil {
 		t.Fatalf("start heartbeats: %v", err)
 	}
 	if !client.HeartbeatsActive() {
 		t.Fatal("heartbeats should be active")
 	}
-	if !errors.Is(client.StartHeartbeats(), ErrHeartbeatsActive) {
+	if !errors.Is(client.StartHeartbeats(t.Context()), ErrHeartbeatsActive) {
 		t.Fatal("second start should return ErrHeartbeatsActive")
 	}
 
@@ -85,7 +84,7 @@ func TestHeartbeatLifecycle(t *testing.T) {
 		t.Fatal("heartbeats should be inactive after stop")
 	}
 
-	if err := client.StartHeartbeats(); err != nil {
+	if err := client.StartHeartbeats(t.Context()); err != nil {
 		t.Fatalf("restart heartbeats: %v", err)
 	}
 	if err := client.Close(); err != nil {
@@ -94,7 +93,7 @@ func TestHeartbeatLifecycle(t *testing.T) {
 	if client.HeartbeatsActive() {
 		t.Fatal("heartbeats should be inactive after close")
 	}
-	if !errors.Is(client.StartHeartbeats(), ErrHeartbeatsClosed) {
+	if !errors.Is(client.StartHeartbeats(t.Context()), ErrHeartbeatsClosed) {
 		t.Fatal("start after close should return ErrHeartbeatsClosed")
 	}
 }
@@ -390,7 +389,6 @@ func TestCredentialsReturnsCopy(t *testing.T) {
 			Secret:     "orig-secret",
 			Passphrase: "orig-pass",
 		},
-		DisableAutoHeartbeat: true,
 	})
 	if err != nil {
 		t.Fatalf("new authenticated client: %v", err)

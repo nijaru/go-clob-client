@@ -22,6 +22,9 @@ const (
 	TradingRestrictionPostOnly = polyhttp.TradingRestrictionPostOnly
 )
 
+// RateLimitUpdate is the server-reported rate-limit state passed to Config.OnRateLimitUpdate.
+type RateLimitUpdate = polyhttp.RateLimitUpdate
+
 // APIError is the typed error returned for non-successful Polymarket API responses.
 type APIError = polyhttp.APIError
 

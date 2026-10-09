@@ -45,13 +45,12 @@ func TestRelayerWalletType(t *testing.T) {
 func newGaslessClient(t *testing.T, sig SignatureType, relayerURL string) *AuthenticatedClient {
 	t.Helper()
 	cfg := Config{
-		ChainID:              PolygonChainID,
-		PrivateKey:           gaslessTestKey,
-		SignatureType:        sig,
-		Credentials:          &Credentials{Key: "k", Secret: "c2VjcmV0", Passphrase: "p"},
-		RelayerHost:          relayerURL,
-		RPCURL:               "http://127.0.0.1:1", // closed port → estimate falls back fast
-		DisableAutoHeartbeat: true,
+		ChainID:       PolygonChainID,
+		PrivateKey:    gaslessTestKey,
+		SignatureType: sig,
+		Credentials:   &Credentials{Key: "k", Secret: "c2VjcmV0", Passphrase: "p"},
+		RelayerHost:   relayerURL,
+		RPCURL:        "http://127.0.0.1:1", // closed port → estimate falls back fast
 	}
 	if sig != SignatureTypeEOA {
 		cfg.FunderAddress = "0x" + repeatHex(20)
@@ -127,19 +126,14 @@ func TestPrepareGaslessTransactionEOAErrors(t *testing.T) {
 
 func TestGaslessConfigUnsupportedChain(t *testing.T) {
 	t.Parallel()
-	c, err := NewAuthenticatedClient(Config{
-		ChainID:              1, // Ethereum mainnet — no Polymarket wallet config
-		PrivateKey:           gaslessTestKey,
-		SignatureType:        SignatureTypePolyProxy,
-		FunderAddress:        "0x" + repeatHex(20),
-		Credentials:          &Credentials{Key: "k", Secret: "c2VjcmV0", Passphrase: "p"},
-		DisableAutoHeartbeat: true,
+	_, err := NewAuthenticatedClient(Config{
+		ChainID:       1, // Ethereum mainnet — no Polymarket wallet config
+		PrivateKey:    gaslessTestKey,
+		SignatureType: SignatureTypePolyProxy,
+		FunderAddress: "0x" + repeatHex(20),
+		Credentials:   &Credentials{Key: "k", Secret: "c2VjcmV0", Passphrase: "p"},
 	})
-	if err != nil {
-		t.Fatalf("NewAuthenticatedClient: %v", err)
-	}
-	if _, err := c.PrepareGaslessTransaction(context.Background(),
-		[]polyrelay.TransactionCall{{To: common.Address{}, Value: big.NewInt(0)}}, ""); err == nil {
-		t.Fatal("expected unsupported-chain error, got nil")
+	if err == nil {
+		t.Fatal("expected unsupported-chain constructor error")
 	}
 }

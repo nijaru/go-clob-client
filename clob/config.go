@@ -1,11 +1,12 @@
 package clob
 
 import (
+	"fmt"
+	"math"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
-
-	"github.com/nijaru/go-clob-client/internal/polyhttp"
 )
 
 const (
@@ -89,11 +90,9 @@ type Config struct {
 	// instead of using local time. Useful when local clock skew causes auth failures.
 	UseServerTime bool
 
-	// HeartbeatInterval is the duration between automatic heartbeats (2026 feature).
-	// Defaults to 5 seconds.
+	// HeartbeatInterval is the posting interval used by StartHeartbeats.
+	// Defaults to 5 seconds. Constructors never start heartbeats implicitly.
 	HeartbeatInterval time.Duration
-	// DisableAutoHeartbeat prevents the client from starting the background heartbeat loop.
-	DisableAutoHeartbeat bool
 
 	// TickSizeCacheTTL is the duration for which tick sizes are cached.
 	// Defaults to 0 (no expiration).
@@ -120,7 +119,28 @@ type Config struct {
 	// whenever a response reports it, both successful and failed. Errors
 	// raised by the listener are ignored and must not affect request
 	// handling.
-	OnRateLimitUpdate func(*polyhttp.RateLimitUpdate)
+	OnRateLimitUpdate func(*RateLimitUpdate)
+}
+
+func (c Config) validate() error {
+	if c.RetryMax < 0 || c.RetryBackoff < 0 || c.TickSizeCacheTTL < 0 || c.HeartbeatInterval < 0 ||
+		c.RateBurst < 0 {
+		return fmt.Errorf("retry, cache, heartbeat, and burst settings must not be negative")
+	}
+	if math.IsNaN(c.RateLimit) || math.IsInf(c.RateLimit, 0) {
+		return fmt.Errorf("RateLimit must be finite")
+	}
+	for _, host := range []string{c.Host, c.GeoblockHost, c.RelayerHost, c.BuilderGatewayHost, c.CollateralReturnHost} {
+		u, err := url.Parse(host)
+		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+			return fmt.Errorf("invalid HTTP host %q", host)
+		}
+	}
+	u, err := url.Parse(c.RTDSHost)
+	if err != nil || (u.Scheme != "wss" && u.Scheme != "ws") || u.Host == "" {
+		return fmt.Errorf("invalid RTDS host %q", c.RTDSHost)
+	}
+	return nil
 }
 
 func (c Config) normalized() Config {

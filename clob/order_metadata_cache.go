@@ -2,6 +2,7 @@ package clob
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -38,7 +39,6 @@ type orderConditionLoad struct {
 type orderMetadataLoad struct {
 	done       chan struct{}
 	value      orderMarketMetadata
-	builderFee BuilderFeeRateResponse
 	err        error
 	generation uint64
 }
@@ -60,7 +60,7 @@ func (c *Client) resolveOrderMarketMetadata(
 	var generation uint64
 	for {
 		c.orderMetadataMu.Lock()
-		currentGeneration := *c.orderMetadataGeneration
+		currentGeneration := c.orderMetadataGeneration
 		if !force {
 			if entry, ok := c.orderMetadataCache[conditionID]; ok &&
 				time.Now().Before(entry.expiresAt) {
@@ -81,6 +81,10 @@ func (c *Client) resolveOrderMarketMetadata(
 			}
 			select {
 			case <-existing.done:
+				if ctx.Err() == nil &&
+					(errors.Is(existing.err, context.Canceled) || errors.Is(existing.err, context.DeadlineExceeded)) {
+					continue
+				}
 				return validateOrderMarketToken(existing.value, tokenID, existing.err)
 			case <-ctx.Done():
 				return orderMarketMetadata{}, ctx.Err()
@@ -113,13 +117,27 @@ func (c *Client) resolveOrderMarketMetadata(
 			delete(c.orderMetadataCache, conditionID)
 		}
 	}
-	if err == nil && generation == *c.orderMetadataGeneration {
+	if err == nil && generation == c.orderMetadataGeneration {
 		c.orderMetadataCache[conditionID] = orderMetadataEntry{
 			value:     value,
 			expiresAt: time.Now().Add(c.orderMetadataTTL()),
 		}
 		for siblingTokenID := range value.TokenIDs {
 			c.orderConditionCache[siblingTokenID] = conditionID
+		}
+		// A forced snapshot refresh also updates the independently fetchable
+		// tick/risk fields so the next order cannot reuse the stale grid.
+		if value.TickSize != "" {
+			c.SetTickSize(tokenID, value.TickSize)
+		}
+		c.SetNegRisk(tokenID, value.NegRisk)
+		for siblingTokenID := range value.TokenIDs {
+			if siblingTokenID != tokenID {
+				if value.TickSize != "" {
+					c.SetTickSize(siblingTokenID, value.TickSize)
+				}
+				c.SetNegRisk(siblingTokenID, value.NegRisk)
+			}
 		}
 	}
 	close(load.done)
@@ -135,7 +153,7 @@ func (c *Client) resolveOrderCondition(
 	var generation uint64
 	for {
 		c.orderMetadataMu.Lock()
-		currentGeneration := *c.orderMetadataGeneration
+		currentGeneration := c.orderMetadataGeneration
 		if conditionID, ok := c.orderConditionCache[tokenID]; ok {
 			c.orderMetadataMu.Unlock()
 			return conditionID, nil
@@ -152,6 +170,10 @@ func (c *Client) resolveOrderCondition(
 			}
 			select {
 			case <-existing.done:
+				if ctx.Err() == nil &&
+					(errors.Is(existing.err, context.Canceled) || errors.Is(existing.err, context.DeadlineExceeded)) {
+					continue
+				}
 				if existing.err != nil {
 					return "", existing.err
 				}
@@ -188,7 +210,7 @@ func (c *Client) resolveOrderCondition(
 	if existing, ok := c.orderConditionLoads[tokenID]; ok && existing == load {
 		delete(c.orderConditionLoads, tokenID)
 	}
-	if err == nil && generation == *c.orderMetadataGeneration {
+	if err == nil && generation == c.orderMetadataGeneration {
 		c.orderConditionCache[tokenID] = conditionID
 	}
 	close(load.done)
@@ -264,7 +286,7 @@ func feeInfoFromMarket(market ClobMarketInfoResponse) FeeInfo {
 
 func (c *Client) clearOrderMetadata(tokenID string) {
 	c.orderMetadataMu.Lock()
-	(*c.orderMetadataGeneration)++
+	c.orderMetadataGeneration++
 	conditionID := c.orderConditionCache[tokenID]
 	delete(c.orderConditionCache, tokenID)
 	if conditionID != "" {
@@ -275,86 +297,9 @@ func (c *Client) clearOrderMetadata(tokenID string) {
 
 func (c *Client) clearAllOrderMetadata() {
 	c.orderMetadataMu.Lock()
-	(*c.orderMetadataGeneration)++
+	c.orderMetadataGeneration++
 	clear(c.orderConditionCache)
 	clear(c.orderMetadataCache)
 	clear(c.builderFeeCache)
 	c.orderMetadataMu.Unlock()
-}
-
-func (c *Client) resolveBuilderFeeRateCached(
-	ctx context.Context,
-	builderCode string,
-) (*BuilderFeeRateResponse, error) {
-	if builderCode == "" || builderCode == zeroBytes32 {
-		return &BuilderFeeRateResponse{}, nil
-	}
-	var load *orderMetadataLoad
-	var generation uint64
-	for {
-		c.orderMetadataMu.Lock()
-		currentGeneration := *c.orderMetadataGeneration
-		if entry, ok := c.builderFeeCache[builderCode]; ok && time.Now().Before(entry.expiresAt) {
-			value := entry.value
-			c.orderMetadataMu.Unlock()
-			return &value, nil
-		}
-		if existing, ok := c.builderFeeLoads[builderCode]; ok {
-			c.orderMetadataMu.Unlock()
-			if existing.generation != currentGeneration {
-				select {
-				case <-existing.done:
-					continue
-				case <-ctx.Done():
-					return nil, ctx.Err()
-				}
-			}
-			select {
-			case <-existing.done:
-				if existing.err != nil {
-					return nil, existing.err
-				}
-				value := existing.builderFee
-				return &value, nil
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			}
-		}
-		generation = currentGeneration
-		load = &orderMetadataLoad{
-			done:       make(chan struct{}),
-			generation: generation,
-		}
-		c.builderFeeLoads[builderCode] = load
-		c.orderMetadataMu.Unlock()
-		break
-	}
-
-	value, err := c.GetBuilderFeeRate(ctx, builderCode)
-	if err == nil && value == nil {
-		err = fmt.Errorf("builder fee rate response is empty")
-	}
-
-	c.orderMetadataMu.Lock()
-	load.err = err
-	if err == nil && value != nil {
-		load.builderFee = *value
-		if generation == *c.orderMetadataGeneration {
-			c.builderFeeCache[builderCode] = builderFeeEntry{
-				value:     *value,
-				expiresAt: time.Now().Add(c.orderMetadataTTL()),
-			}
-		}
-	}
-	if existing, ok := c.builderFeeLoads[builderCode]; ok && existing == load {
-		delete(c.builderFeeLoads, builderCode)
-	}
-	close(load.done)
-	c.orderMetadataMu.Unlock()
-	return value, err
-}
-
-type builderFeeEntry struct {
-	value     BuilderFeeRateResponse
-	expiresAt time.Time
 }

@@ -117,7 +117,8 @@ func (c *AuthenticatedClient) waitForResolvedTradesStrict(
 	timeout time.Duration,
 	interval time.Duration,
 ) ([]Trade, error) {
-	deadline := time.Now().Add(timeout)
+	pollCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	resolved := make(map[string]Trade, len(tradeIDs))
 
 	for len(resolved) < len(tradeIDs) {
@@ -128,13 +129,23 @@ func (c *AuthenticatedClient) waitForResolvedTradesStrict(
 
 			var page Page[Trade]
 			err := c.getJSON(
-				ctx,
+				pollCtx,
 				tradesEndpoint,
 				tradesQuery(TradeParams{ID: tradeID}, ""),
 				polyhttp.AuthL2Builder,
 				&page,
 			)
 			if err != nil {
+				if ctx.Err() != nil {
+					return nil, ctx.Err()
+				}
+				if pollCtx.Err() != nil {
+					return nil, fmt.Errorf(
+						"%w: %s",
+						ErrSettlementTimeout,
+						strings.Join(unresolvedTradeIDs(tradeIDs, resolved), ", "),
+					)
+				}
 				return nil, err
 			}
 			for _, trade := range page.Data {
@@ -149,7 +160,7 @@ func (c *AuthenticatedClient) waitForResolvedTradesStrict(
 			break
 		}
 		remaining := unresolvedTradeIDs(tradeIDs, resolved)
-		if time.Now().After(deadline) {
+		if pollCtx.Err() != nil {
 			return nil, fmt.Errorf(
 				"%w: %s",
 				ErrSettlementTimeout,
@@ -159,11 +170,12 @@ func (c *AuthenticatedClient) waitForResolvedTradesStrict(
 
 		timer := time.NewTimer(interval)
 		select {
-		case <-ctx.Done():
-			if !timer.Stop() {
-				<-timer.C
+		case <-pollCtx.Done():
+			timer.Stop()
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
 			}
-			return nil, ctx.Err()
+			return nil, fmt.Errorf("%w: %s", ErrSettlementTimeout, strings.Join(remaining, ", "))
 		case <-timer.C:
 		}
 	}

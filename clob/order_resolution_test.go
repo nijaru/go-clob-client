@@ -287,9 +287,8 @@ func TestWaitForOrderFillSettlementTimesOut(t *testing.T) {
 func newOrderResolutionClient(t *testing.T, host string) *AuthenticatedClient {
 	t.Helper()
 	client, err := NewAuthenticatedClient(Config{
-		Host:                 host,
-		PrivateKey:           orderResolutionPrivateKey,
-		DisableAutoHeartbeat: true,
+		Host:       host,
+		PrivateKey: orderResolutionPrivateKey,
 		Credentials: &Credentials{
 			Key:        "api-key",
 			Secret:     "c2VjcmV0",

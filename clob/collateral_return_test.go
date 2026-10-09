@@ -21,7 +21,6 @@ func newCollateralReturnClient(t *testing.T, host string, sig SignatureType) *Au
 		RelayerHost:          host,
 		CollateralReturnHost: host,
 		RPCURL:               "http://127.0.0.1:1",
-		DisableAutoHeartbeat: true,
 	}
 	if sig != SignatureTypeEOA {
 		cfg.FunderAddress = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

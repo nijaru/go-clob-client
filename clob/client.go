@@ -2,12 +2,7 @@ package clob
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"log/slog"
-	"maps"
-	"net/http"
-	"net/url"
 	"sync"
 	"time"
 
@@ -32,26 +27,7 @@ type Client struct {
 	gatewayHTTP          *polyhttp.Client
 	rpcURL               string
 
-	tickSizeMu              *sync.RWMutex
-	tickSizeCache           map[string]TickSize
-	tickSizeTimestamps      map[string]time.Time
-	negRiskMu               *sync.RWMutex
-	negRiskCache            map[string]bool
-	negRiskTimestamps       map[string]time.Time
-	orderMetadataMu         *sync.Mutex
-	orderMetadataGeneration *uint64
-	orderConditionCache     map[string]string
-	orderConditionLoads     map[string]*orderConditionLoad
-	orderMetadataCache      map[string]orderMetadataEntry
-	orderMetadataLoads      map[string]*orderMetadataLoad
-	builderFeeCache         map[string]builderFeeEntry
-	builderFeeLoads         map[string]*orderMetadataLoad
-
-	// versionMu guards cachedVersion, the lazily resolved CLOB server
-	// protocol version (0 means uncached). It mirrors the Rust SDK's
-	// resolve_version cache.
-	versionMu     *sync.RWMutex
-	cachedVersion uint32
+	*clientCacheState
 
 	cacheTTL     time.Duration
 	retryMax     int
@@ -66,7 +42,6 @@ type SignerClient struct {
 	signatureType SignatureType
 	funderAddress string
 	saltGenerator func() (uint64, error)
-	rpcURL        string
 }
 
 // AuthenticatedClient extends the base client with methods requiring API credentials (L2).
@@ -87,6 +62,9 @@ type AuthenticatedClient struct {
 // NewClient creates a read-only CLOB client. No private key or credentials are required.
 func NewClient(config Config) (*Client, error) {
 	config = config.normalized()
+	if err := config.validate(); err != nil {
+		return nil, err
+	}
 	return newBase(config), nil
 }
 
@@ -96,11 +74,15 @@ func NewSignerClient(config Config) (*SignerClient, error) {
 		return nil, fmt.Errorf("PrivateKey is required")
 	}
 	config = config.normalized()
+	if err := config.validate(); err != nil {
+		return nil, err
+	}
 	return newSignerFrom(newBase(config), config)
 }
 
 // NewAuthenticatedClient creates a fully authenticated CLOB client with L2 API key auth.
-// Both PrivateKey and Credentials are required.
+// Both PrivateKey and Credentials are required. Construction performs no network
+// requests and starts no goroutines; call StartHeartbeats explicitly if needed.
 func NewAuthenticatedClient(config Config) (*AuthenticatedClient, error) {
 	if config.PrivateKey == "" {
 		return nil, fmt.Errorf("PrivateKey is required")
@@ -109,77 +91,41 @@ func NewAuthenticatedClient(config Config) (*AuthenticatedClient, error) {
 		return nil, fmt.Errorf("Credentials are required")
 	}
 	config = config.normalized()
+	if err := config.validate(); err != nil {
+		return nil, err
+	}
 	base := newBase(config)
 	sc, err := newSignerFrom(base, config)
 	if err != nil {
 		return nil, err
 	}
-	decodedSecret, err := polyauth.DecodeAPISecret(config.Credentials.Secret)
+	decodedSecret, err := decodeCredentials(*config.Credentials)
 	if err != nil {
 		return nil, fmt.Errorf("invalid API secret: %w", err)
 	}
 	authClient := &AuthenticatedClient{
 		SignerClient:      sc,
-		creds:             config.Credentials,
+		creds:             new(*config.Credentials),
 		decodedSecret:     decodedSecret,
 		builderAuth:       config.BuilderAuth,
 		heartbeatInterval: config.HeartbeatInterval,
 	}
 	base.http.Headers = authClient.addAuthHeaders
 	base.gatewayHTTP.Headers = authClient.addAuthHeaders
-	if !config.DisableAutoHeartbeat {
-		if err := authClient.StartHeartbeats(); err != nil {
-			return nil, err
-		}
-	}
 	return authClient, nil
-}
-
-// Credentials returns the current API credentials.
-func (c *AuthenticatedClient) Credentials() *Credentials {
-	c.authMu.RLock()
-	defer c.authMu.RUnlock()
-	if c.creds == nil {
-		return nil
-	}
-	creds := *c.creds
-	return &creds
-}
-
-// PromoteToBuilder upgrades the client with builder credentials, enabling builder-authenticated requests.
-func (c *AuthenticatedClient) PromoteToBuilder(auth BuilderAuth) {
-	c.authMu.Lock()
-	defer c.authMu.Unlock()
-	c.builderAuth = auth
 }
 
 func newBase(config Config) *Client {
 	base := &Client{
-		host:                    config.Host,
-		rtdsHost:                config.RTDSHost,
-		relayerHost:             config.RelayerHost,
-		collateralReturnHost:    config.CollateralReturnHost,
-		builderGatewayHost:      config.BuilderGatewayHost,
-		chainID:                 config.ChainID,
-		useServerTime:           config.UseServerTime,
-		rpcURL:                  config.RPCURL,
-		tickSizeMu:              &sync.RWMutex{},
-		tickSizeCache:           make(map[string]TickSize),
-		tickSizeTimestamps:      make(map[string]time.Time),
-		negRiskMu:               &sync.RWMutex{},
-		negRiskCache:            make(map[string]bool),
-		negRiskTimestamps:       make(map[string]time.Time),
-		orderMetadataMu:         &sync.Mutex{},
-		orderMetadataGeneration: new(uint64),
-		orderConditionCache:     make(map[string]string),
-		orderConditionLoads:     make(map[string]*orderConditionLoad),
-		orderMetadataCache:      make(map[string]orderMetadataEntry),
-		orderMetadataLoads:      make(map[string]*orderMetadataLoad),
-		builderFeeCache:         make(map[string]builderFeeEntry),
-		builderFeeLoads:         make(map[string]*orderMetadataLoad),
-
-		versionMu:     &sync.RWMutex{},
-		cachedVersion: 0,
+		host:                 config.Host,
+		rtdsHost:             config.RTDSHost,
+		relayerHost:          config.RelayerHost,
+		collateralReturnHost: config.CollateralReturnHost,
+		builderGatewayHost:   config.BuilderGatewayHost,
+		chainID:              config.ChainID,
+		useServerTime:        config.UseServerTime,
+		rpcURL:               config.RPCURL,
+		clientCacheState:     newClientCacheState(),
 
 		cacheTTL:     config.TickSizeCacheTTL,
 		retryMax:     config.RetryMax,
@@ -208,6 +154,9 @@ func newBase(config Config) *Client {
 }
 
 func newSignerFrom(base *Client, config Config) (*SignerClient, error) {
+	if _, err := getContractConfig(config.ChainID); err != nil {
+		return nil, err
+	}
 	signer, err := polyauth.ParsePrivateKey(config.PrivateKey)
 	if err != nil {
 		return nil, err
@@ -227,7 +176,6 @@ func newSignerFrom(base *Client, config Config) (*SignerClient, error) {
 		signatureType: config.SignatureType,
 		funderAddress: funderAddress,
 		saltGenerator: generateSalt,
-		rpcURL:        config.RPCURL,
 	}
 	base.http.Headers = sc.addAuthHeaders
 	base.gatewayHTTP.Headers = sc.addAuthHeaders
@@ -235,24 +183,12 @@ func newSignerFrom(base *Client, config Config) (*SignerClient, error) {
 }
 
 func (c *Client) copyBase() *Client {
-	// Deep copy the base client and re-initialize the HTTP transport to allow
-	// different auth headers for upgraded clients (Signer/Authenticated).
+	// Share cache state, but give each auth view an independent header resolver.
+	// Preserve the underlying HTTP client and response callbacks.
 	copy := *c
-	copy.http = &polyhttp.Client{
-		BaseURL:    c.http.BaseURL,
-		HTTPClient: c.http.HTTPClient,
-		UserAgent:  c.http.UserAgent,
-	}
-	copy.geoblockHTTP = &polyhttp.Client{
-		BaseURL:    c.geoblockHTTP.BaseURL,
-		HTTPClient: c.geoblockHTTP.HTTPClient,
-		UserAgent:  c.geoblockHTTP.UserAgent,
-	}
-	copy.gatewayHTTP = &polyhttp.Client{
-		BaseURL:    c.gatewayHTTP.BaseURL,
-		HTTPClient: c.gatewayHTTP.HTTPClient,
-		UserAgent:  c.gatewayHTTP.UserAgent,
-	}
+	copy.http = cloneTransport(c.http)
+	copy.geoblockHTTP = cloneTransport(c.geoblockHTTP)
+	copy.gatewayHTTP = cloneTransport(c.gatewayHTTP)
 	return &copy
 }
 
@@ -282,9 +218,9 @@ func (c *Client) AsSigner(
 		signatureType: sigType,
 		funderAddress: funderAddress,
 		saltGenerator: generateSalt,
-		rpcURL:        c.rpcURL,
 	}
 	sc.http.Headers = sc.addAuthHeaders
+	sc.gatewayHTTP.Headers = sc.addAuthHeaders
 	return sc, nil
 }
 
@@ -304,12 +240,15 @@ func (c *SignerClient) AsAuthenticatedWithInterval(
 	builder BuilderAuth,
 	heartbeatInterval time.Duration,
 ) (*AuthenticatedClient, error) {
-	decodedSecret, err := polyauth.DecodeAPISecret(creds.Secret)
+	decodedSecret, err := decodeCredentials(creds)
 	if err != nil {
 		return nil, fmt.Errorf("invalid API secret: %w", err)
 	}
 
-	if heartbeatInterval <= 0 {
+	if heartbeatInterval < 0 {
+		return nil, fmt.Errorf("heartbeat interval must not be negative")
+	}
+	if heartbeatInterval == 0 {
 		heartbeatInterval = 5 * time.Second
 	}
 
@@ -320,7 +259,6 @@ func (c *SignerClient) AsAuthenticatedWithInterval(
 			signatureType: c.signatureType,
 			funderAddress: c.funderAddress,
 			saltGenerator: c.saltGenerator,
-			rpcURL:        c.rpcURL,
 		},
 		creds:             &creds,
 		decodedSecret:     decodedSecret,
@@ -343,159 +281,17 @@ func (c *AuthenticatedClient) NewAuthenticatedRTDSClient() *rtds.Client {
 	return rtds.NewClient(c.rtdsHost, nil).WithCredentials(rtdsCreds)
 }
 
-// Close stops any background tasks (like heartbeats) and cleans up resources.
-// It blocks until the heartbeat loop exits.
-func (c *AuthenticatedClient) Close() error {
-	return c.closeHeartbeats(context.Background())
-}
-
-// Shutdown gracefully stops background tasks with a context deadline. It
-// returns ctx.Err() if the heartbeat loop does not stop before the deadline.
-func (c *AuthenticatedClient) Shutdown(ctx context.Context) error {
-	return c.closeHeartbeats(ctx)
-}
-
-var (
-	// ErrHeartbeatsActive indicates that an automatic heartbeat loop is already running.
-	ErrHeartbeatsActive = errors.New("heartbeats already active")
-	// ErrHeartbeatsClosed indicates that the client has been closed and cannot restart heartbeats.
-	ErrHeartbeatsClosed = errors.New("authenticated client is closed")
-)
-
-// HeartbeatsActive reports whether the automatic heartbeat loop is running.
-func (c *AuthenticatedClient) HeartbeatsActive() bool {
-	c.heartbeatMu.Lock()
-	defer c.heartbeatMu.Unlock()
-	return c.heartbeatCancel != nil
-}
-
-// StartHeartbeats starts automatic heartbeat posting at the configured interval.
-// It returns ErrHeartbeatsActive when a loop is already running.
-func (c *AuthenticatedClient) StartHeartbeats() error {
-	c.heartbeatMu.Lock()
-	if c.heartbeatClosed {
-		c.heartbeatMu.Unlock()
-		return ErrHeartbeatsClosed
-	}
-	if c.heartbeatCancel != nil {
-		c.heartbeatMu.Unlock()
-		return ErrHeartbeatsActive
-	}
-	if c.heartbeatInterval <= 0 {
-		c.heartbeatInterval = 5 * time.Second
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	interval := c.heartbeatInterval
-	c.heartbeatCancel = cancel
-	c.heartbeatDone = done
-	c.heartbeatMu.Unlock()
-
-	go c.runHeartbeatLoop(ctx, done, interval)
-	return nil
-}
-
-// StopHeartbeats stops automatic heartbeat posting and waits for the loop to
-// exit. An optional context supplies a deadline; without one it waits without
-// a deadline. Stopping is reversible until Close or Shutdown is called.
-func (c *AuthenticatedClient) StopHeartbeats(contexts ...context.Context) error {
-	ctx := context.Background()
-	if len(contexts) > 0 && contexts[0] != nil {
-		ctx = contexts[0]
-	}
-	if len(contexts) > 1 {
-		return fmt.Errorf("stop heartbeats: at most one context is allowed")
-	}
-
-	c.heartbeatMu.Lock()
-	cancel := c.heartbeatCancel
-	done := c.heartbeatDone
-	c.heartbeatMu.Unlock()
-	if cancel == nil || done == nil {
-		return nil
-	}
-	cancel()
-
-	select {
-	case <-done:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-// closeHeartbeats permanently closes the heartbeat lifecycle and waits for any
-// active loop to terminate.
-func (c *AuthenticatedClient) closeHeartbeats(ctx context.Context) error {
-	c.heartbeatMu.Lock()
-	c.heartbeatClosed = true
-	cancel := c.heartbeatCancel
-	done := c.heartbeatDone
-	c.heartbeatMu.Unlock()
-	if cancel == nil || done == nil {
-		return nil
-	}
-	cancel()
-
-	select {
-	case <-done:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-func (c *AuthenticatedClient) runHeartbeatLoop(
-	ctx context.Context,
-	done chan struct{},
-	interval time.Duration,
-) {
-	defer func() {
-		c.heartbeatMu.Lock()
-		if c.heartbeatDone == done {
-			c.heartbeatCancel = nil
-			c.heartbeatDone = nil
-		}
-		c.heartbeatMu.Unlock()
-		close(done)
-	}()
-
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			c.heartbeatMu.Lock()
-			heartbeatID := c.heartbeatID
-			c.heartbeatMu.Unlock()
-
-			resp, err := c.PostHeartbeat(ctx, heartbeatID)
-			if err != nil {
-				slog.Warn("heartbeat failed", "err", err)
-				continue
-			}
-
-			c.heartbeatMu.Lock()
-			if c.heartbeatDone == done {
-				c.heartbeatID = resp.HeartbeatID
-			}
-			c.heartbeatMu.Unlock()
-		}
-	}
-}
-
 // ClearTickSizeCache removes the cached tick size, negative risk flag, and
 // order metadata for a specific token.
 func (c *Client) ClearTickSizeCache(tokenID string) {
 	c.tickSizeMu.Lock()
+	c.tickSizeGeneration++
 	delete(c.tickSizeCache, tokenID)
 	delete(c.tickSizeTimestamps, tokenID)
 	c.tickSizeMu.Unlock()
 
 	c.negRiskMu.Lock()
+	c.negRiskGeneration++
 	delete(c.negRiskCache, tokenID)
 	delete(c.negRiskTimestamps, tokenID)
 	c.negRiskMu.Unlock()
@@ -505,6 +301,7 @@ func (c *Client) ClearTickSizeCache(tokenID string) {
 // ClearNegRiskCache removes the cached negative risk flag for a specific token.
 func (c *Client) ClearNegRiskCache(tokenID string) {
 	c.negRiskMu.Lock()
+	c.negRiskGeneration++
 	delete(c.negRiskCache, tokenID)
 	delete(c.negRiskTimestamps, tokenID)
 	c.negRiskMu.Unlock()
@@ -515,6 +312,7 @@ func (c *Client) ClearNegRiskCache(tokenID string) {
 func (c *Client) SetTickSize(tokenID string, size TickSize) {
 	now := time.Now()
 	c.tickSizeMu.Lock()
+	c.tickSizeGeneration++
 	c.tickSizeCache[tokenID] = size
 	c.tickSizeTimestamps[tokenID] = now
 	c.tickSizeMu.Unlock()
@@ -524,6 +322,7 @@ func (c *Client) SetTickSize(tokenID string, size TickSize) {
 func (c *Client) SetNegRisk(tokenID string, negRisk bool) {
 	now := time.Now()
 	c.negRiskMu.Lock()
+	c.negRiskGeneration++
 	c.negRiskCache[tokenID] = negRisk
 	c.negRiskTimestamps[tokenID] = now
 	c.negRiskMu.Unlock()
@@ -533,15 +332,18 @@ func (c *Client) SetNegRisk(tokenID string, negRisk bool) {
 // market metadata, and builder fee rates).
 func (c *Client) InvalidateCaches() {
 	c.tickSizeMu.Lock()
-	c.tickSizeCache = make(map[string]TickSize)
-	c.tickSizeTimestamps = make(map[string]time.Time)
+	c.tickSizeGeneration++
+	clear(c.tickSizeCache)
+	clear(c.tickSizeTimestamps)
 	c.tickSizeMu.Unlock()
 
 	c.negRiskMu.Lock()
-	c.negRiskCache = make(map[string]bool)
-	c.negRiskTimestamps = make(map[string]time.Time)
+	c.negRiskGeneration++
+	clear(c.negRiskCache)
+	clear(c.negRiskTimestamps)
 	c.negRiskMu.Unlock()
 	c.clearAllOrderMetadata()
+	c.invalidateServerVersion()
 }
 
 // Host returns the base CLOB API host for the client.
@@ -552,362 +354,6 @@ func (c *Client) Host() string {
 // resolveContractConfig returns the contract config for the client's chain.
 func (c *Client) resolveContractConfig(negRisk bool) (contractConfig, error) {
 	return getContractConfig(c.chainID)
-}
-
-// SetCredentials updates the API credentials used for authenticated requests.
-// It re-derives the decoded HMAC secret from creds.Secret so subsequent L2 and
-// relayer requests sign with the new key. If the secret is not valid base64 the
-// existing credentials are left unchanged and an error is returned. Safe to
-// call concurrently with in-flight requests.
-func (c *AuthenticatedClient) SetCredentials(creds Credentials) error {
-	decodedSecret, err := polyauth.DecodeAPISecret(creds.Secret)
-	if err != nil {
-		return fmt.Errorf("set credentials: %w", err)
-	}
-	c.authMu.Lock()
-	c.creds = &creds
-	c.decodedSecret = decodedSecret
-	c.authMu.Unlock()
-	return nil
-}
-
-// Address returns the signer address backing the client.
-func (c *SignerClient) Address() string {
-	if c.signer == nil {
-		return ""
-	}
-	return c.signer.Address().Hex()
-}
-
-// credentials returns the current credentials under a read lock.
-func (c *AuthenticatedClient) credentials() *Credentials {
-	c.authMu.RLock()
-	creds := c.creds
-	c.authMu.RUnlock()
-	return creds
-}
-
-func (c *AuthenticatedClient) getBuilderAuth() BuilderAuth {
-	c.authMu.RLock()
-	defer c.authMu.RUnlock()
-	return c.builderAuth
-}
-
-func (c *SignerClient) addAuthHeaders(
-	ctx context.Context,
-	method, path string,
-	body []byte,
-	level polyhttp.AuthLevel,
-	nonce *int64,
-) (map[string]string, error) {
-	switch level {
-	case polyhttp.AuthNone:
-		return nil, nil
-	case polyhttp.AuthL1:
-		timestamp, err := c.timestamp(ctx)
-		if err != nil {
-			return nil, err
-		}
-		value := int64(0)
-		if nonce != nil {
-			value = *nonce
-		}
-		return polyauth.L1Headers(c.signer, c.chainID, timestamp, value)
-	default:
-		return nil, fmt.Errorf(
-			"this client only supports L1 auth, please upgrade to an AuthenticatedClient",
-		)
-	}
-}
-
-func (c *AuthenticatedClient) addAuthHeaders(
-	ctx context.Context,
-	method, path string,
-	body []byte,
-	level polyhttp.AuthLevel,
-	nonce *int64,
-) (map[string]string, error) {
-	switch level {
-	case polyhttp.AuthNone, polyhttp.AuthL1:
-		return c.SignerClient.addAuthHeaders(ctx, method, path, body, level, nonce)
-	case polyhttp.AuthL2:
-		creds := c.credentials()
-		if creds == nil {
-			return nil, fmt.Errorf("level 2 auth requires API credentials")
-		}
-		timestamp, err := c.timestamp(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return polyauth.L2Headers(
-			c.signer,
-			creds.Key,
-			c.decodedSecret,
-			creds.Passphrase,
-			timestamp,
-			method,
-			path,
-			body,
-		)
-	case polyhttp.AuthL2Builder:
-		creds := c.credentials()
-		if creds == nil {
-			return nil, fmt.Errorf("level 2 auth requires API credentials")
-		}
-		timestamp, err := c.timestamp(ctx)
-		if err != nil {
-			return nil, err
-		}
-		headers, err := polyauth.L2Headers(
-			c.signer,
-			creds.Key,
-			c.decodedSecret,
-			creds.Passphrase,
-			timestamp,
-			method,
-			path,
-			body,
-		)
-		if err != nil {
-			return nil, err
-		}
-		if c.getBuilderAuth() == nil {
-			return headers, nil
-		}
-		builderHeaders, err := c.builderHeaders(ctx, method, path, body, timestamp)
-		if err != nil {
-			return nil, err
-		}
-		maps.Copy(headers, builderHeaders)
-		return headers, nil
-	default:
-		return nil, fmt.Errorf("unknown auth level %d", level)
-	}
-}
-
-func (c *Client) timestamp(ctx context.Context) (int64, error) {
-	if !c.useServerTime {
-		return time.Now().Unix(), nil
-	}
-
-	var serverTime int64
-	if err := c.http.GetJSON(ctx, timeEndpoint, nil, polyhttp.AuthNone, &serverTime); err != nil {
-		return 0, err
-	}
-	return serverTime, nil
-}
-
-func (c *Client) getJSON(
-	ctx context.Context,
-	path string,
-	query url.Values,
-	auth polyhttp.AuthLevel,
-	out any,
-) error {
-	return c.withRetry(ctx, true, func() error {
-		return c.http.GetJSON(ctx, path, query, auth, out)
-	})
-}
-
-func (c *Client) getGeoblockJSON(
-	ctx context.Context,
-	path string,
-	query url.Values,
-	out any,
-) error {
-	return c.geoblockHTTP.GetJSON(ctx, path, query, polyhttp.AuthNone, out)
-}
-
-func (c *Client) postJSON(
-	ctx context.Context,
-	path string,
-	body any,
-	auth polyhttp.AuthLevel,
-	out any,
-) error {
-	return c.withRetry(ctx, false, func() error {
-		return c.http.PostJSON(ctx, path, body, auth, out)
-	})
-}
-
-func (c *Client) deleteJSON(
-	ctx context.Context,
-	path string,
-	body any,
-	auth polyhttp.AuthLevel,
-	out any,
-) error {
-	return c.withRetry(ctx, false, func() error {
-		return c.http.DeleteJSON(ctx, path, body, auth, out)
-	})
-}
-
-func (c *Client) deleteJSONQuery(
-	ctx context.Context,
-	path string,
-	query url.Values,
-	body any,
-	auth polyhttp.AuthLevel,
-	out any,
-) error {
-	return c.withRetry(ctx, false, func() error {
-		return c.http.DeleteJSONQuery(ctx, path, query, body, auth, out)
-	})
-}
-
-func (c *Client) getJSONWithNonce(
-	ctx context.Context,
-	path string,
-	query url.Values,
-	auth polyhttp.AuthLevel,
-	nonce int64,
-	out any,
-) error {
-	return c.withRetry(ctx, false, func() error {
-		return c.http.GetJSONWithNonce(ctx, path, query, auth, nonce, out)
-	})
-}
-
-func (c *Client) postJSONWithNonce(
-	ctx context.Context,
-	path string,
-	body any,
-	auth polyhttp.AuthLevel,
-	nonce int64,
-	out any,
-) error {
-	return c.withRetry(ctx, false, func() error {
-		return c.http.PostJSONWithNonce(ctx, path, body, auth, nonce, out)
-	})
-}
-
-func (c *Client) doJSON(
-	ctx context.Context,
-	method, path string,
-	query url.Values,
-	body any,
-	auth polyhttp.AuthLevel,
-	out any,
-	extraHeaders map[string]string,
-) error {
-	return c.withRetry(ctx, method == http.MethodGet, func() error {
-		return c.http.DoJSON(ctx, method, path, query, body, auth, nil, extraHeaders, out)
-	})
-}
-
-func (c *Client) withRetry(ctx context.Context, retryEnabled bool, fn func() error) error {
-	if !retryEnabled {
-		if c.rateLimiter != nil {
-			if err := c.rateLimiter.Wait(ctx); err != nil {
-				return err
-			}
-		}
-		return fn()
-	}
-
-	var lastErr error
-	var timer *time.Timer
-	defer func() {
-		if timer != nil {
-			timer.Stop()
-		}
-	}()
-
-	for i := 0; i <= c.retryMax; i++ {
-		if c.rateLimiter != nil {
-			if err := c.rateLimiter.Wait(ctx); err != nil {
-				return err
-			}
-		}
-
-		err := fn()
-		if err == nil {
-			return nil
-		}
-		lastErr = err
-
-		// Only retry on:
-		// 1. HTTP 429 (Rate Limit)
-		// 2. HTTP 5xx (Server Error)
-		// 3. Connection/transport errors (not context cancellation)
-		var apiErr *polyhttp.APIError
-		shouldRetry := false
-		if errors.As(err, &apiErr) {
-			if apiErr.StatusCode == http.StatusTooManyRequests || apiErr.StatusCode >= 500 {
-				shouldRetry = true
-			}
-		} else {
-			// Don't retry on context cancellation or deadline — fail fast.
-			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-				return err
-			}
-			shouldRetry = true
-		}
-
-		if !shouldRetry || i >= c.retryMax {
-			return err
-		}
-
-		backoff := c.retryBackoff * (1 << min(i, 30))
-		if timer == nil {
-			timer = time.NewTimer(backoff)
-		} else {
-			timer.Reset(backoff)
-		}
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-timer.C:
-			continue
-		}
-	}
-	return lastErr
-}
-
-func (c *AuthenticatedClient) builderHeaders(
-	ctx context.Context,
-	method, path string,
-	body []byte,
-	timestamp int64,
-) (map[string]string, error) {
-	if c.getBuilderAuth() == nil {
-		return nil, fmt.Errorf("builder auth requires Config.BuilderAuth")
-	}
-
-	return c.getBuilderAuth().Headers(ctx, BuilderHeaderRequest{
-		Method:    method,
-		Path:      path,
-		Body:      body,
-		Timestamp: timestamp,
-	})
-}
-
-func (c *AuthenticatedClient) builderOnlyHeaders(
-	ctx context.Context,
-	method, path string,
-	body []byte,
-) (map[string]string, error) {
-	timestamp, err := c.timestamp(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return c.builderHeaders(ctx, method, path, body, timestamp)
-}
-
-// DeriveWSAuth returns the raw credentials required by the authenticated
-// CLOB websocket user channel.
-func (c *AuthenticatedClient) DeriveWSAuth(_ context.Context) (WSAuth, error) {
-	creds := c.credentials()
-	if creds == nil {
-		return WSAuth{}, fmt.Errorf("derive ws auth requires API credentials")
-	}
-
-	return WSAuth{
-		Key:        creds.Key,
-		Secret:     creds.Secret,
-		Passphrase: creds.Passphrase,
-	}, nil
 }
 
 func newLimiter(r float64, b int) *rate.Limiter {

@@ -452,6 +452,13 @@ type OrderArgs struct {
 	Size       udecimal.Decimal
 	Side       Side
 	Expiration uint64
+	// MaxSpend caps BUY notional plus platform and builder taker fees.
+	// When necessary, Size is reduced to fit the cap.
+	MaxSpend *udecimal.Decimal
+	// Taker, Nonce, and FeeRateBps apply only to server-version-1 orders.
+	Taker      string
+	Nonce      uint64
+	FeeRateBps *uint32
 
 	Metadata    string // 0x-prefixed 32-byte hex; defaults to zero
 	BuilderCode string // 0x-prefixed 32-byte hex; defaults to zero
@@ -497,6 +504,10 @@ type MarketOrderArgs struct {
 	// an explicit Price can tighten the floor, never weaken it.
 	MinPrice *udecimal.Decimal
 
+	// Taker, Nonce, and FeeRateBps apply only to server-version-1 orders.
+	Taker       string
+	Nonce       uint64
+	FeeRateBps  *uint32
 	OrderType   OrderType
 	Metadata    string
 	BuilderCode string
@@ -524,95 +535,9 @@ type SignedOrder struct {
 	Order      Order  `json:"-"`
 	Expiration string `json:"-"`
 	Signature  string `json:"-"`
-}
-
-// MarshalJSON encodes the signed order as the wire-format "order" body.
-// The order fields are flattened with expiration and signature folded in.
-// Salt is encoded as a JSON number.
-func (o SignedOrder) MarshalJSON() ([]byte, error) {
-	salt, err := strconv.ParseUint(o.Order.Salt, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("parse order salt: %w", err)
-	}
-
-	type wireOrder struct {
-		Salt          uint64        `json:"salt"`
-		Maker         string        `json:"maker"`
-		Signer        string        `json:"signer"`
-		TokenID       string        `json:"tokenId"`
-		MakerAmount   string        `json:"makerAmount"`
-		TakerAmount   string        `json:"takerAmount"`
-		Side          Side          `json:"side"`
-		SignatureType SignatureType `json:"signatureType"`
-		Expiration    string        `json:"expiration"`
-		Timestamp     string        `json:"timestamp"`
-		Metadata      string        `json:"metadata"`
-		Builder       string        `json:"builder"`
-		Signature     string        `json:"signature"`
-	}
-	return json.Marshal(wireOrder{
-		Salt:          salt,
-		Maker:         o.Order.Maker,
-		Signer:        o.Order.Signer,
-		TokenID:       o.Order.TokenID,
-		MakerAmount:   o.Order.MakerAmount,
-		TakerAmount:   o.Order.TakerAmount,
-		Side:          o.Order.Side,
-		SignatureType: o.Order.SignatureType,
-		Expiration:    o.Expiration,
-		Timestamp:     o.Order.Timestamp,
-		Metadata:      o.Order.Metadata,
-		Builder:       o.Order.Builder,
-		Signature:     o.Signature,
-	})
-}
-
-// UnmarshalJSON decodes a V2 signed order from wire format.
-func (o *SignedOrder) UnmarshalJSON(data []byte) error {
-	var raw map[string]any
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-
-	parseStr := func(key string) string {
-		if v, ok := raw[key]; ok {
-			switch val := v.(type) {
-			case string:
-				return val
-			case float64:
-				return strconv.FormatFloat(val, 'f', -1, 64)
-			}
-		}
-		return ""
-	}
-
-	o.Order.Salt = parseStr("salt")
-	o.Order.Maker = parseStr("maker")
-	o.Order.Signer = parseStr("signer")
-	o.Order.TokenID = parseStr("tokenId")
-	o.Order.MakerAmount = parseStr("makerAmount")
-	o.Order.TakerAmount = parseStr("takerAmount")
-	o.Order.Timestamp = parseStr("timestamp")
-	o.Order.Metadata = parseStr("metadata")
-	o.Order.Builder = parseStr("builder")
-	o.Expiration = parseStr("expiration")
-	o.Signature = parseStr("signature")
-
-	if v, ok := raw["side"]; ok {
-		o.Order.Side = Side(fmt.Sprint(v))
-	}
-	if v, ok := raw["signatureType"]; ok {
-		switch val := v.(type) {
-		case float64:
-			o.Order.SignatureType = SignatureType(val)
-		case string:
-			if n, err := strconv.Atoi(val); err == nil {
-				o.Order.SignatureType = SignatureType(n)
-			}
-		}
-	}
-
-	return nil
+	// Legacy is non-nil only for a server-version-1 order. Its fields are
+	// included in the V1 wire body in place of timestamp/metadata/builder.
+	Legacy *LegacyOrderFields `json:"-"`
 }
 
 // PostOrderRequest is the authenticated order-post payload.

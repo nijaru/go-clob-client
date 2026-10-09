@@ -38,29 +38,9 @@ func (c *SignerClient) CreateMarketOrder(
 		return nil, fmt.Errorf("market orders only support FOK or FAK order types")
 	}
 
-	// Position-backed (V3) orders skip the CLOB token market metadata
-	// resolution and the order-book price derivation.
-	if userOrder.PositionID != "" {
-		if userOrder.Price.IsZero() {
-			return nil, fmt.Errorf(
-				"market orders require an explicit price for V3 position-backed outcomes",
-			)
-		}
-		if protectedPrice != nil {
-			if err := validateMarketPriceBound(*protectedPrice, TickSizeHundredth); err != nil {
-				return nil, err
-			}
-			if err := validateMarketPriceBound(userOrder.Price, TickSizeHundredth); err != nil {
-				return nil, err
-			}
-		}
-		return c.buildSignedMarketOrder(ctx, userOrder, CreateOrderOptions{
-			TickSize: TickSizeHundredth,
-			NegRisk:  new(false),
-		})
-	}
+	assetID := orderAssetID(userOrder.TokenID, userOrder.PositionID)
 
-	tickSize, err := c.resolveTickSize(ctx, userOrder.TokenID, options)
+	tickSize, err := c.resolveTickSize(ctx, assetID, options)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +48,7 @@ func (c *SignerClient) CreateMarketOrder(
 	if protectedPrice != nil {
 		tickSize, err = c.validateLimitPriceWithRefresh(
 			ctx,
-			userOrder.TokenID,
+			assetID,
 			*protectedPrice,
 			tickSize,
 			options,
@@ -81,7 +61,7 @@ func (c *SignerClient) CreateMarketOrder(
 	if userOrder.Price.IsZero() {
 		price, err := c.CalculateMarketPrice(
 			ctx,
-			userOrder.TokenID,
+			assetID,
 			userOrder.Side,
 			userOrder.Amount,
 			userOrder.OrderType,
@@ -94,7 +74,7 @@ func (c *SignerClient) CreateMarketOrder(
 
 	tickSize, err = c.validateLimitPriceWithRefresh(
 		ctx,
-		userOrder.TokenID,
+		assetID,
 		userOrder.Price,
 		tickSize,
 		options,
@@ -103,9 +83,12 @@ func (c *SignerClient) CreateMarketOrder(
 		return nil, err
 	}
 
-	isNegRisk, err := c.resolveNegRisk(ctx, userOrder.TokenID, options)
-	if err != nil {
-		return nil, err
+	isNegRisk := false
+	if userOrder.PositionID == "" {
+		isNegRisk, err = c.resolveNegRisk(ctx, assetID, options)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	order, err := c.buildSignedMarketOrder(ctx, userOrder, CreateOrderOptions{
@@ -119,7 +102,7 @@ func (c *SignerClient) CreateMarketOrder(
 	// A cap can be tick-aligned yet unsafe under a stale, coarse rounding
 	// configuration. Refresh the whole market snapshot and rebuild once;
 	// never relax the guard or override a caller-supplied tick.
-	metadata, err := c.resolveOrderMarketMetadata(ctx, userOrder.TokenID, true)
+	metadata, err := c.resolveOrderMarketMetadata(ctx, assetID, true)
 	if err != nil {
 		return nil, fmt.Errorf("refresh protected order metadata: %w", err)
 	}
@@ -128,8 +111,11 @@ func (c *SignerClient) CreateMarketOrder(
 			return nil, err
 		}
 	}
-	isNegRisk = metadata.NegRisk
-	if options != nil && options.NegRisk != nil {
+	isNegRisk = false
+	if userOrder.PositionID == "" {
+		isNegRisk = metadata.NegRisk
+	}
+	if userOrder.PositionID == "" && options != nil && options.NegRisk != nil {
 		isNegRisk = *options.NegRisk
 	}
 	return c.buildSignedMarketOrder(ctx, userOrder, CreateOrderOptions{
@@ -159,38 +145,18 @@ func (c *SignerClient) buildSignedMarketOrder(
 		// BUY: Amount is USDC notional. Adjust for fees if MaxSpend is set.
 		adjustedAmount := amount
 		if userOrder.MaxSpend != nil {
-			assetID := userOrder.TokenID
-			if assetID == "" {
-				assetID = userOrder.PositionID
-			}
-			metadata, err := c.resolveOrderMarketMetadata(ctx, assetID, false)
-			if err != nil {
-				return nil, fmt.Errorf("resolve order fee metadata: %w", err)
-			}
-			feeInfo := metadata.FeeInfo
-			builderTakerFeeRate := udecimal.Zero
-			if userOrder.BuilderCode != "" {
-				builderFee, err := c.resolveBuilderFeeRateCached(ctx, userOrder.BuilderCode)
-				if err != nil {
-					return nil, fmt.Errorf("resolve builder fee rate: %w", err)
-				}
-				builderTakerFeeRate = udecimal.MustFromInt64(
-					int64(builderFee.BuilderTakerFeeRateBps),
-					4,
-				)
-			}
-			adj, err := adjustMarketBuyAmount(
+			var err error
+			adjustedAmount, err = c.adjustOrderBuyAmount(
+				ctx,
+				orderAssetID(userOrder.TokenID, userOrder.PositionID),
 				amount,
-				*userOrder.MaxSpend,
 				price,
-				feeInfo.Rate,
-				feeInfo.Exponent,
-				builderTakerFeeRate,
+				*userOrder.MaxSpend,
+				userOrder.BuilderCode,
 			)
 			if err != nil {
 				return nil, err
 			}
-			adjustedAmount = adj
 		}
 		// Preserve the full USDC amount; only the derived share quantity is quantized.
 		rawMakerAmount = adjustedAmount
@@ -226,15 +192,17 @@ func (c *SignerClient) buildSignedMarketOrder(
 	return c.signOrder(ctx, orderBuildInput{
 		TokenID:       userOrder.TokenID,
 		PositionID:    userOrder.PositionID,
-		MakerAmount:   makerAmount,
-		TakerAmount:   takerAmount,
+		MakerAmount:   decimalInteger(makerAmount),
+		TakerAmount:   decimalInteger(takerAmount),
 		Side:          userOrder.Side,
 		Expiration:    0,
 		NegRisk:       derefBool(options.NegRisk),
 		SignatureType: c.signatureType,
 		Metadata:      userOrder.Metadata,
 		BuilderCode:   userOrder.BuilderCode,
-		DeferExec:     userOrder.DeferExec,
+		Taker:         userOrder.Taker,
+		Nonce:         userOrder.Nonce,
+		FeeRateBps:    userOrder.FeeRateBps,
 	})
 }
 

@@ -22,7 +22,7 @@
 //	    PrivateKey: os.Getenv("POLYMARKET_PRIVATE_KEY"),
 //	})
 //
-//	// Fully authenticated (also starts background heartbeat loop)
+//	// Fully authenticated (no implicit requests or background work)
 //	c, err := clob.NewAuthenticatedClient(clob.Config{
 //	    PrivateKey: os.Getenv("POLYMARKET_PRIVATE_KEY"),
 //	    Credentials: &clob.Credentials{
@@ -32,6 +32,10 @@
 //	    },
 //	})
 //	defer c.Close()
+//
+// Heartbeats are opt-in: call c.StartHeartbeats(ctx) to maintain order liveness.
+// Canceling ctx stops the loop; StopHeartbeats(ctx) joins it and allows restart.
+// Close or Shutdown(ctx) joins it and permanently closes that lifecycle.
 //
 // # Pagination iterators
 //
