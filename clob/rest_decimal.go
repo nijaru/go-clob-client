@@ -2,15 +2,11 @@ package clob
 
 import (
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 
+	"github.com/nijaru/go-clob-client/internal/polyjson"
 	"github.com/quagmt/udecimal"
-)
-
-var responseDecimalPattern = regexp.MustCompile(
-	`^[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?$`,
 )
 
 // Decimal converts exactly to the order-math range. It never rounds or truncates.
@@ -20,7 +16,7 @@ func (d DecimalString) Decimal() (udecimal.Decimal, error) {
 	if text == "" {
 		return udecimal.Zero, nil
 	}
-	if !responseDecimalPattern.MatchString(text) {
+	if !polyjson.ValidDecimal(text) {
 		return udecimal.Zero, fmt.Errorf("invalid decimal %q", text)
 	}
 	sign := ""

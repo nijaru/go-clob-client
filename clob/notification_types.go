@@ -275,7 +275,7 @@ func probeNotificationType(data []byte) (int, bool, error) {
 // UnmarshalJSON decodes a notification, discriminating on the integer "type"
 // field. Unknown types return errUnknownNotificationType so list pages can
 // skip them; known types with malformed payloads reject the notification.
-// Empty strings are normalized to nil for optional fields.
+// Optional metadata retains nil separately from an explicit empty value.
 func (n *Notification) UnmarshalJSON(data []byte) error {
 	typeVal, ok, err := probeNotificationType(data)
 	if err != nil {

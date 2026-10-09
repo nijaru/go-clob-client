@@ -4,6 +4,7 @@ import (
 	stdjson "encoding/json"
 	"fmt"
 
+	"github.com/nijaru/go-clob-client/internal/polyjson"
 	"github.com/quagmt/udecimal"
 )
 
@@ -41,7 +42,7 @@ func (d *DecimalString) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
-	if value != "" && !responseDecimalPattern.MatchString(value) {
+	if value != "" && !polyjson.ValidDecimal(value) {
 		return fmt.Errorf("invalid decimal %q", value)
 	}
 	*d = DecimalString(value)
