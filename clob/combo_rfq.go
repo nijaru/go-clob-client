@@ -2,6 +2,7 @@ package clob
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -437,18 +438,7 @@ func (c *AuthenticatedClient) AcceptComboQuote(
 	if c.signatureType == SignatureTypePoly1271 {
 		order.Signer = order.Maker
 	}
-	typedData := buildOrderTypedData(
-		c.chainID,
-		comboProtocolVersion,
-		contracts.ExchangeV3,
-		order.typedOrder(),
-	)
-	if c.signatureType == SignatureTypePoly1271 {
-		order.Signature, err = signPoly1271Order(c.signer, typedData, c.chainID)
-	} else {
-		order.Signature, err = polyauth.SignTypedData(c.signer, typedData)
-	}
-	if err != nil {
+	if err := c.signComboOrder(&order, contracts.ExchangeV3); err != nil {
 		return nil, fmt.Errorf("combo accept: sign order: %w", err)
 	}
 
@@ -654,6 +644,17 @@ func (c *SignerClient) comboMakerAddress() string {
 // comboProtocolVersion is the Exchange V3 EIP-712 domain version.
 const comboProtocolVersion = "3"
 
+func (c *SignerClient) signComboOrder(order *comboSignedOrderWire, exchange string) error {
+	typed := buildOrderTypedData(c.chainID, comboProtocolVersion, exchange, order.typedOrder())
+	var err error
+	if c.signatureType == SignatureTypePoly1271 {
+		order.Signature, err = signPoly1271Order(c.signer, typed, c.chainID)
+	} else {
+		order.Signature, err = polyauth.SignTypedData(c.signer, typed)
+	}
+	return err
+}
+
 // comboAcceptanceExpired classifies an accept-request transport error whose
 // gateway code reports an expired RFQ as a normal failed outcome.
 func comboAcceptanceExpired(err error) (bool, ComboAcceptFailureReason) {
@@ -785,6 +786,14 @@ func comboOrderHash(chainID int64, exchangeV3 string, order comboSignedOrderWire
 	return "0x" + fmt.Sprintf("%x", digest)
 }
 
+func comboTransactionHashValid(value string) bool {
+	if len(value) != 66 || !strings.HasPrefix(value, "0x") {
+		return false
+	}
+	_, err := hex.DecodeString(value[2:])
+	return err == nil
+}
+
 // decimalToE6 converts a human-readable decimal amount to the gateway's
 // 6-decimal base-unit integer string, truncating any sub-unit remainder.
 func decimalToE6(value udecimal.Decimal) string {
@@ -810,15 +819,16 @@ func e6ToDecimal(value string) (string, error) {
 	if value == "" {
 		return "", fmt.Errorf("empty e6 value")
 	}
-	raw, err := strconv.ParseUint(value, 10, 64)
-	if err != nil {
-		return "", fmt.Errorf("parse e6 value %q: %w", value, err)
+	raw, ok := new(big.Int).SetString(value, 10)
+	if !ok || !isNumericString(value) {
+		return "", fmt.Errorf("parse unsigned e6 value %q", value)
 	}
-	whole := raw / 1_000_000
-	fraction := strconv.FormatUint(raw%1_000_000, 10)
+	whole, remainder := new(big.Int), new(big.Int)
+	whole.QuoRem(raw, big.NewInt(1_000_000), remainder)
+	fraction := remainder.String()
 	fraction = strings.TrimRight(strings.Repeat("0", 6-len(fraction))+fraction, "0")
 	if fraction == "" {
-		return strconv.FormatUint(whole, 10), nil
+		return whole.String(), nil
 	}
-	return strconv.FormatUint(whole, 10) + "." + fraction, nil
+	return whole.String() + "." + fraction, nil
 }
