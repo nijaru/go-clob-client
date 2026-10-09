@@ -48,28 +48,26 @@ func conditionIDs(q url.Values, values []string, grammar conditionGrammar) error
 	seen := make(map[string]struct{})
 	ids := make([]string, 0, len(values))
 	for _, value := range values {
-		if !strings.HasPrefix(value, "0x") {
-			return input("condition_id", "must be a 0x-prefixed hex identifier")
-		}
-		decoded, err := hex.DecodeString(value[2:])
-		if err != nil || (len(decoded) != 31 && len(decoded) != 32) {
-			return input("condition_id", "must contain 31 or 32 bytes")
-		}
-		value = strings.ToLower(value)
-		switch grammar {
-		case marketConditions:
-			if len(decoded) == 31 {
+		if grammar == comboConditions {
+			normalized, err := normalizeComboConditionID(value)
+			if err != nil {
+				return input("condition_id", "expected a v2 combo identifier")
+			}
+			value = normalized
+		} else {
+			if !strings.HasPrefix(value, "0x") {
+				return input("condition_id", "must be a 0x-prefixed hex identifier")
+			}
+			decoded, err := hex.DecodeString(value[2:])
+			if err != nil || (len(decoded) != 31 && len(decoded) != 32) {
+				return input("condition_id", "must contain 31 or 32 bytes")
+			}
+			value = strings.ToLower(value)
+			if grammar == marketConditions && len(decoded) == 31 {
 				if decoded[0] != 1 && decoded[0] != 2 {
 					return input("condition_id", "31-byte market IDs must start with 01 or 02")
 				}
 				value += "00"
-			}
-		case comboConditions:
-			if decoded[0] != 3 || (len(decoded) == 32 && decoded[31] != 0 && decoded[31] != 1) {
-				return input("condition_id", "expected a v2 combo identifier")
-			}
-			if len(decoded) == 32 {
-				value = value[:64]
 			}
 		}
 		if _, exists := seen[value]; !exists {

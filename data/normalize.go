@@ -1,5 +1,7 @@
 package data
 
+// Optional display text uses an empty string as an absence marker. Preserve
+// populated text verbatim (including whitespace), just as other optional models.
 func clearEmptyText(fields ...**string) {
 	for _, field := range fields {
 		if *field != nil && **field == "" {
@@ -66,23 +68,6 @@ func (h *Holder) UnmarshalJSON(raw []byte) error {
 		&value.ProfileImageOptimized,
 	)
 	*h = Holder(value)
-	return nil
-}
-
-func (t *TraderLeaderboardStanding) UnmarshalJSON(raw []byte) error {
-	type wire TraderLeaderboardStanding
-	var value wire
-	if err := decodeWire(raw, &value); err != nil {
-		return err
-	}
-	if value.PnLRank != nil && *value.PnLRank == 0 {
-		value.PnLRank = nil
-	}
-	if value.VolumeRank != nil && *value.VolumeRank == 0 {
-		value.VolumeRank = nil
-	}
-	clearEmptyText(&value.UserName, &value.ProfileImage, &value.XUsername)
-	*t = TraderLeaderboardStanding(value)
 	return nil
 }
 

@@ -91,6 +91,13 @@ func (a *Activity) UnmarshalJSON(raw []byte) error {
 			(value.ConditionID == nil || value.AssetID == nil || value.Side == nil || value.Shares == nil || value.Amount == nil || value.Price == nil) {
 			return fmt.Errorf("data: incomplete trade activity")
 		}
+		if value.Type == ActivityTypeTrade && value.IsCombo {
+			id, err := normalizeComboConditionID(*value.ConditionID)
+			if err != nil {
+				return err
+			}
+			value.ConditionID = &id
+		}
 	} else {
 		// Future variants may reuse financial field names with different shapes.
 		// Only their common envelope is understood; the rest stays in Raw.
@@ -163,6 +170,11 @@ func (a *ComboActivity) UnmarshalJSON(raw []byte) error {
 	default:
 		return fmt.Errorf("data: unknown combo activity type %q", value.Type)
 	}
+	id, err := normalizeComboConditionID(value.ConditionID)
+	if err != nil {
+		return err
+	}
+	value.ConditionID = id
 	*a = ComboActivity(value)
 	return nil
 }
@@ -200,6 +212,14 @@ func (b *BiggestWinner) UnmarshalJSON(raw []byte) error {
 		(value.EventID == nil || *value.EventID == "" || *value.EventID == "0") {
 		return fmt.Errorf("data: market winner is missing event_id")
 	}
+	if value.Kind == BiggestWinnerKindCombo {
+		id, err := normalizeComboConditionID(value.ConditionID)
+		if err != nil {
+			return err
+		}
+		value.ConditionID = id
+	}
+	clearEmptyText(&value.UserName, &value.ProfileImage, &value.EventTitle, &value.EventSlug)
 	*b = BiggestWinner(value)
 	return nil
 }

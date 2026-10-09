@@ -81,7 +81,7 @@ func TestResolutionUnitsAndUnsetSentinel(t *testing.T) {
 
 func TestActivityAndWinnerKinds(t *testing.T) {
 	var activity Activity
-	raw := `{"type":"TRADE","proxy_wallet":"0x7c3db723f1d4d8cb9c550095203b686cb11e5c6b","timestamp":1785425912,"transaction_hash":"0x01","condition_id":"0x03","token_id":"42","is_combo":true,"side":"BUY","size":3.1,"usdc_size":1.55,"price":0.5}`
+	raw := `{"type":"TRADE","proxy_wallet":"0x7c3db723f1d4d8cb9c550095203b686cb11e5c6b","timestamp":1785425912,"transaction_hash":"0x01","condition_id":"0x03abababababababababababababababababababababababababababababab","token_id":"42","is_combo":true,"side":"BUY","size":3.1,"usdc_size":1.55,"price":0.5}`
 	if err := jsonv2.Unmarshal([]byte(raw), &activity); err != nil {
 		t.Fatal(err)
 	}
