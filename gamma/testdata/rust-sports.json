@@ -1,0 +1,10 @@
+[
+  {
+    "sport": "ncaab",
+    "image": "https://example.com/basketball.png",
+    "resolution": "https://example.com",
+    "ordering": "home",
+    "tags": "1,2,3",
+    "series": "39"
+  }
+]

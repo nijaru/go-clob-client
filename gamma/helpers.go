@@ -50,44 +50,19 @@ func iteratorLimit(limit, defaultLimit, max int) int {
 	return min(limit, max)
 }
 
-func seriesPageLimit(limit int) int {
+func pageLimit(limit, max int) int {
 	if limit <= 0 {
 		return 0
 	}
-	return min(limit, maxSeriesPageSize)
+	return min(limit, max)
 }
 
-func tagPageLimit(limit int) int {
-	if limit <= 0 {
-		return 0
+func addGammaFilterValues(query url.Values, key, single string, values []string) {
+	if len(values) > 0 {
+		for _, value := range values {
+			query.Add(key, value)
+		}
+		return
 	}
-	return min(limit, maxTagPageSize)
-}
-
-func commentsByUserPageLimit(limit int) int {
-	if limit <= 0 {
-		return 0
-	}
-	return min(limit, maxCommentsByUserPageSize)
-}
-
-func commentsPageLimit(limit int) int {
-	if limit <= 0 {
-		return 0
-	}
-	return min(limit, maxCommentsPageSize)
-}
-
-func teamPageLimit(limit int) int {
-	if limit <= 0 {
-		return 0
-	}
-	return min(limit, maxTeamsPageSize)
-}
-
-func clarificationPageLimit(limit int) int {
-	if limit <= 0 {
-		return 0
-	}
-	return min(limit, maxClarificationsPageSize)
+	setString(query, key, single)
 }

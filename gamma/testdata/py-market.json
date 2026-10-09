@@ -1,0 +1,81 @@
+{
+  "id": "MARKET-1",
+  "outcomes": [
+    "Yes",
+    "No"
+  ],
+  "outcomePrices": [
+    "0.6",
+    "0.4"
+  ],
+  "clobTokenIds": [
+    "TOKEN-YES",
+    "TOKEN-NO"
+  ],
+  "positionIds": [
+    "POSITION-YES",
+    "POSITION-NO"
+  ],
+  "marketMakerAddress": "0xMM",
+  "slug": "my-market",
+  "question": "Will it rain?",
+  "groupItemTitle": "Rain tomorrow",
+  "description": "A market.",
+  "category": "weather",
+  "image": "https://example.test/i.png",
+  "icon": "https://example.test/icon.png",
+  "conditionId": "0x5c19f205507ce03ff5f3be08a8090a5969ea6870cc07b902a4ca2e61dfe48fdd",
+  "active": true,
+  "closed": false,
+  "archived": false,
+  "comboStatus": "enabled",
+  "acceptingOrders": true,
+  "enableOrderBook": true,
+  "negRisk": false,
+  "startDate": "2026-05-01T00:00:00Z",
+  "endDate": "2026-06-01T00:00:00Z",
+  "closedTime": null,
+  "volume": "100",
+  "volume24hr": "20",
+  "liquidity": "50",
+  "bestBid": "0.59",
+  "bestAsk": "0.61",
+  "lastTradePrice": "0.6",
+  "spread": "0.02",
+  "orderMinSize": "5",
+  "orderPriceMinTickSize": "0.01",
+  "secondsDelay": 2,
+  "feesEnabled": true,
+  "feeType": "standard",
+  "feeSchedule": {
+    "exponent": 1,
+    "rate": "0.01",
+    "takerOnly": false,
+    "rebateRate": "0"
+  },
+  "questionID": "0xQID",
+  "umaResolutionStatus": "resolved",
+  "resolutionSource": "UMA",
+  "resolvedBy": "0xRES",
+  "rewardsMinSize": "10",
+  "rewardsMaxSpread": 0.05,
+  "holdingRewardsEnabled": true,
+  "sportsMarketType": "moneyline",
+  "line": 2.5,
+  "gameId": "GAME-1",
+  "gameStartTime": "2026-05-15T18:00:00Z",
+  "events": [
+    {
+      "id": "EVENT-1",
+      "slug": "e1",
+      "title": "Event 1"
+    }
+  ],
+  "tags": [
+    {
+      "id": "TAG-1",
+      "slug": "t1",
+      "label": "Tag 1"
+    }
+  ]
+}

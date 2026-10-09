@@ -1,0 +1,109 @@
+{
+  "id": "EVENT-1",
+  "ticker": "TICK",
+  "slug": "event-slug",
+  "title": "An Event",
+  "subtitle": "sub",
+  "description": "desc",
+  "category": "cat",
+  "image": "https://example.test/i.png",
+  "featuredImage": "https://example.test/f.png",
+  "createdAt": "2026-01-01T00:00:00Z",
+  "updatedAt": "2026-02-01T00:00:00Z",
+  "active": true,
+  "closed": false,
+  "archived": false,
+  "new": false,
+  "featured": true,
+  "restricted": false,
+  "liquidity": "100",
+  "volume": "500",
+  "volume24hr": "50",
+  "openInterest": "200",
+  "competitive": 1.5,
+  "commentCount": 10,
+  "tweetCount": 4,
+  "startDate": "2026-05-01T00:00:00Z",
+  "endDate": "2026-06-01T00:00:00Z",
+  "showAllOutcomes": true,
+  "color": "#ff0000",
+  "countryName": "USA",
+  "electionType": "general",
+  "enableOrderBook": true,
+  "negRisk": true,
+  "negRiskMarketID": "NRMID",
+  "negRiskFeeBips": 5.0,
+  "resolutionSource": "UMA",
+  "automaticallyResolved": true,
+  "estimateValue": true,
+  "cantEstimate": false,
+  "estimatedValue": "123.45",
+  "seriesSlug": "sport-series",
+  "gameStatus": "live",
+  "gameId": 999,
+  "homeTeamName": "Home",
+  "awayTeamName": "Away",
+  "teams": [
+    {
+      "id": 114315,
+      "name": "Paris Saint-Germain FC",
+      "ordering": "home"
+    }
+  ],
+  "sport": {
+    "id": 11,
+    "sport": "fl1",
+    "name": "Ligue 1",
+    "image": "https://example.test/league.png",
+    "resolution": "https://example.test/results",
+    "ordering": "home",
+    "tags": "1,2",
+    "series": "3"
+  },
+  "bestLines": [],
+  "markets": [],
+  "externalPartners": [
+    {
+      "id": 7,
+      "externalId": "EXT-7",
+      "partner": {
+        "id": 1,
+        "slug": "partner-a",
+        "name": "Partner A"
+      },
+      "createdAt": "2026-03-01T00:00:00Z",
+      "updatedAt": null
+    }
+  ],
+  "eventCreators": [
+    {
+      "id": "CREATOR-1",
+      "creatorName": "Alice",
+      "creatorHandle": "@alice",
+      "creatorUrl": "https://example.test/alice",
+      "creatorImage": "https://example.test/alice.png",
+      "createdAt": "2026-04-01T00:00:00Z",
+      "updatedAt": "2026-04-02T00:00:00Z"
+    }
+  ],
+  "series": [
+    {
+      "id": "SERIES-1",
+      "slug": "s1",
+      "title": "Series 1",
+      "volume": "1000",
+      "liquidity": "500",
+      "startDate": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "tags": [
+    {
+      "id": "TAG-1",
+      "slug": "t1",
+      "label": "Tag 1"
+    }
+  ],
+  "eventMetadata": {
+    "k": "v"
+  }
+}
