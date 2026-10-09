@@ -3,6 +3,8 @@ package bridge
 import (
 	"context"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -10,8 +12,7 @@ import (
 )
 
 const (
-	DefaultHost = "https://bridge.polymarket.com"
-
+	DefaultHost             = "https://bridge.polymarket.com"
 	supportedAssetsEndpoint = "/supported-assets"
 	depositEndpoint         = "/deposit"
 	statusEndpoint          = "/status"
@@ -19,84 +20,105 @@ const (
 	withdrawEndpoint        = "/withdraw"
 )
 
-// Client is a client for the Polymarket Bridge API.
-type Client struct {
-	host string
-	http *polyhttp.Client
-}
+// Client reads bridge quotes/status and explicitly creates routing addresses.
+// It never signs, broadcasts or waits for a token transfer.
+type Client struct{ http *polyhttp.Client }
 
-// Config defines the configuration for a Bridge client.
 type Config struct {
 	Host       string
 	HTTPClient *http.Client
 	UserAgent  string
 }
 
-// New creates a new Bridge API client.
-func New(config Config) *Client {
-	config = config.normalized()
+type APIError = polyhttp.APIError
 
+type InputError struct{ Field, Message string }
+
+func (e *InputError) Error() string { return "bridge: " + e.Field + ": " + e.Message }
+
+func NewClient(config Config) (*Client, error) {
+	if config.Host == "" {
+		config.Host = DefaultHost
+	}
+	parsed, err := url.Parse(config.Host)
+	if err != nil || parsed.Host == "" || (parsed.Scheme != "https" && parsed.Scheme != "http") ||
+		parsed.User != nil ||
+		parsed.RawQuery != "" ||
+		parsed.Fragment != "" {
+		return nil, &InputError{
+			Field:   "host",
+			Message: "must be an HTTP(S) URL without credentials, query, or fragment",
+		}
+	}
+	if config.HTTPClient == nil {
+		config.HTTPClient = &http.Client{Timeout: 15 * time.Second}
+	}
+	if config.UserAgent == "" {
+		config.UserAgent = "go-clob-client/bridge"
+	}
 	return &Client{
-		host: config.Host,
 		http: &polyhttp.Client{
-			BaseURL:    config.Host,
+			BaseURL:    strings.TrimRight(config.Host, "/"),
 			HTTPClient: config.HTTPClient,
 			UserAgent:  config.UserAgent,
 		},
-	}
+	}, nil
 }
 
-func (c Config) normalized() Config {
-	if c.Host == "" {
-		c.Host = DefaultHost
-	}
-	if c.HTTPClient == nil {
-		c.HTTPClient = &http.Client{Timeout: 15 * time.Second}
-	}
-	if c.UserAgent == "" {
-		c.UserAgent = "go-clob-client/bridge"
-	}
-	return c
-}
-
-// GetSupportedAssets returns all chains and tokens supported by the bridge.
 func (c *Client) GetSupportedAssets(ctx context.Context) (*SupportedAssetsResponse, error) {
 	var out SupportedAssetsResponse
-	err := c.http.GetJSON(ctx, supportedAssetsEndpoint, nil, polyhttp.AuthNone, &out)
-	return &out, err
+	if err := c.http.GetJSON(ctx, supportedAssetsEndpoint, nil, polyhttp.AuthNone, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
-// CreateDepositAddress generates unique deposit addresses for the given Polymarket wallet.
+// CreateDepositAddress registers routing addresses for a Polymarket wallet.
+// No tokens move until the caller separately sends funds to those addresses.
 func (c *Client) CreateDepositAddress(
 	ctx context.Context,
 	address common.Address,
 ) (*DepositResponse, error) {
-	req := DepositRequest{Address: address}
 	var out DepositResponse
-	err := c.http.PostJSON(ctx, depositEndpoint, req, polyhttp.AuthNone, &out)
-	return &out, err
+	if err := c.http.PostJSON(ctx, depositEndpoint, DepositRequest{Address: address}, polyhttp.AuthNone, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
-// GetStatus checks the status of bridge transactions for an address (2026 standard).
-func (c *Client) GetStatus(
-	ctx context.Context,
-	address string,
-) (*StatusResponse, error) {
+// GetStatus accepts an address from any supported network, not just EVM.
+func (c *Client) GetStatus(ctx context.Context, address string) (*StatusResponse, error) {
+	if strings.TrimSpace(address) == "" || address == "." || address == ".." {
+		return nil, &InputError{Field: "address", Message: "is required"}
+	}
 	var out StatusResponse
-	err := c.http.GetJSON(ctx, statusEndpoint+"/"+address, nil, polyhttp.AuthNone, &out)
-	return &out, err
+	if err := c.http.GetJSON(ctx, statusEndpoint+"/"+url.PathEscape(address), nil, polyhttp.AuthNone, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
-// GetQuote gets a quote for a bridge transfer.
-func (c *Client) GetQuote(ctx context.Context, req QuoteRequest) (*QuoteResponse, error) {
+func (c *Client) GetQuote(ctx context.Context, request QuoteRequest) (*QuoteResponse, error) {
+	if _, err := ParseBaseUnits(string(request.FromAmountBaseUnit)); err != nil {
+		return nil, &InputError{Field: "from_amount_base_unit", Message: err.Error()}
+	}
 	var out QuoteResponse
-	err := c.http.PostJSON(ctx, quoteEndpoint, req, polyhttp.AuthNone, &out)
-	return &out, err
+	if err := c.http.PostJSON(ctx, quoteEndpoint, request, polyhttp.AuthNone, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
-// Withdraw initiates a withdrawal via the bridge (2026 standard).
-func (c *Client) Withdraw(ctx context.Context, req WithdrawRequest) (*WithdrawResponse, error) {
+// CreateWithdrawalAddress registers routing addresses for the requested
+// destination. Despite the service's /withdraw path, this does not itself
+// withdraw, sign or transfer funds from the Polymarket wallet.
+func (c *Client) CreateWithdrawalAddress(
+	ctx context.Context,
+	request WithdrawRequest,
+) (*WithdrawResponse, error) {
 	var out WithdrawResponse
-	err := c.http.PostJSON(ctx, withdrawEndpoint, req, polyhttp.AuthNone, &out)
-	return &out, err
+	if err := c.http.PostJSON(ctx, withdrawEndpoint, request, polyhttp.AuthNone, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }

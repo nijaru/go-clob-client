@@ -2,13 +2,22 @@ package bridge
 
 import (
 	"context"
-	"io"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 )
+
+func bridgeTestClient(t *testing.T, host string) *Client {
+	t.Helper()
+	client, err := NewClient(Config{Host: host})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return client
+}
 
 func TestGetSupportedAssets(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -29,7 +38,7 @@ func TestGetSupportedAssets(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := New(Config{Host: server.URL})
+	client := bridgeTestClient(t, server.URL)
 	resp, err := client.GetSupportedAssets(context.Background())
 	if err != nil {
 		t.Fatalf("failed to get supported assets: %v", err)
@@ -44,8 +53,11 @@ func TestGetSupportedAssets(t *testing.T) {
 	if resp.SupportedAssets[0].Token.Symbol != "USDC" {
 		t.Errorf("expected symbol USDC, got %s", resp.SupportedAssets[0].Token.Symbol)
 	}
-	if resp.SupportedAssets[0].MinCheckoutUSD.String() != "45" {
-		t.Errorf("expected min checkout 45, got %s", resp.SupportedAssets[0].MinCheckoutUSD)
+	if resp.SupportedAssets[0].MinCheckoutUSD.String() != "45.0" {
+		t.Errorf(
+			"expected lossless min checkout 45.0, got %s",
+			resp.SupportedAssets[0].MinCheckoutUSD,
+		)
 	}
 }
 
@@ -66,7 +78,7 @@ func TestCreateDepositAddress(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := New(Config{Host: server.URL})
+	client := bridgeTestClient(t, server.URL)
 	resp, err := client.CreateDepositAddress(
 		context.Background(),
 		common.HexToAddress("0x1230000000000000000000000000000000000000"),
@@ -110,7 +122,7 @@ func TestGetStatus(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := New(Config{Host: server.URL})
+	client := bridgeTestClient(t, server.URL)
 	status, err := client.GetStatus(context.Background(), address)
 	if err != nil {
 		t.Fatalf("failed to get status: %v", err)
@@ -144,11 +156,23 @@ func TestGetQuote(t *testing.T) {
 			t.Errorf("expected POST, got %s", r.Method)
 		}
 
-		body, _ := io.ReadAll(r.Body)
-		if string(
-			body,
-		) != `{"fromAmountBaseUnit":"13566635","fromChainId":"1","fromTokenAddress":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48","recipientAddress":"0x0000000000000000000000000000000000000001","toChainId":"137","toTokenAddress":"0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"}` {
-			t.Errorf("unexpected quote payload: %s", body)
+		var body struct {
+			FromAmount string `json:"fromAmountBaseUnit"`
+			FromChain  string `json:"fromChainId"`
+			FromToken  string `json:"fromTokenAddress"`
+			Recipient  string `json:"recipientAddress"`
+			ToChain    string `json:"toChainId"`
+			ToToken    string `json:"toTokenAddress"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Error(err)
+		}
+		if body.FromAmount != "13566635" || body.FromChain != "1" ||
+			body.FromToken != "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" ||
+			body.Recipient != "0x0000000000000000000000000000000000000001" ||
+			body.ToChain != "137" ||
+			body.ToToken != "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174" {
+			t.Errorf("unexpected quote payload: %+v", body)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -163,7 +187,7 @@ func TestGetQuote(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := New(Config{Host: server.URL})
+	client := bridgeTestClient(t, server.URL)
 	resp, err := client.GetQuote(context.Background(), QuoteRequest{
 		FromAmountBaseUnit: "13566635",
 		FromChainID:        1,
@@ -200,8 +224,8 @@ func TestWithdraw(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := New(Config{Host: server.URL})
-	resp, err := client.Withdraw(context.Background(), WithdrawRequest{
+	client := bridgeTestClient(t, server.URL)
+	resp, err := client.CreateWithdrawalAddress(context.Background(), WithdrawRequest{
 		Address:        common.HexToAddress("0x56687bf447db6ffa42ffe2204a05edaa20f55839"),
 		ToChainID:      1,
 		ToTokenAddress: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",

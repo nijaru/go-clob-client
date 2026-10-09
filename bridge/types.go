@@ -1,43 +1,6 @@
 package bridge
 
-import (
-	"fmt"
-	"strconv"
-
-	"github.com/ethereum/go-ethereum/common"
-	json "github.com/go-json-experiment/json"
-	"github.com/quagmt/udecimal"
-)
-
-// ChainID identifies an EVM or bridge-supported chain.
-// It marshals to the wire format Polymarket expects: a base-10 JSON string.
-type ChainID int64
-
-func (c ChainID) MarshalJSON() ([]byte, error) {
-	return json.Marshal(strconv.FormatInt(int64(c), 10))
-}
-
-func (c *ChainID) UnmarshalJSON(data []byte) error {
-	var raw string
-	if err := json.Unmarshal(data, &raw); err == nil {
-		parsed, err := strconv.ParseInt(raw, 10, 64)
-		if err != nil {
-			return fmt.Errorf("parse chain id: %w", err)
-		}
-		*c = ChainID(parsed)
-		return nil
-	}
-
-	var numeric int64
-	if err := json.Unmarshal(data, &numeric); err != nil {
-		return fmt.Errorf("decode chain id: %w", err)
-	}
-	*c = ChainID(numeric)
-	return nil
-}
-
-// Decimal is the numeric type used for bridge decimal amounts.
-type Decimal = udecimal.Decimal
+import "github.com/ethereum/go-ethereum/common"
 
 // DepositRequest is the request to generate deposit addresses.
 type DepositRequest struct {
@@ -81,28 +44,28 @@ type SupportedAssetsResponse struct {
 
 // QuoteRequest is a request for a bridge quote.
 type QuoteRequest struct {
-	FromAmountBaseUnit string  `json:"fromAmountBaseUnit"`
-	FromChainID        ChainID `json:"fromChainId"`
-	FromTokenAddress   string  `json:"fromTokenAddress"`
-	RecipientAddress   string  `json:"recipientAddress"`
-	ToChainID          ChainID `json:"toChainId"`
-	ToTokenAddress     string  `json:"toTokenAddress"`
+	FromAmountBaseUnit BaseUnits `json:"fromAmountBaseUnit"`
+	FromChainID        ChainID   `json:"fromChainId"`
+	FromTokenAddress   string    `json:"fromTokenAddress"`
+	RecipientAddress   string    `json:"recipientAddress"`
+	ToChainID          ChainID   `json:"toChainId"`
+	ToTokenAddress     string    `json:"toTokenAddress"`
 }
 
 // EstimatedFeeBreakdown holds the fee breakdown for a quote.
 type EstimatedFeeBreakdown struct {
 	AppFeeLabel     string  `json:"appFeeLabel"`
-	AppFeePercent   float64 `json:"appFeePercent"`
-	AppFeeUSD       float64 `json:"appFeeUsd"`
-	FillCostPercent float64 `json:"fillCostPercent"`
-	FillCostUSD     float64 `json:"fillCostUsd"`
-	GasUSD          float64 `json:"gasUsd"`
-	MaxSlippage     float64 `json:"maxSlippage"`
-	MinReceived     float64 `json:"minReceived"`
-	SwapImpact      float64 `json:"swapImpact"`
-	SwapImpactUSD   float64 `json:"swapImpactUsd"`
-	TotalImpact     float64 `json:"totalImpact"`
-	TotalImpactUSD  float64 `json:"totalImpactUsd"`
+	AppFeePercent   Decimal `json:"appFeePercent"`
+	AppFeeUSD       Decimal `json:"appFeeUsd"`
+	FillCostPercent Decimal `json:"fillCostPercent"`
+	FillCostUSD     Decimal `json:"fillCostUsd"`
+	GasUSD          Decimal `json:"gasUsd"`
+	MaxSlippage     Decimal `json:"maxSlippage"`
+	MinReceived     Decimal `json:"minReceived"`
+	SwapImpact      Decimal `json:"swapImpact"`
+	SwapImpactUSD   Decimal `json:"swapImpactUsd"`
+	TotalImpact     Decimal `json:"totalImpact"`
+	TotalImpactUSD  Decimal `json:"totalImpactUsd"`
 }
 
 // QuoteResponse is the response from the /quote endpoint.
@@ -110,9 +73,9 @@ type QuoteResponse struct {
 	QuoteID            string                `json:"quoteId"`
 	EstCheckoutTimeMs  uint64                `json:"estCheckoutTimeMs"`
 	EstFeeBreakdown    EstimatedFeeBreakdown `json:"estFeeBreakdown"`
-	EstInputUSD        float64               `json:"estInputUsd"`
-	EstOutputUSD       float64               `json:"estOutputUsd"`
-	EstToTokenBaseUnit string                `json:"estToTokenBaseUnit"`
+	EstInputUSD        Decimal               `json:"estInputUsd"`
+	EstOutputUSD       Decimal               `json:"estOutputUsd"`
+	EstToTokenBaseUnit BaseUnits             `json:"estToTokenBaseUnit"`
 }
 
 // WithdrawRequest is a request to withdraw assets from Polymarket via the bridge.
@@ -152,7 +115,7 @@ const (
 type DepositTransaction struct {
 	FromChainID        ChainID                  `json:"fromChainId"`
 	FromTokenAddress   string                   `json:"fromTokenAddress"`
-	FromAmountBaseUnit string                   `json:"fromAmountBaseUnit"`
+	FromAmountBaseUnit BaseUnits                `json:"fromAmountBaseUnit"`
 	ToChainID          ChainID                  `json:"toChainId"`
 	ToTokenAddress     common.Address           `json:"toTokenAddress"`
 	Status             DepositTransactionStatus `json:"status"`

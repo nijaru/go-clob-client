@@ -1,19 +1,12 @@
-// Package bridge provides a client for Polymarket's bridge API.
+// Package bridge reads supported assets, quotes and transfer status, and
+// explicitly registers deposit/withdrawal routing addresses across chains.
 //
-// The package covers supported assets, deposit address generation, quote
-// retrieval, transaction status checks, and withdrawals across supported chains.
-// It is separate from the CLOB trading API and does not manage orders.
+// Creating a withdrawal address does not sign or transfer tokens. The caller
+// sends funds separately and can then poll GetStatus. Constructors perform no
+// remote requests, and no operation automatically retries a registration POST.
 //
-// # Creating a client
-//
-//	c := bridge.New(bridge.Config{})
-//
-// # Common usage
-//
-//	ctx := context.Background()
-//	assets, err := c.GetSupportedAssets(ctx)
-//	if err != nil {
-//	    return err
-//	}
-//	fmt.Println(len(assets.Tokens))
+// NewClient validates the configured HTTP(S) host. ChainID covers the full
+// unsigned 64-bit range; BaseUnits is a canonical uint256 token quantity.
+// Decimal retains every wire digit for monetary estimates and fee percentages.
+// Token and recipient addresses remain strings for non-EVM network support.
 package bridge

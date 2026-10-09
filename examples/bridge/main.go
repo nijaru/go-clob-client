@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"time"
@@ -11,35 +12,47 @@ import (
 )
 
 func main() {
-	client := bridge.New(bridge.Config{})
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	depositWallet := flag.String(
+		"deposit-wallet",
+		"",
+		"explicitly create routing addresses for this Polymarket wallet (remote write)",
+	)
+	flag.Parse()
+	client, err := bridge.NewClient(bridge.Config{})
+	if err != nil {
+		log.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-
-	// 1. Get supported assets
-	fmt.Println("Fetching supported assets...")
-	resp, err := client.GetSupportedAssets(ctx)
+	assets, err := client.GetSupportedAssets(ctx)
 	if err != nil {
-		log.Fatalf("failed to get supported assets: %v", err)
+		log.Fatal(err)
 	}
-	fmt.Printf("Found %d supported assets\n", len(resp.SupportedAssets))
-	if len(resp.SupportedAssets) > 0 {
-		a := resp.SupportedAssets[0]
-		fmt.Printf("Example asset: %s (%s) on %s\n", a.Token.Name, a.Token.Symbol, a.ChainName)
-	}
-
-	// 2. Create deposit address (mock address)
-	address := "0x1234567890123456789012345678901234567890"
-	fmt.Printf("\nGenerating deposit addresses for %s...\n", address)
-	addrs, err := client.CreateDepositAddress(ctx, common.HexToAddress(address))
-	if err != nil {
+	fmt.Printf("Supported assets: %d\n", len(assets.SupportedAssets))
+	for _, asset := range assets.SupportedAssets {
 		fmt.Printf(
-			"failed to generate deposit addresses: %v (expected if not on whitelist/live)\n",
-			err,
+			"%s on %s (%d): minimum USD %s\n",
+			asset.Token.Symbol,
+			asset.ChainName,
+			asset.ChainID,
+			asset.MinCheckoutUSD,
 		)
-	} else {
-		fmt.Printf("- EVM: %s\n", addrs.Address.EVM)
-		fmt.Printf("- SVM: %s\n", addrs.Address.SVM)
-		fmt.Printf("- BTC: %s\n", addrs.Address.BTC)
 	}
+	// Running this example without a flag performs only a public GET.
+	if *depositWallet == "" {
+		return
+	}
+	if !common.IsHexAddress(*depositWallet) {
+		log.Fatal("deposit-wallet must be an EVM address")
+	}
+	addresses, err := client.CreateDepositAddress(ctx, common.HexToAddress(*depositWallet))
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf(
+		"Routing addresses: EVM %s / SVM %s / BTC %s\n",
+		addresses.Address.EVM,
+		addresses.Address.SVM,
+		addresses.Address.BTC,
+	)
 }

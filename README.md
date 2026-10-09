@@ -33,7 +33,7 @@ The module exposes several focused packages:
 - **`data`** — Data API v2: positions, trades, activity, combo portfolios, analytics, and leaderboards
 - **`data/legacy`** — explicit v1 Data API contracts retained for Rust SDK coverage
 - **`gamma`** — markets, events, tags, sports, comments, profiles, and clarifications
-- **`bridge`** — deposit-address discovery
+- **`bridge`** — cross-chain assets, quotes, transfer status, and explicit routing-address registration
 - **`perps`** — public perpetuals market data and authenticated account/session access
 
 ## Quickstart
