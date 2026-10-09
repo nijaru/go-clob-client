@@ -64,6 +64,11 @@ func NewWallet(signer Signer) (*Wallet, error) {
 			return nil, ErrInvalidSigner
 		}
 	}
+	// Already-verified wallets own their capability selection. Wrapping one
+	// would falsely advertise optional methods even when its backend lacks them.
+	if wallet, ok := signer.(*Wallet); ok {
+		return wallet, nil
+	}
 	address := signer.Address()
 	if address == (common.Address{}) {
 		return nil, ErrInvalidSigner

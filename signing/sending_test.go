@@ -30,6 +30,20 @@ func sendRequest() TransactionRequest {
 	}
 }
 
+func TestVerifiedLocalWalletKeepsItsActualCapabilities(t *testing.T) {
+	original := wallet(t, local(t))
+	rebound := wallet(t, original)
+	if rebound.CanSendTransactions() {
+		t.Fatal("binding a verified local signer invented wallet-owned sending")
+	}
+	if _, err := rebound.SendTransaction(t.Context(), sendRequest()); !errors.Is(
+		err,
+		ErrTransactionSendingUnsupported,
+	) {
+		t.Fatalf("unsupported sender was treated as an uncertain broadcast: %v", err)
+	}
+}
+
 func TestSenderIntentIsolation(t *testing.T) {
 	t.Parallel()
 	address := local(t).Address()
