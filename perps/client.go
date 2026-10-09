@@ -9,8 +9,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/nijaru/go-clob-client/internal/polyauth"
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
+	"github.com/nijaru/go-clob-client/signing"
 )
 
 // DefaultHost is the production Perps REST API host.
@@ -80,6 +80,9 @@ func New(config Config) *Client {
 type AuthenticatedConfig struct {
 	Config
 	Credentials PerpsCredentials
+	// DelegatedSigner signs proxy commands without exporting a private key.
+	// Mutually exclusive with Credentials.PrivateKey; its address must match Proxy.
+	DelegatedSigner signing.Signer
 }
 
 // AuthenticatedClient reads account data and opens delegated Perps sessions.
@@ -87,12 +90,13 @@ type AuthenticatedClient struct {
 	*Client
 	chainID     int64
 	credentials PerpsCredentials
+	signer      *signing.Wallet
 }
 
 // NewAuthenticated creates an authenticated Perps client from delegated
 // credentials. Credential creation and revocation remain explicit owner-signed
-// operations. This constructor validates local key identity only; use
-// OwnerClient.Resume to verify owner identity and expiration with the server.
+// operations. This constructor pins signing identity without network access;
+// use OwnerClient.Resume to verify owner identity and expiration with the server.
 func NewAuthenticated(config AuthenticatedConfig) (*AuthenticatedClient, error) {
 	baseConfig := config.Config.normalized()
 	if !common.IsHexAddress(config.Credentials.Proxy) ||
@@ -102,15 +106,34 @@ func NewAuthenticated(config AuthenticatedConfig) (*AuthenticatedClient, error) 
 	if config.Credentials.Secret == "" {
 		return nil, fmt.Errorf("perps: delegated credential secret is required")
 	}
-	client := &AuthenticatedClient{
+	if config.DelegatedSigner != nil && config.Credentials.PrivateKey != "" {
+		return nil, fmt.Errorf("perps: provide a delegated signer or private key, not both")
+	}
+	source := config.DelegatedSigner
+	if config.Credentials.PrivateKey != "" {
+		local, err := signing.NewLocalSigner(config.Credentials.PrivateKey)
+		if err != nil {
+			return nil, fmt.Errorf("perps: parse delegated signing key: %w", err)
+		}
+		source = local
+	}
+	var signer *signing.Wallet
+	if source != nil {
+		var err error
+		signer, err = signing.NewWallet(source)
+		if err != nil {
+			return nil, fmt.Errorf("perps: delegated signer: %w", err)
+		}
+		if signer.Address() != common.HexToAddress(config.Credentials.Proxy) {
+			return nil, fmt.Errorf("perps: delegated signer does not match proxy")
+		}
+	}
+	return &AuthenticatedClient{
 		Client:      New(baseConfig),
 		chainID:     baseConfig.ChainID,
 		credentials: config.Credentials,
-	}
-	if _, err := client.delegatedSigner(); err != nil {
-		return nil, err
-	}
-	return client, nil
+		signer:      signer,
+	}, nil
 }
 
 // Credentials returns a copy of the delegated credentials used by the client.
@@ -118,18 +141,8 @@ func (c *AuthenticatedClient) Credentials() PerpsCredentials {
 	return c.credentials
 }
 
-func (c *AuthenticatedClient) delegatedSigner() (*polyauth.Signer, error) {
-	if c.credentials.PrivateKey == "" {
-		return nil, nil
-	}
-	signer, err := polyauth.ParsePrivateKey(c.credentials.PrivateKey)
-	if err != nil {
-		return nil, fmt.Errorf("perps: parse delegated signing key: %w", err)
-	}
-	if signer.Address() != common.HexToAddress(c.credentials.Proxy) {
-		return nil, fmt.Errorf("perps: delegated signing key does not match proxy")
-	}
-	return signer, nil
+func (c *AuthenticatedClient) delegatedSigner() (*signing.Wallet, error) {
+	return c.signer, nil
 }
 
 func (c *AuthenticatedClient) getAuthenticatedJSON(

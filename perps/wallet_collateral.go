@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/nijaru/go-clob-client/clob"
 )
@@ -81,16 +82,17 @@ func (w *CollateralWallet) ApproveAndDeposit(
 	)
 }
 
-// CollateralSubmissionError identifies the failed step. Its submission may
-// have reached the RPC/relayer even without a returned hash. Earlier confirmed
-// EOA submissions remain effective; inspect the accompanying transaction.
+// CollateralSubmissionError identifies the failed execution step, whether
+// signing, sending or receipt confirmation failed. An uncertain send may have
+// reached the RPC/relayer; earlier EOA submissions remain effective. Inspect
+// the accompanying transaction before deciding how to recover.
 type CollateralSubmissionError struct {
 	Operation string
 	Err       error
 }
 
 func (e *CollateralSubmissionError) Error() string {
-	return fmt.Sprintf("perps: %s submission uncertain: %v", e.Operation, e.Err)
+	return fmt.Sprintf("perps: %s execution failed: %v", e.Operation, e.Err)
 }
 func (e *CollateralSubmissionError) Unwrap() error { return e.Err }
 
@@ -107,53 +109,40 @@ func (w *CollateralWallet) execute(
 	if !state.OnChain {
 		return nil, fmt.Errorf("perps: wallet has no on-chain code; deploy explicitly")
 	}
-	result := &CollateralTransaction{wallet: w}
 	converted := make([]clob.TransactionCall, len(calls))
 	for i, call := range calls {
 		converted[i] = clob.TransactionCall{To: call.To, Data: call.Data, Value: call.Value}
 	}
-	if w.walletType != clob.SignatureTypeEOA {
-		h, err := w.transactions.ExecuteWalletTransaction(ctx, converted, metadata)
-		if err != nil {
-			return result, &CollateralSubmissionError{Operation: "batch", Err: err}
-		}
-		result.Submissions = []CollateralSubmission{
-			{
-				Operation:       "batch",
-				TransactionID:   h.TransactionID,
-				TransactionHash: h.TransactionHash,
-				handle:          h,
-			},
-		}
-		return result, nil
-	}
-	for i, call := range converted {
-		if err := ctx.Err(); err != nil {
-			return result, err
-		}
-		h, err := w.transactions.ExecuteWalletTransaction(
-			ctx,
-			[]clob.TransactionCall{call},
-			metadata,
-		)
-		if err != nil {
-			return result, &CollateralSubmissionError{Operation: operations[i], Err: err}
-		}
-		result.Submissions = append(
-			result.Submissions,
-			CollateralSubmission{
-				Operation:       operations[i],
-				TransactionID:   h.TransactionID,
-				TransactionHash: h.TransactionHash,
-				handle:          h,
-			},
-		)
-		if i+1 < len(converted) {
-			receipt, err := result.waitSubmission(ctx, result.Submissions[i])
-			if err != nil {
-				return result, fmt.Errorf("perps: confirm %s: %w", operations[i], err)
+	// CLOB owns execution ordering and retains every attempted signed hash even
+	// when sending or confirming fails. Do not discard a nonnil handle on error.
+	h, err := w.transactions.ExecuteWalletTransaction(ctx, converted, metadata)
+	result := &CollateralTransaction{wallet: w, RequestedCalls: len(calls), handle: h}
+	operation := "batch"
+	if w.walletType == clob.SignatureTypeEOA {
+		operation = operations[0]
+		if h != nil {
+			for i, submission := range h.Submissions {
+				result.Submissions = append(result.Submissions, CollateralSubmission{
+					Operation: operations[i], TransactionHash: submission.TransactionHash,
+					BroadcastUncertain: submission.BroadcastUncertain,
+					ConfirmedReceipt:   submission.ConfirmedReceipt,
+				})
+				operation = operations[i]
+				if submission.ConfirmedReceipt != nil &&
+					submission.ConfirmedReceipt.Status == types.ReceiptStatusSuccessful && i+1 < len(operations) {
+					operation = operations[i+1]
+				}
 			}
-			result.Submissions[i].ConfirmedReceipt = receipt
+		}
+	} else if h != nil {
+		result.Submissions = []CollateralSubmission{{
+			Operation: "batch", TransactionID: h.TransactionID, TransactionHash: h.TransactionHash,
+		}}
+	}
+	if err != nil {
+		return result, &CollateralSubmissionError{
+			Operation: operation,
+			Err:       collateralReceiptError(err),
 		}
 	}
 	return result, nil

@@ -1,6 +1,7 @@
 package perps
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 )
 
 func TestPerpsCreateOrdersMessagePackHashMatchesOfficialFixture(t *testing.T) {
@@ -30,9 +32,17 @@ func TestPerpsCreateOrdersMessagePackHashMatchesOfficialFixture(t *testing.T) {
 	}
 }
 
-func TestPostOrdersSignsAndSendsOfficialCommandShape(t *testing.T) {
+func TestPostOrdersExternalSignerSendsOfficialCommandShape(t *testing.T) {
 	const proxy = "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf"
-	const privateKey = "0x0000000000000000000000000000000000000000000000000000000000000001"
+	signer, local := externalFixtureSigner(t)
+	type contextKey struct{}
+	ctx := context.WithValue(t.Context(), contextKey{}, "session command")
+	signer.callback = func(got context.Context, data apitypes.TypedData) ([]byte, error) {
+		if got.Value(contextKey{}) != "session command" {
+			t.Error("session signer lost caller context")
+		}
+		return local.SignTypedData(got, data)
+	}
 	command := make(chan map[string]any, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := websocket.Accept(w, r, nil)
@@ -51,6 +61,16 @@ func TestPostOrdersSignsAndSendsOfficialCommandShape(t *testing.T) {
 			}
 			id := int(frame["id"].(float64))
 			if i == 3 {
+				var signed fixtureCommand
+				if err := json.Unmarshal(payload, &signed); err != nil {
+					t.Error(err)
+					return
+				}
+				assertOperationSignature(
+					t,
+					signed,
+					[]any{"createOrders", []any{[]any{1, true, "100.50", "10", "gtc", false}}},
+				)
 				command <- frame
 			}
 			response := map[string]any{"id": id, "data": map[string]any{"status": "ok"}}
@@ -70,7 +90,8 @@ func TestPostOrdersSignsAndSendsOfficialCommandShape(t *testing.T) {
 			WebSocketHost: "ws" + strings.TrimPrefix(server.URL, "http"),
 			ChainID:       31337,
 		},
-		Credentials: PerpsCredentials{Proxy: proxy, Secret: "secret", PrivateKey: privateKey},
+		Credentials:     PerpsCredentials{Proxy: proxy, Secret: "secret"},
+		DelegatedSigner: signer,
 	})
 	if err != nil {
 		t.Fatalf("NewAuthenticated: %v", err)
@@ -80,7 +101,7 @@ func TestPostOrdersSignsAndSendsOfficialCommandShape(t *testing.T) {
 		t.Fatalf("OpenSession: %v", err)
 	}
 	t.Cleanup(func() { _ = session.Close() })
-	acks, err := session.PostOrders(t.Context(), []PerpsOrderRequest{{
+	acks, err := session.PostOrders(ctx, []PerpsOrderRequest{{
 		InstrumentID: 1,
 		Side:         PerpsOrderBuy,
 		Price:        "100.50",

@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
+	"github.com/nijaru/go-clob-client/signing"
 )
 
 const (
@@ -25,7 +26,7 @@ const (
 
 func fixtureOwner(t *testing.T, host string) *OwnerClient {
 	t.Helper()
-	signer, err := NewOwnerSigner(fixturePrivateKey)
+	signer, err := signing.NewLocalSigner(fixturePrivateKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +132,7 @@ func TestOwnerCredentialLifecycle(t *testing.T) {
 		credentials.ExpiresAt != expiry {
 		t.Fatalf("created credential key/expiry mismatch: %v", err)
 	}
-	client, err := owner.Resume(t.Context(), credentials)
+	client, err := owner.Resume(t.Context(), credentials, nil)
 	if err != nil || client.Credentials().ExpiresAt != expiry {
 		t.Fatalf("resume: %v", err)
 	}
@@ -181,7 +182,7 @@ func TestResumeRejectsWrongOwnerAndExpiredCredentials(t *testing.T) {
 			_, err := fixtureOwner(
 				t,
 				server.URL,
-			).Resume(t.Context(), PerpsCredentials{Proxy: fixtureProxy, PrivateKey: fixturePrivateKey, Secret: "secret"})
+			).Resume(t.Context(), PerpsCredentials{Proxy: fixtureProxy, PrivateKey: fixturePrivateKey, Secret: "secret"}, nil)
 			if err == nil {
 				t.Fatal("invalid credentials resumed")
 			}

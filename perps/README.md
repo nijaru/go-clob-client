@@ -14,19 +14,26 @@ says otherwise; withdrawal signatures use Unix seconds internally.
 
 ## Credentials and trading
 
-`NewAuthenticated` accepts a proxy and secret for account reads. Supply the
-matching delegated private key for signed commands. It validates local key
-identity, not server ownership or expiration.
+`NewAuthenticated` accepts a proxy and secret for account reads. For signed
+commands, supply either `AuthenticatedConfig.DelegatedSigner` (a
+`signing.Signer`) or the matching `Credentials.PrivateKey`, never both. Hardware
+and remote signers need no key export. The constructor pins the proxy EOA and
+verifies every signature, but does not check server ownership or expiration.
 
-For owner operations, use `NewOwner` with an `OwnerSigner` (local key, hardware
-wallet or external signer). `CreateCredentials` generates a delegated key;
-`Resume` checks the server's credential listing, owner and expiration.
+For owner operations, use `NewOwner` with a `signing.Signer`; use
+`signing.NewLocalSigner(key)` for an in-memory key. The owner EOA is pinned at
+construction and signatures are normalized and verified before submission.
+Every signing callback receives the operation's context. `CreateCredentials`
+generates a delegated key; `Resume` checks the server's credential listing,
+owner and expiration.
 `RevokeCredentials` explicitly revokes a proxy. Credential creation returns
 private key material even on an uncertain submission failure: retain it securely
 and reconcile or revoke the proxy rather than blindly creating another.
 
 ```go
-account, err := owner.Resume(ctx, storedCredentials)
+// nil uses storedCredentials.PrivateKey. For an external proxy signer, pass
+// proxySigner instead and omit storedCredentials.PrivateKey.
+account, err := owner.Resume(ctx, storedCredentials, nil)
 if err != nil { return err }
 session, err := account.OpenSession(ctx, perps.SessionConfig{})
 if err != nil { return err }
@@ -63,9 +70,15 @@ engine through `CollateralWalletConfig.Transactions` (`clob.Config`). It derives
 Safe/proxy wallets, or a beacon deposit wallet when no funder is supplied, and
 validates the owner, chain and withdrawal wallet. Construction is offline and
 never deploys, approves or sends. Token and deposit-contract addresses and an
-RPC URL must be explicit. The adapter currently requires a local transaction
-key and CLOB credentials; gasless wallets also require separate `BuilderAuth`.
-Perps credentials are not CLOB or relayer credentials.
+RPC URL must be explicit. Transactions accepts `clob.Config.Signer` or
+`PrivateKey`, never both. EOA execution needs `signing.TransactionSigner`;
+Safe/proxy execution needs `signing.MessageSigner`; deposit-wallet batches and
+Safe creation use typed-data signing. Unsupported capabilities fail without
+sending.
+The reused CLOB authenticated constructor still requires genuine CLOB L2
+credentials, even for collateral-only execution; gasless wallets also require
+separate `BuilderAuth`. Perps credentials are neither CLOB nor relayer credentials.
+Unsigned `OwnerClient.PrepareDeposit` needs none of those execution credentials.
 
 - `PrepareCollateralApproval` prepares an exact allowance; zero revokes.
 - `ApproveCollateral` sends only approval. `Deposit` sends only a deposit and
@@ -74,17 +87,21 @@ Perps credentials are not CLOB or relayer credentials.
   batch for smart wallets, or an approval confirmed before deposit for EOAs.
   An EOA failure can leave an allowance without a deposit. Retain the returned
   `CollateralTransaction` even on error: its submissions and confirmed prefix
-  support reconciliation. A failed send may have reached the network without
-  returning a hash. Do not blindly retry it.
-- `DeployDepositWallet` explicitly submits current beacon-wallet creation.
+  support reconciliation. EOA send errors retain the locally computed hash and
+  mark `BroadcastUncertain`; `RequestedCalls` records the entire intended
+  sequence. Do not blindly retry an uncertain send.
+- `DeploySafeWallet` explicitly submits deterministic owner-Safe creation.
+  `DeployDepositWallet` explicitly submits current beacon-wallet creation.
   `Readiness` reports on-chain code and relayer registry status separately.
   Registry readiness never substitutes for code or a transaction receipt.
 - `CollateralTransaction.Wait(ctx)` checks relayer outcomes and successful RPC
   receipts, validates receipt identity and chain, and returns collected receipts
   even on failure. It sends nothing, is cancellable, and supports concurrent
   waits. Success means mined execution, **not** perps ledger credit or reorg
-  finality. After a partial EOA failure it waits only for recorded submissions,
-  not the missing or uncertain deposit.
+  finality. It reconciles uncertain hashes, but never sends a missing tail.
+  A partial EOA sequence returns `ErrCollateralTransactionIncomplete` after
+  resolving its recorded receipts, rather than reporting the whole sequence
+  complete.
 
 RPC chain identity is checked before submission. Gas estimation, EIP-1559
 signing and relayer serialization remain owned by CLOB. Its gasless engine may
@@ -95,8 +112,11 @@ a successful receipt does not check an ERC-20 boolean return value.
 
 See [`walletdeposit`](../examples/perps/walletdeposit/main.go). It defaults to
 unsigned preparation; mutation requires an explicit `-action`. For existing
-legacy deposit wallets, supply the funder explicitly after using CLOB's
-`DeriveCurrentDepositWallet(ctx)` or a known validated derivation. The constructor
+legacy deposit wallets, call CLOB's read-only
+`Client.DiscoverDepositWallet(ctx, owner)` (legacy-deployed-first public relayer
+probe), then supply the returned funder explicitly. Factory-current selection
+is a separate read-only RPC call, `SignerClient.DeriveCurrentDepositWallet(ctx)`.
+Neither discovery path deploys or changes an existing client. The constructor
 selects beacon derivation offline rather than discovering deployed legacy code.
 The lower-level `OwnerClient.Deposit` and `TransactionSender` remain available
 for externally managed wallets and hardware/external transaction signers.
@@ -162,14 +182,14 @@ rather than a single-item wrapper, is not counted as a missing capability.
 | Cancellation/risk | Numeric/client-ID cancellation, instrument/all cancel-all, bounded retries only for explicit `order_in_flight` items; auto-cancel arm/disarm; single/batch leverage and isolated-margin adjustment |
 | Managed execution | TWAP create/read/pause/resume/cancel; chase create/read/cancel, bounds, run/child identities and progress records |
 | Builders | Status, durable owner consent/revocation, approvals, batch attribution, exact fill fees, sparse receipts, cursor earnings and fixed-window/cutoff summary |
-| Collateral | Explicit derived-wallet approval/deposit, gasless batches, EOA gas estimation, deposit-wallet deployment and RPC receipt tracking; unsigned/external-sender boundary; owner withdrawal and exact-decimal internal transfer with reconciliation label |
+| Collateral | Explicit derived-wallet approval/deposit, gasless batches, verified external signers, EOA gas estimation, Safe/beacon-wallet deployment and partial-submission RPC receipt reconciliation; unsigned/external-sender boundary; owner withdrawal and exact-decimal internal transfer with reconciliation label |
 
 ## Remaining gaps and limitations
 
-- **Wallet lifecycle still has limits.** The managed adapter requires a local
-  transaction key and CLOB credentials because it reuses the CLOB engine;
-  external transaction signing remains caller-owned. Safe/proxy wallets must
-  already be deployed. Deposit-wallet deployment is explicit and beacon-only.
+- **Wallet lifecycle still has limits.** The managed adapter accepts external
+  signers but still requires CLOB L2 credentials through the CLOB constructor.
+  Proxy deployment is not supplied. Safe creation is explicit; deposit-wallet
+  creation is explicit and beacon-only.
   Constructors use offline derivation; deployed legacy-wallet discovery is
   separate. Funding, perps ledger-credit waits and reorg finality are caller-owned.
 - Timestamp-only histories cannot guarantee access to every record in a full

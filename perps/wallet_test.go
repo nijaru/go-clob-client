@@ -19,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/nijaru/go-clob-client/clob"
+	"github.com/nijaru/go-clob-client/signing"
 )
 
 type collateralRPC struct {
@@ -117,6 +118,7 @@ func newCollateralRPC(t *testing.T) (*collateralRPC, string) {
 					Status:      status,
 					TxHash:      hash,
 					BlockNumber: big.NewInt(1),
+					BlockHash:   common.HexToHash("0xbeef"),
 					Logs:        []*types.Log{},
 				}
 			}
@@ -137,7 +139,7 @@ func newCollateralRPC(t *testing.T) (*collateralRPC, string) {
 
 func collateralConfig(t *testing.T, rpc string, kind clob.SignatureType) CollateralWalletConfig {
 	t.Helper()
-	signer, err := NewOwnerSigner(fixturePrivateKey)
+	signer, err := signing.NewLocalSigner(fixturePrivateKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,17 +270,24 @@ func TestCollateralEOAPartialAndReceiptFailures(t *testing.T) {
 	tx, err := wallet.ApproveAndDeposit(t.Context(), big.NewInt(100000000), "")
 	var submissionErr *CollateralSubmissionError
 	if !errors.As(err, &submissionErr) || submissionErr.Operation != "deposit" || tx == nil ||
-		len(tx.Submissions) != 1 ||
-		tx.Submissions[0].ConfirmedReceipt == nil {
+		len(tx.Submissions) != 2 || tx.RequestedCalls != 2 ||
+		tx.Submissions[0].ConfirmedReceipt == nil ||
+		!tx.Submissions[1].BroadcastUncertain || tx.Submissions[1].TransactionHash == "" {
 		t.Fatalf("lost confirmed approval prefix: %+v %v", tx, err)
 	}
 	if f.sent.Load() != 2 {
 		t.Fatal("uncertain send retried")
 	}
-	// Wait only covers the recorded prefix, not the uncertain deposit.
-	if receipts, err := tx.Wait(t.Context()); err != nil || len(receipts) != 1 {
-		t.Fatalf("prefix wait: %v %v", receipts, err)
+	// The RPC accepted both calls before losing the second response. Reconcile
+	// the uncertain deposit by its signed hash, without another submission.
+	if receipts, err := tx.Wait(t.Context()); err != nil || len(receipts) != 2 {
+		t.Fatalf("uncertain submission wait: %v %v", receipts, err)
 	}
+	f.mu.Lock()
+	if tx.Submissions[1].TransactionHash != f.txs[1].Hash().Hex() {
+		t.Error("uncertain signed hash lost")
+	}
+	f.mu.Unlock()
 	f.revert.Store(true)
 	if receipts, err := tx.Wait(t.Context()); !errors.Is(err, ErrCollateralTransactionReverted) ||
 		len(receipts) != 1 ||
@@ -305,7 +314,11 @@ func TestCollateralEOAApprovalMustConfirmBeforeDeposit(t *testing.T) {
 			f.pending.Store(pending)
 			f.revert.Store(!pending)
 			wallet := mustCollateralWallet(t, collateralConfig(t, rpc, clob.SignatureTypeEOA))
-			ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+			timeout := 2 * time.Second
+			if pending {
+				timeout = 50 * time.Millisecond
+			}
+			ctx, cancel := context.WithTimeout(t.Context(), timeout)
 			defer cancel()
 			tx, err := wallet.ApproveAndDeposit(ctx, big.NewInt(1), "")
 			want := ErrCollateralTransactionReverted
@@ -315,6 +328,19 @@ func TestCollateralEOAApprovalMustConfirmBeforeDeposit(t *testing.T) {
 			if !errors.Is(err, want) || tx == nil || len(tx.Submissions) != 1 ||
 				f.sent.Load() != 1 {
 				t.Fatalf("deposit sent before successful approval receipt: %+v %v", tx, err)
+			}
+			if pending {
+				// Approval eventually mines, but the missing deposit is not complete.
+				f.pending.Store(false)
+				receipts, err := tx.Wait(t.Context())
+				if !errors.Is(err, ErrCollateralTransactionIncomplete) || len(receipts) != 1 ||
+					f.sent.Load() != 1 {
+					t.Fatalf(
+						"missing deposit reported complete or resubmitted: %v %v",
+						receipts,
+						err,
+					)
+				}
 			}
 		})
 	}
@@ -368,7 +394,8 @@ func TestCollateralGaslessAndDeployment(t *testing.T) {
 			registry.Store(true)
 			relay := httptest.NewServer(
 				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if r.Header.Get("POLY_BUILDER_API_KEY") != "builder" {
+					if r.URL.Path != "/deployed" &&
+						r.Header.Get("POLY_BUILDER_API_KEY") != "builder" {
 						t.Error("relayer auth is not builder auth")
 					}
 					switch r.URL.Path {
@@ -411,6 +438,14 @@ func TestCollateralGaslessAndDeployment(t *testing.T) {
 			)
 			t.Cleanup(relay.Close)
 			cfg := collateralConfig(t, rpc, kind)
+			external, local := externalFixtureSigner(t)
+			var source signing.Signer = external
+			if kind == clob.SignatureTypePolyGnosisSafe {
+				source = externalMessageSigner{external, local.SignMessage}
+			}
+			cfg.Owner.Signer = source
+			cfg.Transactions.PrivateKey = ""
+			cfg.Transactions.Signer = source
 			cfg.Transactions.RelayerHost = relay.URL
 			wallet := mustCollateralWallet(t, cfg)
 			f.code.Store(false)
@@ -472,8 +507,22 @@ func TestCollateralGaslessAndDeployment(t *testing.T) {
 				if _, err := h.Wait(t.Context()); err != nil {
 					t.Fatal(err)
 				}
-			} else if _, err := wallet.DeployDepositWallet(t.Context(), ""); err == nil {
-				t.Fatal("safe deploy unsupported, must not infer success")
+			} else {
+				if _, err := wallet.DeployDepositWallet(t.Context(), ""); err == nil {
+					t.Fatal("deposit creation must not deploy Safe")
+				}
+				h, err := wallet.DeploySafeWallet(t.Context(), "explicit Safe deploy")
+				if err != nil || h.Submissions[0].TransactionID != "tx-test" {
+					t.Fatalf("Safe deploy: %v %v", h, err)
+				}
+				payloadMu.Lock()
+				if !strings.Contains(payload, "safe-create") || !strings.Contains(payload, "\"signature\"") {
+					t.Errorf("Safe deployment wire: %s", payload)
+				}
+				payloadMu.Unlock()
+				if receipts, err := h.Wait(t.Context()); err != nil || len(receipts) != 1 {
+					t.Fatalf("Safe deployment receipt: %v %v", receipts, err)
+				}
 			}
 		})
 	}

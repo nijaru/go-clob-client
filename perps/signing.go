@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 
 	"github.com/nijaru/go-clob-client/internal/polyauth"
+	"github.com/nijaru/go-clob-client/signing"
 )
 
 func perpsTypedData(
@@ -83,7 +84,7 @@ func randomPerpsSalt() (uint64, error) {
 
 func signPerpsOperation(
 	ctx context.Context,
-	signer *polyauth.Signer,
+	signer *signing.Wallet,
 	chainID int64,
 	op []any,
 	salt uint64,
@@ -98,7 +99,7 @@ func signPerpsOperation(
 
 func makePerpsSignedCommand(
 	ctx context.Context,
-	signer *polyauth.Signer,
+	signer *signing.Wallet,
 	chainID int64,
 	op []any,
 	bodyOp map[string]any,

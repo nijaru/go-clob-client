@@ -11,8 +11,10 @@ import (
 )
 
 // CollateralWalletConfig binds the perps owner to CLOB's existing transaction
-// engine. Transactions requires a local key and CLOB credentials; smart wallets
-// additionally require BuilderAuth for the relayer. Neither is perps auth.
+// engine. Transactions accepts a signing.Signer or local PrivateKey, and still
+// requires CLOB credentials; smart wallets also require BuilderAuth. EOA sends
+// require signing.TransactionSigner, and Safe/proxy sends signing.MessageSigner.
+// None of these credentials is perps auth.
 // Owner.Wallet may be omitted to use the derived transaction wallet.
 // A missing Poly1271 funder selects the current beacon derivation offline;
 // use clob.SignerClient.DeriveCurrentDepositWallet explicitly for legacy factories.
@@ -23,7 +25,7 @@ type CollateralWalletConfig struct {
 
 // CollateralWallet owns no connections or goroutines. Construction performs no
 // RPC, deployment, approval or submission. OwnerClient remains independent of
-// this optional local-key transaction adapter.
+// this optional transaction adapter.
 type CollateralWallet struct {
 	*OwnerClient
 	transactions *clob.AuthenticatedClient
@@ -32,6 +34,13 @@ type CollateralWallet struct {
 }
 
 func NewCollateralWallet(config CollateralWalletConfig) (*CollateralWallet, error) {
+	owner, err := NewOwner(config.Owner)
+	if err != nil {
+		return nil, err
+	}
+	if owner.token == (common.Address{}) || owner.deposit == (common.Address{}) {
+		return nil, fmt.Errorf("perps: collateral token and deposit contract required")
+	}
 	cfg := config.Transactions
 	if cfg.ChainID == 0 {
 		cfg.ChainID = clob.PolygonChainID
@@ -42,7 +51,7 @@ func NewCollateralWallet(config CollateralWalletConfig) (*CollateralWallet, erro
 	if cfg.RPCURL == "" {
 		return nil, fmt.Errorf("perps: explicit collateral RPC URL required")
 	}
-	// Derivation and local-key identity are owned by clob, not duplicated here.
+	// Derivation and transaction-signing identity are owned by clob.
 	if cfg.SignatureType == clob.SignatureTypePoly1271 && cfg.FunderAddress == "" {
 		probe := cfg
 		probe.SignatureType = clob.SignatureTypeEOA
@@ -63,8 +72,7 @@ func NewCollateralWallet(config CollateralWalletConfig) (*CollateralWallet, erro
 	if err != nil {
 		return nil, err
 	}
-	if config.Owner.Signer == nil ||
-		config.Owner.Signer.Address() != common.HexToAddress(client.Address()) {
+	if owner.signer.Address() != common.HexToAddress(client.Address()) {
 		return nil, fmt.Errorf("perps: transaction signer must match perps owner")
 	}
 	wallet := client.WalletAddress()
@@ -75,9 +83,9 @@ func NewCollateralWallet(config CollateralWalletConfig) (*CollateralWallet, erro
 	case clob.SignatureTypePolyGnosisSafe, clob.SignatureTypePolyProxy:
 		var derived common.Address
 		if cfg.SignatureType == clob.SignatureTypePolyGnosisSafe {
-			derived, err = clob.DeriveSafeWallet(config.Owner.Signer.Address(), cfg.ChainID)
+			derived, err = clob.DeriveSafeWallet(owner.signer.Address(), cfg.ChainID)
 		} else {
-			derived, err = clob.DeriveProxyWallet(config.Owner.Signer.Address(), cfg.ChainID)
+			derived, err = clob.DeriveProxyWallet(owner.signer.Address(), cfg.ChainID)
 		}
 		if err != nil {
 			return nil, err
@@ -95,17 +103,10 @@ func NewCollateralWallet(config CollateralWalletConfig) (*CollateralWallet, erro
 		}
 	}
 	if config.Owner.Wallet == "" {
-		config.Owner.Wallet = wallet.Hex()
-	}
-	owner, err := NewOwner(config.Owner)
-	if err != nil {
-		return nil, err
+		owner.wallet = wallet
 	}
 	if owner.wallet != wallet {
 		return nil, fmt.Errorf("perps: withdrawal and transaction wallet differ")
-	}
-	if owner.token == (common.Address{}) || owner.deposit == (common.Address{}) {
-		return nil, fmt.Errorf("perps: collateral token and deposit contract required")
 	}
 	return &CollateralWallet{
 		OwnerClient:  owner,
@@ -165,7 +166,7 @@ func (w *CollateralWallet) Readiness(ctx context.Context) (WalletReadiness, erro
 
 // DeployDepositWallet explicitly submits creation of the current beacon wallet.
 // It does not wait or infer deployment from relayer registry readiness.
-// Safe/proxy deployment is not supplied by the existing CLOB transaction engine.
+// Safe creation is separate; proxy deployment is not supplied.
 func (w *CollateralWallet) DeployDepositWallet(
 	ctx context.Context,
 	metadata string,
@@ -189,15 +190,40 @@ func (w *CollateralWallet) DeployDepositWallet(
 	if err != nil {
 		return nil, err
 	}
+	return w.deploymentTransaction(h), nil
+}
+
+// DeploySafeWallet explicitly submits creation of the deterministic owner Safe.
+// Wait on the returned transaction for independent RPC receipt verification.
+func (w *CollateralWallet) DeploySafeWallet(
+	ctx context.Context,
+	metadata string,
+) (*CollateralTransaction, error) {
+	if w.walletType != clob.SignatureTypePolyGnosisSafe {
+		return nil, fmt.Errorf("perps: deployment requires a Safe wallet")
+	}
+	ec, err := w.dial(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ec.Close()
+	h, err := w.transactions.DeploySafeWallet(ctx, metadata)
+	if err != nil {
+		return nil, err
+	}
+	return w.deploymentTransaction(h), nil
+}
+
+func (w *CollateralWallet) deploymentTransaction(
+	h *clob.GaslessTransactionHandle,
+) *CollateralTransaction {
 	return &CollateralTransaction{
-		wallet: w,
-		Submissions: []CollateralSubmission{
-			{
-				Operation:       "deploy",
-				TransactionID:   h.TransactionID,
-				TransactionHash: h.TransactionHash,
-				relay:           h,
-			},
-		},
-	}, nil
+		wallet:         w,
+		RequestedCalls: 1,
+		relay:          h,
+		Submissions: []CollateralSubmission{{
+			Operation: "deploy", TransactionID: h.TransactionID,
+			TransactionHash: h.TransactionHash,
+		}},
+	}
 }

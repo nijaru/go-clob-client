@@ -15,43 +15,22 @@ import (
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"github.com/nijaru/go-clob-client/internal/polyauth"
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
+	"github.com/nijaru/go-clob-client/signing"
 )
 
-// OwnerSigner supports local keys, hardware wallets, and external signers.
-// SignTypedData must return a hex Ethereum signature with recovery byte 27/28.
-type OwnerSigner interface {
-	Address() common.Address
-	SignTypedData(context.Context, apitypes.TypedData) (string, error)
-}
+// ownerSigner converts verified signatures to the perps wire format. The public
+// boundary is signing.Signer; the wallet pins identity and verifies every result.
+type ownerSigner struct{ *signing.Wallet }
 
-type localOwnerSigner struct{ signer *polyauth.Signer }
-
-func (s localOwnerSigner) Address() common.Address { return s.signer.Address() }
-
-func (s localOwnerSigner) SignTypedData(
-	ctx context.Context,
-	data apitypes.TypedData,
-) (string, error) {
-	if err := ctx.Err(); err != nil {
-		return "", err
-	}
-	return polyauth.SignTypedData(ctx, s.signer, data)
-}
-
-// NewOwnerSigner adapts a local private key. Never log or persist the key.
-func NewOwnerSigner(privateKey string) (OwnerSigner, error) {
-	s, err := polyauth.ParsePrivateKey(privateKey)
-	if err != nil {
-		return nil, err
-	}
-	return localOwnerSigner{s}, nil
+func (s ownerSigner) SignTypedData(ctx context.Context, data apitypes.TypedData) (string, error) {
+	return polyauth.SignTypedData(ctx, s.Wallet, data)
 }
 
 // OwnerConfig explicitly selects the wallet and collateral contracts; no wallet
 // derivation or transaction broadcasting is hidden in this client.
 type OwnerConfig struct {
 	Config
-	Signer          OwnerSigner
+	Signer          signing.Signer
 	Wallet          string
 	CollateralToken string
 	DepositContract string
@@ -61,7 +40,7 @@ type OwnerConfig struct {
 // Submissions are attempted once. Reconcile uncertain outcomes before retrying.
 type OwnerClient struct {
 	*Client
-	signer                 OwnerSigner
+	signer                 ownerSigner
 	chainID                int64
 	wallet, token, deposit common.Address
 	config                 Config
@@ -69,11 +48,12 @@ type OwnerClient struct {
 }
 
 func NewOwner(config OwnerConfig) (*OwnerClient, error) {
-	if config.Signer == nil || config.Signer.Address() == (common.Address{}) {
-		return nil, fmt.Errorf("perps: owner signer is required")
+	signer, err := signing.NewWallet(config.Signer)
+	if err != nil {
+		return nil, fmt.Errorf("perps: owner signer: %w", err)
 	}
 	if config.Wallet == "" {
-		config.Wallet = config.Signer.Address().Hex()
+		config.Wallet = signer.Address().Hex()
 	}
 	for name, address := range map[string]string{"wallet": config.Wallet, "collateral token": config.CollateralToken, "deposit contract": config.DepositContract} {
 		if address == "" && name != "wallet" {
@@ -86,7 +66,7 @@ func NewOwner(config OwnerConfig) (*OwnerClient, error) {
 	cfg := config.Config.normalized()
 	return &OwnerClient{
 		Client:  New(cfg),
-		signer:  config.Signer,
+		signer:  ownerSigner{signer},
 		chainID: cfg.ChainID,
 		wallet:  common.HexToAddress(config.Wallet),
 		token:   common.HexToAddress(config.CollateralToken),
@@ -165,20 +145,21 @@ func (c *AuthenticatedClient) GetCredentials(ctx context.Context) (*CredentialIn
 	return &out, nil
 }
 
-// Resume validates key identity, owner, and expiration against the server.
+// Resume validates proxy identity, owner, and expiration against the server.
+// delegatedSigner may be nil to use credentials.PrivateKey. The resumed client
+// inherits the owner's endpoint and chain configuration.
 func (c *OwnerClient) Resume(
 	ctx context.Context,
 	credentials PerpsCredentials,
+	delegatedSigner signing.Signer,
 ) (*AuthenticatedClient, error) {
-	client, err := NewAuthenticated(AuthenticatedConfig{Config: c.config, Credentials: credentials})
+	client, err := NewAuthenticated(AuthenticatedConfig{
+		Config: c.config, Credentials: credentials, DelegatedSigner: delegatedSigner,
+	})
 	if err != nil {
 		return nil, err
 	}
-	signer, err := client.delegatedSigner()
-	if err != nil {
-		return nil, err
-	}
-	if signer == nil {
+	if client.signer == nil {
 		return nil, ErrPerpsSigningKeyRequired
 	}
 	info, err := client.GetCredentials(ctx)
@@ -190,7 +171,8 @@ func (c *OwnerClient) Resume(
 		return nil, fmt.Errorf("perps: credentials belong to a different owner")
 	}
 	for _, key := range info.Keys {
-		if common.IsHexAddress(key.Proxy) && common.HexToAddress(key.Proxy) == signer.Address() {
+		if common.IsHexAddress(key.Proxy) &&
+			common.HexToAddress(key.Proxy) == common.HexToAddress(client.credentials.Proxy) {
 			if key.ExpiresAt <= time.Now().UnixMilli() {
 				return nil, fmt.Errorf("perps: credentials expired")
 			}
@@ -284,7 +266,7 @@ func (c *OwnerClient) CreateCredentials(
 	if out.Secret == "" {
 		return credentials, fmt.Errorf("perps: credential response missing secret")
 	}
-	client, err := c.Resume(ctx, credentials)
+	client, err := c.Resume(ctx, credentials, nil)
 	if err != nil {
 		return credentials, err
 	}
