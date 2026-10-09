@@ -2,22 +2,18 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/nijaru/go-clob-client/clob.svg)](https://pkg.go.dev/github.com/nijaru/go-clob-client/clob)
 [![CI](https://github.com/nijaru/go-clob-client/actions/workflows/ci.yml/badge.svg)](https://github.com/nijaru/go-clob-client/actions/workflows/ci.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/nijaru/go-clob-client)](https://goreportcard.com/report/github.com/nijaru/go-clob-client)
+
+Go SDK for [Polymarket](https://polymarket.com) trading, discovery, portfolios,
+perpetuals and live feeds. It targets the stable capability union of the official
+[Rust](https://github.com/Polymarket/rs-clob-client-v2),
+[TypeScript](https://github.com/Polymarket/ts-sdk) and
+[Python](https://github.com/Polymarket/py-sdk) SDKs through protocol-oriented Go
+packages, not a shared client façade.
 
 > [!WARNING]
-> Unofficial, community-maintained SDK. Not extensively tested in production trading environments. Use at your own risk.
-
-> [!NOTE]
-> This project targets the stable capabilities of the official
-> [Rust](https://github.com/Polymarket/rs-clob-client-v2), [TypeScript](https://github.com/Polymarket/ts-sdk),
-> and [Python](https://github.com/Polymarket/py-sdk) SDKs. Catch-up is ongoing; current capabilities
-> and limitations are described below. Trading and wallet flows are implemented against official
-> fixtures, not production use — validate with tiny sizes before risking funds.
-
-Go SDK for the [Polymarket](https://polymarket.com) CLOB and adjacent APIs. Tracks stable capability
-parity with the official [Rust V2](https://github.com/Polymarket/rs-clob-client-v2),
-[TypeScript](https://github.com/Polymarket/ts-sdk), and [Python](https://github.com/Polymarket/py-sdk)
-SDKs while keeping an idiomatic Go API.
+> Unofficial SDK. Trading, relaying and wallet operations have fixture-backed
+> verification, not production-account validation. Do not interpret passing tests
+> or endpoint coverage as proof of live trading compatibility.
 
 ## Install
 
@@ -27,353 +23,255 @@ Requires **Go 1.27+**.
 go get github.com/nijaru/go-clob-client@latest
 ```
 
-The module exposes several focused packages:
+| Package | Purpose |
+| --- | --- |
+| [`clob`](https://pkg.go.dev/github.com/nijaru/go-clob-client/clob) | Event-market trading, account management, RFQ, wallets and signing |
+| [`data`](https://pkg.go.dev/github.com/nijaru/go-clob-client/data) | Data API v2 portfolios, activity, analytics, leaderboards and indexed approvals |
+| [`data/legacy`](https://pkg.go.dev/github.com/nijaru/go-clob-client/data/legacy) | Explicitly isolated, supported v1 Data contracts |
+| [`gamma`](https://pkg.go.dev/github.com/nijaru/go-clob-client/gamma) | Markets, events, tags, comments, profiles, sports metadata and search |
+| [`bridge`](https://pkg.go.dev/github.com/nijaru/go-clob-client/bridge) | Cross-chain assets, quotes, transfer status and routing-address registration |
+| [`perps`](perps/README.md) | Perpetuals markets, credentials, accounts, trading, execution and collateral |
+| [`realtime`](https://pkg.go.dev/github.com/nijaru/go-clob-client/realtime) | Authenticated Polybolt crypto/equity spot and 60-second TWAP streams |
+| [`sports`](sports/README.md) | Public live game-result streams |
 
-- **`clob`** — trading, orderbooks, prices, account management, websockets, heartbeats, wallet operations
-- **`data`** — Data API v2: positions, trades, activity, combo portfolios, analytics, and leaderboards
-- **`data/legacy`** — explicit v1 Data API contracts retained for Rust SDK coverage
-- **`gamma`** — markets, events, tags, sports, comments, profiles, and clarifications
-- **`bridge`** — cross-chain assets, quotes, transfer status, and explicit routing-address registration
-- **`perps`** — public perpetuals market data and authenticated account/session access
+Constructors do not start heartbeats, deploy wallets, grant approvals or submit
+transactions. Network operations take contexts; streams and transaction handles
+make lifetime and confirmation ownership explicit. These are pre-1.0 APIs: this
+migration changes public interfaces without compatibility shims or a release.
 
-## Quickstart
-
-### Read-Only
+## Public market data
 
 ```go
 import "github.com/nijaru/go-clob-client/clob"
 
 client, err := clob.NewClient(clob.Config{})
 if err != nil {
-	log.Fatal(err)
+    return err
 }
-
-book, err := client.GetOrderBook(ctx, "<token-id>")
+book, err := client.GetOrderBook(ctx, tokenID)
 if err != nil {
-	log.Fatal(err)
+    return err
 }
-
-fmt.Printf("Best bid: %s\n", book.Bids[len(book.Bids)-1].Price)
+if len(book.Bids) > 0 {
+    fmt.Println(book.Bids[len(book.Bids)-1].Price)
+}
 ```
 
-### Authenticated Trading
+A read-only example needs no key:
 
-`NewAuthenticatedClient` starts a background **heartbeat loop** to maintain order liveness. Always call `Close` or `Shutdown` when done.
+```bash
+go run ./examples/clob/read_only
+```
+
+## Event-market trading
+
+CLOB has public, signing and authenticated views. API-key bootstrap requires L1
+Ethereum signing; posting and account operations use L2 credentials. Builder and
+relayer credentials are separate from CLOB credentials.
 
 ```go
 client, err := clob.NewAuthenticatedClient(clob.Config{
-	PrivateKey: os.Getenv("POLYMARKET_PRIVATE_KEY"),
-	Credentials: &clob.Credentials{
-		Key:        os.Getenv("POLYMARKET_API_KEY"),
-		Secret:     os.Getenv("POLYMARKET_API_SECRET"),
-		Passphrase: os.Getenv("POLYMARKET_API_PASSPHRASE"),
-	},
+    PrivateKey: os.Getenv("POLYMARKET_PRIVATE_KEY"),
+    Credentials: &clob.Credentials{
+        Key:        os.Getenv("POLYMARKET_API_KEY"),
+        Secret:     os.Getenv("POLYMARKET_API_SECRET"),
+        Passphrase: os.Getenv("POLYMARKET_API_PASSPHRASE"),
+    },
 })
 if err != nil {
-	log.Fatal(err)
+    return err
 }
-defer client.Close()
-
+// This call submits an order. Construction above does not.
 resp, err := client.CreateAndPostOrder(ctx, clob.OrderArgs{
-	TokenID: os.Getenv("POLYMARKET_TOKEN_ID"),
-	Price:   udecimal.MustParse("0.45"),
-	Size:    udecimal.MustParse("5"),
-	Side:    clob.SideBuy,
+    TokenID: tokenID,
+    Price:   udecimal.MustParse("0.45"),
+    Size:    udecimal.MustParse("5"),
+    Side:    clob.SideBuy,
 }, nil, clob.OrderTypeGTC, false)
 ```
 
-For explicit control over immediate fills, pass the accepted response to
-`client.WaitForOrderFillSettlement(ctx, *resp, clob.OrderSettlementOptions{})`.
-It waits for confirmed or failed fill outcomes and returns typed timeout or all-fills-failed errors.
+If order liveness needs automatic heartbeats, explicitly call
+`StartHeartbeats(ctx)`. `StopHeartbeats(ctx)` joins the loop and permits a restart.
+`Close`/`Shutdown` permanently close **only the heartbeat lifecycle**: they do not
+revoke credentials or disable foreground requests. `Deauthenticate(ctx)` joins
+that lifecycle and returns a public view; existing Go references are not consumed.
+Discard authenticated references when their ownership ends.
 
-### Market Orders
+For confirmed fills, use `WaitForOrderFillSettlement` with the accepted response.
+Cancellation of a wait cannot undo an order or transaction already submitted.
+After an uncertain submission, reconcile its identities before retrying.
 
-Market orders use `Amount` as USDC notional for BUY and share count for SELL.
-Set `MaxPrice` for BUY or `MinPrice` for SELL to protect the execution price without reading the
-orderbook. The bound must be positive and aligned to the market's tick grid. An explicit `Price`
-can tighten the bound but cannot weaken it. BUY orders whose rounded amounts could reach the next
-higher ask on the finest supported grid are rejected; increase the amount or change the cap.
+### Price-protected market orders
+
+`Amount` means USDC notional for BUY and shares for SELL. `MaxPrice` protects BUY;
+`MinPrice` protects SELL. Bounds must be positive and tick-aligned. An explicit
+`Price` may tighten, never weaken, the bound. No book-derived protection bound is
+invented. Protected BUY shares round down while preserving six-decimal USDC
+notional; unsafe final wire ratios are rejected.
 
 ```go
-// Sell 25 shares at market
-resp, err := client.CreateAndPostMarketOrder(ctx, clob.MarketOrderArgs{
-	TokenID: os.Getenv("POLYMARKET_TOKEN_ID"),
-	Amount:  udecimal.MustParse("25"),
-	Side:    clob.SideSell,
-}, nil, clob.OrderTypeFOK)
-
-// Buy $10 worth of shares at market
-resp, err := client.CreateAndPostMarketOrder(ctx, clob.MarketOrderArgs{
-	TokenID: os.Getenv("POLYMARKET_TOKEN_ID"),
-	Amount:  udecimal.MustParse("10"),
-	Side:    clob.SideBuy,
-}, nil, clob.OrderTypeFOK)
-
-// Buy at no more than $0.50 per share, spending at most $10.50 including fees.
-maxSpend := udecimal.MustParse("10.50")
 maxPrice := udecimal.MustParse("0.50")
+maxSpend := udecimal.MustParse("10.50")
 resp, err := client.CreateAndPostMarketOrder(ctx, clob.MarketOrderArgs{
-	TokenID:  os.Getenv("POLYMARKET_TOKEN_ID"),
-	Amount:   udecimal.MustParse("10"),
-	Side:     clob.SideBuy,
-	MaxSpend: &maxSpend,
-	MaxPrice: &maxPrice,
+    TokenID:  tokenID,
+    Amount:   udecimal.MustParse("10"),
+    Side:     clob.SideBuy,
+    MaxPrice: &maxPrice,
+    MaxSpend: &maxSpend, // includes applicable platform and builder fees
 }, nil, clob.OrderTypeFOK)
 ```
 
-### Asset routing and Exchange V3
+Orders select exactly one of `TokenID` (CTF outcome) and `PositionID` (native V2
+position). Native positions use Exchange V3 and their own metadata/book/allowance
+routing. Token orders follow `/version`: V1 uses legacy nonce/taker/fee fields and
+its own signing domain; V2/V3 use timestamp, metadata and builder fields. Version
+mismatch and eligible stale metadata rebuild once without overriding caller ticks.
+The wire asset field is `tokenId` for both identifier kinds. Legacy fee-cache
+setters do not override V2/V3 market fee curves.
 
-Orders take exactly one asset identifier: `TokenID` for CTF token outcomes, `PositionID` for
-Polymarket V2 position-backed outcomes. `PositionID` always signs against Exchange V3.
-`TokenID` signs against the exchange the CLOB server's current protocol version selects
-(`GET /version` reporting 3 → Exchange V3 with domain version "3"; older servers → the CTF
-Exchange or its neg-risk variant with version "2"). The version is cached per client and
-refreshed automatically after an `order_version_mismatch` rejection; `BuildAndPostOrder` and
-`BuildAndPostMarketOrder` rebuild and re-sign once when the version changes. The wire field stays
-`tokenId` for both identifier kinds.
+### RFQ
+
+Legacy RFQ REST operations and combo requester/quoter flows are distinct. Combo
+request/accept uses `BuilderAuth` and the builder gateway; no quotes and maker
+declines are ordinary results. `WaitForComboFill` treats FILLED/CONFIRMED as settled
+only with a valid transaction hash.
+
+`OpenComboRFQSession` owns a quoter WebSocket session with typed events, signed
+`Quote`, acknowledged `CancelQuote`, and last-look `RespondToConfirmation`.
+Session-key signers cannot use combo RFQ. Reconnect is explicit; ambiguous command
+cancellation closes the socket rather than miscorrelating a late acknowledgement.
+See the [local quoter example](examples/clob/combo_rfq_quoter/main.go).
+
+## Wallet operations
+
+| Signature type | Wallet model |
+| --- | --- |
+| `SignatureTypeEOA` | Direct EOA |
+| `SignatureTypePolyProxy` | Polymarket proxy |
+| `SignatureTypePolyGnosisSafe` | Polymarket Safe |
+| `SignatureTypePoly1271` | Owner/session-signed deposit wallet |
+
+Wallet identity is not interchangeable with signer identity. Funder derivation and
+owner/session checks depend on the chosen scheme and supported chain. Constructors
+use explicit/offline identity; remote discovery and readiness are separate calls.
+
+`WalletOperations` resolves market protocol and prepares/routes split, merge and
+redeem operations for legacy CTF, native V2 positions and combos. Token approvals,
+transfers, trading approval snapshots, indexed approvals and collateral-return
+plans remain explicit. A collateral-return plan may cover only one chunk: confirm
+it before obtaining the next plan.
+
+Smart-wallet calls relay one atomic batch. EOA batches are sequential and
+**not atomic**; failure can leave approvals or a confirmed prefix behind. Submission
+returns handles. Call `Wait(ctx)` or `WaitReceipt(ctx)` explicitly; relayer registry
+visibility, mined receipts, CLOB indexing and perps ledger credit are different
+states. Deployment is not approval, funding or order readiness.
+
+Configure relayer authentication separately:
 
 ```go
-// Buy 10 shares of a position-backed outcome
-resp, err := client.CreateAndPostOrder(ctx, clob.OrderArgs{
-	PositionID: "4806087868183709353058267124167238610126851596433849971812422822",
-	Price:      udecimal.MustParse("0.50"),
-	Size:       udecimal.MustParse("10"),
-	Side:       clob.SideBuy,
-}, nil, clob.OrderTypeGTC, false)
+relayCtx, err := clob.WithRelayerAuth(ctx, clob.RelayerAuthConfig{
+    APIKey: &clob.RelayerAPIKey{
+        Key:     os.Getenv("RELAYER_API_KEY"),
+        Address: relayerKeyOwner,
+    },
+})
+if err != nil { return err }
+handle, err := client.PrepareGaslessTransaction(relayCtx, calls, "merge")
+if err != nil { return err }
+outcome, err := handle.Wait(relayCtx)
 ```
 
-### Iterators
+Alternatively select builder authentication. Explicit relayer selection replaces,
+never mixes with, the client's builder scheme. Use the selected context for both
+submission and waits. Retry is limited to evidenced relayer rejections, not an
+arbitrary transport failure after a possible broadcast.
 
-List endpoints expose both a slice and a range-over-function iterator:
+Deposit-wallet session keys have a 4,315-hour authorization lifetime. Listing,
+authorization, readiness and revocation are separate operations. Authorization
+waits for confirmation and matching registry scopes; revocation may return on
+registry removal before chain confirmation. Authorization requires builder auth;
+revocation supports builder or Relayer API-key auth.
 
-```go
-for order, err := range client.IterOpenOrders(ctx, clob.OpenOrderParams{}) {
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("Order ID: %s\n", order.ID)
-}
-```
-
-### Data API
+## Data and discovery
 
 ```go
 import "github.com/nijaru/go-clob-client/data"
 
 client, err := data.NewClient(data.Config{})
-if err != nil {
-	log.Fatal(err)
-}
-
+if err != nil { return err }
 page, err := client.GetPositions(ctx, data.PositionsParams{
-	User: "0x1234...",
-	Page: data.PageParams{Limit: 100},
+    User: wallet,
+    Page: data.PageParams{Limit: 100},
 })
-if err != nil {
-	log.Fatal(err)
-}
+if err != nil { return err }
 for _, position := range page.Items {
-	fmt.Println(position.AssetID, position.CurrentSize, position.CurrentValue)
+    fmt.Println(position.AssetID, position.CurrentSize, position.CurrentValue)
 }
 ```
 
-## Client Tiers
+Data v2 exposes server `HasMore`/`NextCursor`; row count is not completion. Iterators
+follow opaque cursors, detect cycles and stop without prefetch after cancellation
+or an early break. `data/legacy` is a separate import, never an automatic fallback.
+Financial wire decimals retain their digits; accounting ZIPs stream to a
+caller-owned writer. Unknown wallet activity keeps its raw payload.
 
-The SDK enforces authentication through a three-tier hierarchy:
+Gamma provides offset and query-bound keyset discovery. Comment offsets count
+roots, not replies. Offset-only comments cap at 200 and search at 100 pages;
+iterators report incomplete enumeration instead of silently claiming exhaustion.
+See [Gamma package documentation](https://pkg.go.dev/github.com/nijaru/go-clob-client/gamma)
+for filter/keyset eligibility and optional-field limitations.
 
-| Tier                  | Constructor              | Auth Required           | Capabilities                                  |
-| --------------------- | ------------------------ | ----------------------- | --------------------------------------------- |
-| `Client`              | `NewClient`              | None                    | Public market data, orderbooks, prices        |
-| `SignerClient`        | `NewSignerClient`        | Private key             | Order building & signing, API key management  |
-| `AuthenticatedClient` | `NewAuthenticatedClient` | Private key + API creds | Order posting, account management, heartbeats, gasless relayer |
+Bridge uses `NewClient`, full uint64 chain IDs, canonical uint256 base-unit amounts
+and lossless USD estimates. `CreateDepositAddress`/`CreateWithdrawalAddress`
+register routing addresses: neither signs or transfers funds. The bridge example
+performs only public reads unless `-deposit-wallet` explicitly enables registration.
 
-Upgrade incrementally:
+## Perpetuals and live feeds
 
-```go
-base, _ := clob.NewClient(clob.Config{})
-signer, _ := base.AsSigner(privateKey, clob.SignatureTypeEOA, "")
-authed, _ := signer.AsAuthenticated(creds, nil)
-```
+Perps has separate credentials, REST/WebSocket protocols and owner/session signing.
+It supports credential creation/resumption/revocation, account/history reads,
+notifications/ADL, GTD, TP/SL and trailing exits, cancellation/risk, TWAP/chase,
+builders, internal transfers and explicit collateral workflows. See
+[the perps guide](perps/README.md) for signing, reconciliation and wallet limits.
 
-## Wallet Types
+`NewMarketStream(ctx)` pools public filters with independently cancellable handles.
+Account sessions own their handshake, heartbeat and reconnect. Overflow is an
+explicit error, not silent update loss. Book reconstruction and resync backfill
+remain caller-owned. Timestamp-only histories report nonprogress when exhaustive
+retrieval cannot be proven.
 
-| Value | Constant                      | Wallet type                              |
-| ----- | ----------------------------- | ---------------------------------------- |
-| `0`   | `SignatureTypeEOA`            | MetaMask, hardware wallets (direct key)  |
-| `1`   | `SignatureTypePolyProxy`      | Email / Magic wallet (delegated signing) |
-| `2`   | `SignatureTypePolyGnosisSafe` | Browser proxy wallet                     |
-| `3`   | `SignatureTypePoly1271`       | Smart-contract / deposit wallet          |
+Legacy CLOB WebSocket/RTDS feeds remain available. `realtime` separately implements
+Polybolt's authenticated crypto/equity spot and fixed 60-second TWAP feeds with
+pooled filters, acknowledgements, snapshots and provider provenance. Requested
+provider and actual source are distinct. `sports` is a public all-games feed, not
+a server-filtered subscription protocol. Reconnect does not imply replay or gap
+recovery. Stream examples default to local fixtures.
 
-Set `FunderAddress` explicitly for proxy/Magic wallets where the signing key differs from the on-chain funder. For EOA wallets it defaults to the signing key address.
+## Examples and checks
 
-### Gasless relayer
-
-Proxy, Safe, and deposit (Poly1271) wallets can only act through Polymarket's relayer, which submits on-chain calls as meta-transactions so the caller pays no gas. `AuthenticatedClient` exposes the full lifecycle for these wallet types; EOA wallets broadcast directly via go-ethereum (see CTF operations).
-
-```go
-// Submit a batch of calls through the relayer and wait for confirmation.
-handle, err := client.PrepareGaslessTransaction(ctx, calls, "merge")
-if err != nil { return err }
-outcome, err := handle.Wait(ctx)
-// outcome.TransactionHash is the on-chain tx hash once mined.
-```
-
-`PrepareGaslessTransaction` handles nonce fetch, per-scheme signing, payload assembly, and submit with retry on transient failures (rate limit, wallet contention, stale nonce). `DeployDepositWallet` submits the unsigned wallet deployment; `IsWalletDeployed` checks on-chain deployment. The relayer host defaults to `https://relayer-v2.polymarket.com` (override via `Config.RelayerHost`).
-
-For the common CTF operations, gasless convenience methods build the calldata and route it through the relayer — the non-EOA equivalents of the on-chain `SignerClient` methods, sharing identical calldata and contract targets:
-
-```go
-// Merge a complementary YES/NO pair back into collateral, gaslessly.
-handle, err := client.MergePositionsGasless(ctx, clob.MergeBinary(usdc, conditionID, amount), "merge")
-// Also: SplitPositionGasless, RedeemPositionsGasless, RedeemNegRiskGasless.
-outcome, err := handle.Wait(ctx)
-```
-
-Token wallet operations use the same explicit split: `SignerClient.ApproveERC20`,
-`SignerClient.ApproveERC1155ForAll`, and `SignerClient.TransferERC20` broadcast directly from an
-EOA; the corresponding `AuthenticatedClient` `*Gasless` methods route calls through proxy, Safe,
-or deposit wallets. `clob.MaxUint256()` returns a fresh unlimited-approval amount.
-
-For one-call trading setup, `PrepareTradingApprovals` reads the current on-chain state and skips
-allowances already present. Use `SignerClient.SetupTradingApprovals` for sequential EOA
-transactions or `AuthenticatedClient.SetupTradingApprovalsGasless` for one relayed batch. The
-resolver follows the current Polygon contract set; callers should treat a nil gasless handle as
-“already approved.” `GetTradingApprovalsState` returns the same read as an inspectable snapshot
-(`Missing` plus `IsFullyApproved`) without submitting anything.
-
-### Combo RFQ (builder gateway)
-
-`AuthenticatedClient` with `Config.BuilderAuth` can request and accept combo quotes through the
-builder gateway (`Config.BuilderGatewayHost`, default
-`https://combos-rfq-gateway-builder.polymarket.com`). A request with no usable quotes and a maker
-decline are normal outcomes, not errors:
-
-```go
-result, err := client.RequestComboQuote(ctx, clob.RequestComboQuoteParams{
-	LegPositionIDs: []string{yesPositionID, noPositionID},
-	Direction:      clob.RFQDirectionBuy,
-	Amount:         udecimal.MustParse("100"),
-})
-if err != nil { return err }
-if result.Quote == nil {
-	// result.Reason explains why (NO_QUOTES, SIZE_TOO_LARGE).
-	return nil
-}
-
-acceptance, err := client.AcceptComboQuote(ctx, clob.AcceptComboQuoteParams{
-	RFQID:       result.RFQID,
-	Direction:   clob.SideBuy,
-	PositionID:  result.YesPositionID,
-	BuilderCode: result.BuilderCode,
-	Quote: clob.ComboQuoteReference{
-		QuoteID:     result.Quote.QuoteID,
-		MakerAmount: result.Quote.MakerAmount,
-		TakerAmount: result.Quote.TakerAmount,
-	},
-})
-if err != nil { return err }
-// acceptance.Status Executing means the trade was handed off for on-chain
-// execution; follow it with GetComboRFQStatus.
-```
-
-### Collateral return
-
-Proxy, Safe, and deposit wallets can plan and execute the official collateral-return workflow. The
-plan is an inspectable server response; review its `NetPUSDOut`, operations, and position summary
-before submitting the exact router call it carries. A truncated plan covers one chunk, so wait for
-that transaction and request a fresh plan for the remainder.
-
-```go
-plan, err := client.PlanCollateralReturn(ctx)
-if err != nil {
-	return err
-}
-
-handle, err := client.ExecuteCollateralReturnPlan(ctx, *plan)
-if err != nil {
-	return err
-}
-_, err = handle.Wait(ctx)
-```
-
-This workflow does not support EOA wallets or submit approvals implicitly. The service host defaults
-to `https://combos-rfq-collateral-return.polymarket.com` and can be overridden with
-`Config.CollateralReturnHost`.
-
-Perps account reads use an existing delegated credential, and `OpenSession` performs the official
-authenticated WebSocket handshake, account-channel subscription, application heartbeat, and
-automatic reconnect/resubscription:
-
-```go
-import "github.com/nijaru/go-clob-client/perps"
-
-client, err := perps.NewAuthenticated(perps.AuthenticatedConfig{
-	Credentials: perps.PerpsCredentials{
-		Proxy:  os.Getenv("POLYMARKET_PERPS_PROXY"),
-		Secret: os.Getenv("POLYMARKET_PERPS_SECRET"),
-	},
-})
-if err != nil {
-	log.Fatal(err)
-}
-portfolio, err := client.GetPortfolio(ctx)
-if err != nil {
-	log.Fatal(err)
-}
-fmt.Printf("withdrawable: %s\n", portfolio.Withdrawable)
-session, err := client.OpenSession(ctx, perps.SessionConfig{})
-if err != nil {
-	log.Fatal(err)
-}
-defer session.Close()
-for event := range session.Events() {
-	log.Printf("perps %s update: %s", event.Channel, event.Data)
-}
-```
-
-Signed perps entry-order placement, low-level batch/cancel/cancel-all, and leverage commands are
-available when the delegated private key is supplied in `PerpsCredentials`. TP/SL orchestration and
-owner-signed delegated-credential creation/revocation remain separate follow-up surfaces.
-
-## Error Handling
-
-API errors are returned as `*clob.APIError` with HTTP status and body. When supplied by the
-service, `RetryAfterSeconds` contains the finite, non-negative retry delay from `Retry-After` or
-`retry_after_seconds`:
-
-```go
-if errors.Is(err, clob.ErrNotFound)    { /* 404 */ }
-if errors.Is(err, clob.ErrRateLimit)   { /* 429 */ }
-if errors.Is(err, clob.ErrGeoBlocked)  { /* 451 */ }
-if errors.Is(err, clob.ErrUnauthorized){ /* 401/403 */ }
-```
-
-## Examples
-
-| Example        | Path                           | What it shows                                |
-| -------------- | ------------------------------ | -------------------------------------------- |
-| Read-only      | `examples/clob/read_only`      | Orderbook, prices, market data               |
-| Auth bootstrap | `examples/clob/auth_bootstrap` | Creating and deriving API keys               |
-| Limit order    | `examples/clob/limit_order`    | Placing a GTC limit order                    |
-| Market order   | `examples/clob/market_order`   | Placing a FOK market order                   |
-| CTF operations | `examples/clob/ctf_operations` | Splitting, merging, and redeeming shares     |
-| Gasless        | `examples/clob/gasless`        | Submitting CTF and arbitrary calls through the relayer |
-| WebSocket      | `examples/ws`                  | Real-time orderbook and user event streaming |
-| Data API       | `examples/data`                | Positions and read-only data endpoints       |
-| Bridge         | `examples/bridge`              | Deposit addresses (EVM, Solana, Bitcoin)     |
-| Gamma          | `examples/gamma`               | Search, events, and discovery metadata       |
-| Perps         | `examples/perps`               | Instruments, tickers, books, candles, trades, funding |
+| Example | Purpose |
+| --- | --- |
+| [`examples/clob`](examples/clob) | Public reads, auth, protected orders, CTF, wallets, session keys and RFQ |
+| [`examples/data`](examples/data) | Data v2 portfolios and analytics |
+| [`examples/gamma`](examples/gamma) | Search and keyset discovery |
+| [`examples/bridge`](examples/bridge) | Cross-chain assets; optional explicit address registration |
+| [`examples/perps`](examples/perps) | Market reads and local wallet preparation |
+| [`examples/realtime/stream`](examples/realtime/stream) | Local Polybolt fixture |
+| [`examples/sports`](examples/sports) | Local sports fixture |
+| [`examples/ws`](examples/ws) | Legacy CLOB WebSocket/RTDS |
 
 ```bash
-export POLYMARKET_PRIVATE_KEY=0x...
-go run ./examples/clob/read_only
+make fmt
+make test
+make build
+make vet
+go test -race ./...
 ```
 
-## Contributing
+Coverage is grounded in merged Rust `561830b`, TypeScript `087f9443` and Python
+`ed8d04ca`. Implementation and fixture coverage do not establish exhaustive live
+schema or account compatibility. Polymarket US is a separate exchange and is not
+included. No release or production-readiness claim accompanies this migration.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the tiered official-SDK oracle model and contribution
-workflow.
-
-## Security
-
-See [SECURITY.md](SECURITY.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).

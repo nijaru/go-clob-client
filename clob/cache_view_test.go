@@ -46,7 +46,12 @@ func TestFeeCacheSetterWinsOverPendingRead(t *testing.T) {
 }
 
 func TestDeauthenticateJoinsHeartbeatAndDetachesAuthView(t *testing.T) {
-	client, err := NewAuthenticatedClient(Config{PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c", Credentials: &Credentials{Key: "key", Secret: "c2VjcmV0", Passphrase: "pass"}})
+	client, err := NewAuthenticatedClient(
+		Config{
+			PrivateKey:  "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
+			Credentials: &Credentials{Key: "key", Secret: "c2VjcmV0", Passphrase: "pass"},
+		},
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

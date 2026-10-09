@@ -15,10 +15,11 @@ Go SDK for the Polymarket CLOB. **Reference SDKs (tiered oracle model):**
 | Directory | Purpose |
 | --------- | ------- |
 | `clob/` | Public CLOB SDK package |
-| `data/` | Public read-only Data API package |
+| `data/`, `data/legacy/` | Data v2 and explicitly isolated v1 protocols |
 | `gamma/` | Public Gamma markets/events/tags package |
-| `bridge/` | Public deposit-address discovery package |
-| `perps/` | Public perpetuals market-data and account package |
+| `bridge/` | Cross-chain assets, quotes, transfer status and address registration |
+| `perps/` | Perpetuals markets, accounts, streams and collateral workflows |
+| `realtime/`, `sports/` | Polybolt prices and public live game-result protocols |
 | `internal/polyauth/` | Shared Polymarket auth and signing logic |
 | `internal/polyhttp/` | Shared HTTP transport and response handling |
 | `examples/` | Runnable examples grouped by API family |
