@@ -55,6 +55,52 @@ cap and saved owner-approved maximum; missing/zero approval disables it. Explici
 owner approval/revocation updates this session's terms; other sessions must call
 `RefreshBuilder`. Existing orders retain their saved attribution.
 
+
+## Wallet-managed collateral
+
+`NewCollateralWallet` binds an `OwnerConfig` to the existing CLOB transaction
+engine through `CollateralWalletConfig.Transactions` (`clob.Config`). It derives
+Safe/proxy wallets, or a beacon deposit wallet when no funder is supplied, and
+validates the owner, chain and withdrawal wallet. Construction is offline and
+never deploys, approves or sends. Token and deposit-contract addresses and an
+RPC URL must be explicit. The adapter currently requires a local transaction
+key and CLOB credentials; gasless wallets also require separate `BuilderAuth`.
+Perps credentials are not CLOB or relayer credentials.
+
+- `PrepareCollateralApproval` prepares an exact allowance; zero revokes.
+- `ApproveCollateral` sends only approval. `Deposit` sends only a deposit and
+  credits the owner signer, not the smart-wallet address.
+- `ApproveAndDeposit` explicitly authorizes both effects: one atomic relayer
+  batch for smart wallets, or an approval confirmed before deposit for EOAs.
+  An EOA failure can leave an allowance without a deposit. Retain the returned
+  `CollateralTransaction` even on error: its submissions and confirmed prefix
+  support reconciliation. A failed send may have reached the network without
+  returning a hash. Do not blindly retry it.
+- `DeployDepositWallet` explicitly submits current beacon-wallet creation.
+  `Readiness` reports on-chain code and relayer registry status separately.
+  Registry readiness never substitutes for code or a transaction receipt.
+- `CollateralTransaction.Wait(ctx)` checks relayer outcomes and successful RPC
+  receipts, validates receipt identity and chain, and returns collected receipts
+  even on failure. It sends nothing, is cancellable, and supports concurrent
+  waits. Success means mined execution, **not** perps ledger credit or reorg
+  finality. After a partial EOA failure it waits only for recorded submissions,
+  not the missing or uncertain deposit.
+
+RPC chain identity is checked before submission. Gas estimation, EIP-1559
+signing and relayer serialization remain owned by CLOB. Its gasless engine may
+retry explicit transient submission rejections; this adapter adds no send retry.
+There is no automatic allowance skip, unlimited approval or zero-first token
+reset. Tokens requiring a reset need explicit revocation and confirmation first;
+a successful receipt does not check an ERC-20 boolean return value.
+
+See [`walletdeposit`](../examples/perps/walletdeposit/main.go). It defaults to
+unsigned preparation; mutation requires an explicit `-action`. For existing
+legacy deposit wallets, supply the funder explicitly after using CLOB's
+`DeriveCurrentDepositWallet(ctx)` or a known validated derivation. The constructor
+selects beacon derivation offline rather than discovering deployed legacy code.
+The lower-level `OwnerClient.Deposit` and `TransactionSender` remain available
+for externally managed wallets and hardware/external transaction signers.
+
 ## Public market subscriptions
 
 Create an explicitly context-owned pool, then subscribe with a separate context
@@ -116,28 +162,26 @@ rather than a single-item wrapper, is not counted as a missing capability.
 | Cancellation/risk | Numeric/client-ID cancellation, instrument/all cancel-all, bounded retries only for explicit `order_in_flight` items; auto-cancel arm/disarm; single/batch leverage and isolated-margin adjustment |
 | Managed execution | TWAP create/read/pause/resume/cancel; chase create/read/cancel, bounds, run/child identities and progress records |
 | Builders | Status, durable owner consent/revocation, approvals, batch attribution, exact fill fees, sparse receipts, cursor earnings and fixed-window/cutoff summary |
-| Collateral | Deposit call preparation and caller-provided transaction sender; owner withdrawal and exact-decimal internal transfer with reconciliation label |
+| Collateral | Explicit derived-wallet approval/deposit, gasless batches, EOA gas estimation, deposit-wallet deployment and RPC receipt tracking; unsigned/external-sender boundary; owner withdrawal and exact-decimal internal transfer with reconciliation label |
 
 ## Remaining gaps and limitations
 
-- **Wallet-managed deposits are partial.** Unlike upstream secure-client
-  workflows, Go does not derive Safe/deposit wallets, relay gasless deposits,
-  approve token spending, estimate gas or track receipts here. Configure token,
-  deposit contract and withdrawal wallet explicitly; `TransactionSender` owns
-  broadcasting and wallet lifecycle. Deposit ABI and withdrawal signing are
-  implemented, but that is not end-to-end wallet parity.
+- **Wallet lifecycle still has limits.** The managed adapter requires a local
+  transaction key and CLOB credentials because it reuses the CLOB engine;
+  external transaction signing remains caller-owned. Safe/proxy wallets must
+  already be deployed. Deposit-wallet deployment is explicit and beacon-only.
+  Constructors use offline derivation; deployed legacy-wallet discovery is
+  separate. Funding, perps ledger-credit waits and reorg finality are caller-owned.
 - Timestamp-only histories cannot guarantee access to every record in a full
   equal-timestamp boundary. Go returns `ErrPaginationNonProgress` rather than
-  advancing past potentially unseen records as upstream fallback paginators do.
-  This is an explicit safety difference, not proof of exhaustive history access.
-- No built-in registration-result cache, reconstructed book or automatic resync
-  backfill. Several response structs preserve fields without reproducing all
-  upstream schema validation. Fixture verification does not establish live
-  service or wallet compatibility.
+  advancing past potentially unseen records. This is an explicit safety
+  difference, not proof of exhaustive history access.
+- No reconstructed book or automatic resync backfill. Several response structs
+  preserve fields without reproducing every upstream schema validator. Fixture
+  verification does not establish live service, wallet or relayer compatibility.
 
 No additional public trading/account operation group was found missing in the
-listed pinned surfaces; the partial wallet workflow above prevents a
-complete-parity claim. No live orders, wallet transactions or remote
+listed pinned surfaces. No live orders, wallet transactions or remote
 mutations are needed for the package tests.
 
 Submissions are attempted once except the documented cancellation-item retry.

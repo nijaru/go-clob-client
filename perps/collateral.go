@@ -14,8 +14,9 @@ import (
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 )
 
-// TransactionCall is an unsigned EVM call. The caller owns approval, gas,
-// submission, receipt tracking, and any Safe/deposit-wallet relaying.
+// TransactionCall is an unsigned EVM call. External senders own its execution;
+// CollateralWallet provides explicit approval, submission and receipt operations
+// using the existing CLOB wallet engine.
 type TransactionCall struct {
 	To    common.Address
 	Data  []byte
