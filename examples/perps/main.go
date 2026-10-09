@@ -108,7 +108,9 @@ func run(ctx context.Context, streaming bool) error {
 	if !streaming {
 		return nil
 	}
-	updates, err := client.SubscribeMarket(
+	stream := client.NewMarketStream(ctx)
+	defer stream.Close()
+	updates, err := stream.Subscribe(
 		ctx,
 		[]perps.MarketSubscription{{Topic: perps.MarketBBO, InstrumentID: &inst.ID}},
 	)

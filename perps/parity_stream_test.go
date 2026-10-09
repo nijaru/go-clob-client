@@ -80,9 +80,11 @@ func TestPublicMarketStreamReconnectsAndDecodes(t *testing.T) {
 		{Topic: MarketStatistics},
 		{Topic: MarketCandles, InstrumentID: &id, Interval: PerpsKline1m},
 	}
-	stream, err := New(
+	pool := New(
 		Config{WebSocketHost: "ws" + strings.TrimPrefix(server.URL, "http")},
-	).SubscribeMarket(ctx, specs)
+	).NewMarketStream(ctx)
+	t.Cleanup(func() { _ = pool.Close() })
+	stream, err := pool.Subscribe(ctx, specs)
 	if err != nil {
 		t.Fatal(err)
 	}

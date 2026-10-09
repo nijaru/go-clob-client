@@ -1,7 +1,6 @@
 package perps
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -86,52 +85,6 @@ type MarketEvent struct {
 	Statistic    *PerpsStatistic
 	Candles      []PerpsCandle
 }
-
-// MarketStream owns one socket and a fixed subscription set, with heartbeat and
-// automatic reconnect/resubscribe. Its lifetime follows ctx or explicit Close.
-// A separate stream may be opened for independently owned subscriptions.
-type MarketStream struct{ session *Session }
-
-func (c *Client) SubscribeMarket(
-	ctx context.Context,
-	subscriptions []MarketSubscription,
-) (*MarketStream, error) {
-	if len(subscriptions) == 0 {
-		return nil, fmt.Errorf("perps: at least one public subscription required")
-	}
-	channels := []string{}
-	seen := map[string]bool{}
-	all := map[MarketTopic]bool{}
-	for _, sub := range subscriptions {
-		if (sub.Topic == MarketTickers || sub.Topic == MarketStatistics) &&
-			sub.InstrumentID == nil {
-			all[sub.Topic] = true
-		}
-	}
-	for _, sub := range subscriptions {
-		channel, err := sub.channel()
-		if err != nil {
-			return nil, err
-		}
-		if sub.InstrumentID != nil && all[sub.Topic] {
-			continue
-		}
-		if !seen[channel] {
-			channels = append(channels, channel)
-			seen[channel] = true
-		}
-	}
-	// Public transport never authenticates and cannot expose signed commands.
-	client := &AuthenticatedClient{Client: c}
-	session, err := client.openSession(ctx, SessionConfig{Channels: channels}, true)
-	if err != nil {
-		return nil, err
-	}
-	return &MarketStream{session}, nil
-}
-func (s *MarketStream) Events() <-chan PerpsSessionEvent { return s.session.Events() }
-func (s *MarketStream) Errors() <-chan error             { return s.session.Errors() }
-func (s *MarketStream) Close() error                     { return s.session.Close() }
 
 func (e PerpsSessionEvent) AsMarket() (*MarketEvent, error) {
 	if e.Market != nil {

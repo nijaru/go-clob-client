@@ -55,6 +55,42 @@ cap and saved owner-approved maximum; missing/zero approval disables it. Explici
 owner approval/revocation updates this session's terms; other sessions must call
 `RefreshBuilder`. Existing orders retain their saved attribution.
 
+## Public market subscriptions
+
+Create an explicitly context-owned pool, then subscribe with a separate context
+for each independently owned handle:
+
+```go
+stream := client.NewMarketStream(ctx) // lazy, public-only; never authenticates
+defer stream.Close()
+id := 1
+handle, err := stream.Subscribe(subscriptionCtx, []perps.MarketSubscription{
+    {Topic: perps.MarketBook, InstrumentID: &id},
+})
+if err != nil { return err }
+defer handle.Close()
+// Consume handle.Events() and handle.Errors(). Cancel subscriptionCtx to remove
+// only this handle; cancel ctx or Close stream to stop the entire pool.
+```
+
+`Subscribe` waits for the server acknowledgement, and its context owns the
+returned handle's lifetime. Identical filters share a server subscription;
+all-ticker/statistics filters replace instrument-specific server filters while
+preserving each handle's instrument selection. Filters are copied at subscribe
+time. Duplicate/overlapping filters produce one delivery per matching frame.
+
+Handles reconnect/resubscribe automatically and emit reconnect/sequence-gap
+resync events. Each handle has a 128-event queue; overflow closes only that handle
+with `ErrPerpsSlowConsumer`. It does not block healthy peers or acknowledgements.
+`MarketHandle.Close` waits for local removal and queue closure; the pool owns
+server unsubscribe cleanup. Rejected, timed-out or uncertain filter operations
+reset the socket and resubscribe surviving handles, rather than retain potentially
+orphaned subscriptions. A failed initial subscription returns an error; callers
+may explicitly subscribe again. The idle socket closes when the last handle ends;
+the pool remains reusable until its context ends or `MarketStream.Close` is called.
+Pool closure cancels and waits for dial/read/write workers. Book snapshots and resync
+backfill remain caller-owned.
+
 ## Capability inventory
 
 Compared against merged TypeScript [`087f9443`](https://github.com/Polymarket/ts-sdk/tree/087f9443635316e4e6be5dc4e22bd93f08cea443)
@@ -70,7 +106,7 @@ rather than a single-item wrapper, is not counted as a missing capability.
 | --- | --- |
 | Public market reads | Instruments/category filtering, joined ticker(s)/statistics, book depth, fees; resumable candles, trades and funding-rate history |
 | Public account discovery | Registration; anonymous ordered active/historical position snapshots |
-| Public streams | Trades, BBO, book, tickers, statistics, candles; instrument/all-topic selection, heartbeat and reconnect |
+| Public streams | Trades, BBO, book, tickers, statistics, candles; shared-socket independently context-owned handles, dynamic filter refcounts, instrument/all-topic selection, heartbeat and reconnect |
 | Owner credentials | Create, validate/resume, revoke; external typed-data signer boundary |
 | Account snapshots | Balances, portfolio, seven-day stats, leverage/margin config, auto-cancel status; owner-authenticated position snapshots |
 | Orders and history | Open orders and filtered order lookup/history; fills with sort/trade-ID cursor; funding payments, deposits, withdrawals, internal transfers, equity and PnL iterators |
@@ -90,11 +126,6 @@ rather than a single-item wrapper, is not counted as a missing capability.
   deposit contract and withdrawal wallet explicitly; `TransactionSender` owns
   broadcasting and wallet lifecycle. Deposit ABI and withdrawal signing are
   implemented, but that is not end-to-end wallet parity.
-- **Public subscription handles are partial.** Each Go `MarketStream` owns a
-  fixed subscription set and its own socket. Upstream managers multiplex
-  independently cancellable subscription handles and dynamically subscribe/
-  unsubscribe on one connection. Open separate Go streams when independent
-  ownership is needed; no shared-socket manager is provided.
 - Timestamp-only histories cannot guarantee access to every record in a full
   equal-timestamp boundary. Go returns `ErrPaginationNonProgress` rather than
   advancing past potentially unseen records as upstream fallback paginators do.
@@ -105,8 +136,8 @@ rather than a single-item wrapper, is not counted as a missing capability.
   service or wallet compatibility.
 
 No additional public trading/account operation group was found missing in the
-listed pinned surfaces; the partial wallet and subscription workflows above
-prevent a complete-parity claim. No live orders, wallet transactions or remote
+listed pinned surfaces; the partial wallet workflow above prevents a
+complete-parity claim. No live orders, wallet transactions or remote
 mutations are needed for the package tests.
 
 Submissions are attempted once except the documented cancellation-item retry.

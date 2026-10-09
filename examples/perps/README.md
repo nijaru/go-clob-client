@@ -8,8 +8,9 @@ go run ./examples/perps -stream
 ```
 
 The example prints the first instrument, its ticker/book and recent hourly
-candles. `-stream` then reads public BBO updates. It stops on Ctrl-C or after
-30 seconds. It never submits orders, creates credentials or sends transactions.
+candles. `-stream` then creates a public WebSocket pool and reads BBO updates
+through a context-owned handle. Other handles can share that pool and be canceled
+independently. It stops on Ctrl-C or after 30 seconds. It never submits orders, creates credentials or sends transactions.
 
 Optional `PERPS_PROXY` and `PERPS_SECRET` environment variables enable an account
 balance read; no private key is needed. Set them securely in your environment,

@@ -131,7 +131,6 @@ type Session struct {
 	sequences      map[string]int64
 	closeOnce      sync.Once
 	closeErr       error
-	public         bool
 	queuedPayloads []json.RawMessage
 	builder        *PerpsBuilderTerms
 	builderAddress string
@@ -147,21 +146,9 @@ func (c *AuthenticatedClient) OpenSession(
 	ctx context.Context,
 	config SessionConfig,
 ) (*Session, error) {
-	return c.openSession(ctx, config, false)
-}
-
-func (c *AuthenticatedClient) openSession(
-	ctx context.Context,
-	config SessionConfig,
-	public bool,
-) (*Session, error) {
-	var builder *PerpsBuilderTerms
-	var err error
-	if !public {
-		builder, err = c.resolveBuilder(ctx, config.BuilderAddress)
-		if err != nil {
-			return nil, err
-		}
+	builder, err := c.resolveBuilder(ctx, config.BuilderAddress)
+	if err != nil {
+		return nil, err
 	}
 	webSocketURL := config.WebSocketURL
 	if webSocketURL == "" {
@@ -187,7 +174,6 @@ func (c *AuthenticatedClient) openSession(
 	sessionCtx, cancel := context.WithCancel(ctx)
 	session := &Session{
 		conn:           conn,
-		public:         public,
 		builder:        builder,
 		builderAddress: config.BuilderAddress,
 		client:         c,
@@ -228,23 +214,21 @@ func (s *Session) handshake(
 	credentials PerpsCredentials,
 	channels []string,
 ) error {
-	if !s.public {
-		if err := s.writeJSONConn(ctx, conn, sessionFrame{
-			ID: 1,
-			Op: &sessionOp{
-				Type: "auth",
-				Args: map[string]any{
-					"proxy":  credentials.Proxy,
-					"secret": credentials.Secret,
-				},
+	if err := s.writeJSONConn(ctx, conn, sessionFrame{
+		ID: 1,
+		Op: &sessionOp{
+			Type: "auth",
+			Args: map[string]any{
+				"proxy":  credentials.Proxy,
+				"secret": credentials.Secret,
 			},
-			Req: "post",
-		}); err != nil {
-			return fmt.Errorf("perps: send session auth: %w", err)
-		}
-		if err := s.readAckConn(ctx, conn, 1); err != nil {
-			return fmt.Errorf("perps: session auth rejected: %w", err)
-		}
+		},
+		Req: "post",
+	}); err != nil {
+		return fmt.Errorf("perps: send session auth: %w", err)
+	}
+	if err := s.readAckConn(ctx, conn, 1); err != nil {
+		return fmt.Errorf("perps: session auth rejected: %w", err)
 	}
 	if err := s.writeJSONConn(
 		ctx,
@@ -488,14 +472,6 @@ func (s *Session) handlePayload(payload []byte) {
 			s.reportError(fmt.Errorf("perps: decode notification event: %w", err))
 		}
 	}
-	if s.public {
-		market, err := event.AsMarket()
-		if err != nil {
-			s.reportError(fmt.Errorf("perps: decode market event: %w", err))
-			return
-		}
-		event.Market = market
-	}
 	s.resolveOrderWaiters(event)
 	s.emitEvent(event)
 }
@@ -626,8 +602,9 @@ func (s *Session) emitEvent(event PerpsSessionEvent) {
 	}
 }
 
-// ErrPerpsSlowConsumer means the bounded update queue filled. The session is
-// closed rather than dropping account data or blocking command acknowledgements.
+// ErrPerpsSlowConsumer means the bounded update queue filled. The account
+// session or individual public handle closes rather than dropping data or
+// blocking acknowledgements.
 var ErrPerpsSlowConsumer = errors.New("perps: event consumer fell behind; session closed")
 
 // AsNotification returns the typed notification payload for a notification
