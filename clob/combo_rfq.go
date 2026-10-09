@@ -117,6 +117,9 @@ type ComboQuote struct {
 	// TotalRequired is the total collateral (BUY) or position-share (SELL)
 	// balance required to accept.
 	TotalRequired string
+	// NetReceive is exact collateral proceeds after fees. Required for SELL;
+	// nil for BUY when the gateway omits it. Zero is distinct from absence.
+	NetReceive *DecimalString
 	// ExpiresAt is the acceptance deadline as Unix milliseconds.
 	ExpiresAt int64
 }
@@ -142,7 +145,10 @@ type RequestComboQuoteResult struct {
 	RFQID string
 	// Quote is the winning quote, or nil when none was returned.
 	Quote *ComboQuote
-	// Direction echoes the requested trade direction.
+	// Request is the gateway's echoed request, present for a usable quote.
+	// RequestedSize.ValueE6 is an exact base-unit integer, not a human decimal.
+	Request *ComboRFQResponseRequest
+	// Direction is the verified gateway-echoed direction for a usable quote.
 	Direction RFQDirection
 	// YesPositionID is the combo YES position the acceptance order trades.
 	YesPositionID string
@@ -223,9 +229,25 @@ func (e *ComboRFQRejectionError) Error() string {
 
 // Wire types for the builder gateway. Field names follow the gateway contract.
 
-type builderRfqRequestedSize struct {
+// ComboRFQResponseRequestedSize is a gateway size in e6 base units.
+type ComboRFQResponseRequestedSize struct {
 	Unit    RFQRequestedSizeUnit `json:"unit"`
 	ValueE6 string               `json:"value_e6"`
+}
+
+type builderRfqRequestedSize = ComboRFQResponseRequestedSize
+
+// ComboRFQResponseRequest is the original request echoed by a quote-ready
+// response. It is checked against the submitted request before use.
+type ComboRFQResponseRequest struct {
+	RFQID          string                        `json:"rfq_id"`
+	LegPositionIDs []string                      `json:"leg_position_ids"`
+	ConditionID    string                        `json:"condition_id"`
+	YesPositionID  string                        `json:"yes_position_id"`
+	NoPositionID   string                        `json:"no_position_id"`
+	Direction      RFQDirection                  `json:"direction"`
+	Side           RFQSide                       `json:"side"`
+	RequestedSize  ComboRFQResponseRequestedSize `json:"requested_size"`
 }
 
 type builderRfqCreateRequest struct {
@@ -239,25 +261,22 @@ type builderRfqCreateRequest struct {
 }
 
 type builderRfqQuoteWire struct {
-	QuoteID         string `json:"quote_id"`
-	BlendedPriceE6  string `json:"blended_price_e6"`
-	MakerAmountE6   string `json:"maker_amount_e6"`
-	TakerAmountE6   string `json:"taker_amount_e6"`
-	TotalRequiredE6 string `json:"total_required_e6"`
+	QuoteID         string  `json:"quote_id"`
+	BlendedPriceE6  string  `json:"blended_price_e6"`
+	MakerAmountE6   string  `json:"maker_amount_e6"`
+	TakerAmountE6   string  `json:"taker_amount_e6"`
+	TotalRequiredE6 string  `json:"total_required_e6"`
+	NetReceiveE6    *string `json:"net_receive_e6"`
 }
 
 type builderRfqCreateResponseWire struct {
-	RFQID       string `json:"rfq_id"`
-	Status      string `json:"status"`
-	ExpiresAt   int64  `json:"expires_at"`
-	BuilderCode string `json:"builder_code"`
-	Request     struct {
-		ConditionID   string `json:"condition_id"`
-		YesPositionID string `json:"yes_position_id"`
-		NoPositionID  string `json:"no_position_id"`
-	} `json:"request"`
-	Quote *builderRfqQuoteWire `json:"quote"`
-	Error *BuilderRfqError     `json:"error"`
+	RFQID       string                  `json:"rfq_id"`
+	Status      string                  `json:"status"`
+	ExpiresAt   int64                   `json:"expires_at"`
+	BuilderCode string                  `json:"builder_code"`
+	Request     ComboRFQResponseRequest `json:"request"`
+	Quote       *builderRfqQuoteWire    `json:"quote"`
+	Error       *BuilderRfqError        `json:"error"`
 }
 
 type builderRfqStatusWire struct {
@@ -356,6 +375,14 @@ func (c *AuthenticatedClient) RequestComboQuote(
 	}
 
 	if wire.Quote != nil {
+		if err := validateComboQuoteEcho(wire, request); err != nil {
+			return nil, err
+		}
+		if wire.Request.Direction == RFQDirectionSell && wire.Quote.NetReceiveE6 == nil {
+			return nil, fmt.Errorf("combo rfq: SELL quote omitted net sell proceeds")
+		}
+		result.Request = &wire.Request
+		result.Direction = wire.Request.Direction
 		quote, err := comboQuoteFromWire(wire.Quote, wire.ExpiresAt)
 		if err != nil {
 			return nil, fmt.Errorf("combo rfq: decode quote: %w", err)
@@ -492,10 +519,12 @@ func (c *AuthenticatedClient) AcceptComboQuote(
 	status := ComboRFQStatus(wire.Status)
 	if status == ComboRFQFailed || status == ComboRFQExpired || status == ComboRFQCanceled {
 		return &AcceptComboQuoteResult{
-			Status: status,
-			RFQID:  wire.RFQID,
-			Reason: comboAcceptFailureReason(status, wire.Error),
-			Error:  wire.Error,
+			Status:         status,
+			RFQID:          wire.RFQID,
+			TakerOrderHash: wire.TakerOrderHash,
+			TxHash:         wire.TxHash,
+			Reason:         comboAcceptFailureReason(status, wire.Error),
+			Error:          wire.Error,
 		}, nil
 	}
 
@@ -508,6 +537,7 @@ func (c *AuthenticatedClient) AcceptComboQuote(
 		RFQID:          wire.RFQID,
 		TakerOrderHash: takerOrderHash,
 		TxHash:         wire.TxHash,
+		Error:          wire.Error,
 	}, nil
 }
 
@@ -598,7 +628,17 @@ func comboQuoteFromWire(wire *builderRfqQuoteWire, expiresAt int64) (*ComboQuote
 	if err != nil {
 		return nil, err
 	}
+	var netReceive *DecimalString
+	if wire.NetReceiveE6 != nil {
+		value, err := decode(*wire.NetReceiveE6, "net_receive_e6")
+		if err != nil {
+			return nil, err
+		}
+		exact := DecimalString(value)
+		netReceive = &exact
+	}
 	return &ComboQuote{
+		NetReceive:    netReceive,
 		QuoteID:       wire.QuoteID,
 		BlendedPrice:  blendedPrice,
 		MakerAmount:   makerAmount,

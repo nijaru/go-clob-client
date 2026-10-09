@@ -18,12 +18,12 @@ type RFQRequest struct {
 	Complement      string        `json:"complement"`
 	Condition       string        `json:"condition"`
 	Side            string        `json:"side"`
-	SizeIn          string        `json:"sizeIn"`
-	SizeOut         string        `json:"sizeOut"`
+	SizeIn          DecimalString `json:"sizeIn"`
+	SizeOut         DecimalString `json:"sizeOut"`
 	Price           DecimalString `json:"price"`
 	AcceptedQuoteID string        `json:"acceptedQuoteId"`
 	State           string        `json:"state"`
-	Expiry          string        `json:"expiry"`
+	Expiry          string        `json:"expiry"` // Unix seconds, retained as exact text.
 	CreatedAt       string        `json:"createdAt"`
 	UpdatedAt       string        `json:"updatedAt"`
 }
@@ -38,11 +38,11 @@ type RFQQuote struct {
 	Complement   string        `json:"complement"`
 	Condition    string        `json:"condition"`
 	Side         string        `json:"side"`
-	SizeIn       string        `json:"sizeIn"`
-	SizeOut      string        `json:"sizeOut"`
+	SizeIn       DecimalString `json:"sizeIn"`
+	SizeOut      DecimalString `json:"sizeOut"`
 	Price        DecimalString `json:"price"`
 	State        string        `json:"state"`
-	Expiry       string        `json:"expiry"`
+	Expiry       string        `json:"expiry"` // Unix seconds, retained as exact text.
 	MatchType    string        `json:"matchType"`
 	CreatedAt    string        `json:"createdAt"`
 	UpdatedAt    string        `json:"updatedAt"`
@@ -71,6 +71,9 @@ const (
 	RFQCodeInternalError                            RFQErrorCode = "INTERNAL_ERROR"
 	RFQCodeLegMetadataUnavailable                   RFQErrorCode = "LEG_METADATA_UNAVAILABLE"
 	RFQCodeMakerAlreadyResponded                    RFQErrorCode = "MAKER_ALREADY_RESPONDED"
+	RFQCodeMakerDeclined                            RFQErrorCode = "MAKER_DECLINED"
+	RFQCodeNoQuotes                                 RFQErrorCode = "NO_QUOTES"
+	RFQCodeSizeTooLarge                             RFQErrorCode = "SIZE_TOO_LARGE"
 	RFQCodeMakerNotRequired                         RFQErrorCode = "MAKER_NOT_REQUIRED"
 	RFQCodeMakerQuoteLimited                        RFQErrorCode = "MAKER_QUOTE_LIMITED"
 	RFQCodePreExecBalanceReservationFailed          RFQErrorCode = "PRE_EXECUTION_BALANCE_RESERVATION_FAILED"
@@ -316,10 +319,22 @@ type RFQQuoteResponse struct {
 }
 
 // RFQRequestsResponse is the response for listing RFQ requests.
-type RFQRequestsResponse Page[RFQRequest]
+type RFQRequestsResponse struct {
+	Limit      int          `json:"limit"`
+	Count      int          `json:"count"`
+	NextCursor string       `json:"next_cursor"`
+	Data       []RFQRequest `json:"data"`
+	TotalCount *int         `json:"total_count,omitzero"`
+}
 
 // RFQQuotesResponse is the response for listing RFQ quotes.
-type RFQQuotesResponse Page[RFQQuote]
+type RFQQuotesResponse struct {
+	Limit      int        `json:"limit"`
+	Count      int        `json:"count"`
+	NextCursor string     `json:"next_cursor"`
+	Data       []RFQQuote `json:"data"`
+	TotalCount *int       `json:"total_count,omitzero"`
+}
 
 // RFQRequestFilterParams contains the filters for listing RFQ requests.
 type RFQRequestFilterParams struct {
@@ -392,16 +407,16 @@ type ComboMarketOutcomes struct {
 // Wire format uses flat arrays for outcomes/prices; the [ComboMarketOutcomes]
 // accessor parses them into a structured yes/no pair.
 type ComboMarket struct {
-	ID            string   `json:"id"`
-	ConditionID   string   `json:"condition_id"`
-	Slug          string   `json:"slug"`
-	Title         string   `json:"title"`
-	Outcomes      []string `json:"outcomes"`
-	OutcomePrices []string `json:"outcome_prices"`
-	PositionIDs   []string `json:"position_ids"`
-	Image         string   `json:"image"`
-	Volume        float64  `json:"volume"`
-	Tags          []string `json:"tags"`
+	ID            string        `json:"id"`
+	ConditionID   string        `json:"condition_id"`
+	Slug          string        `json:"slug"`
+	Title         string        `json:"title"`
+	Outcomes      []string      `json:"outcomes"`
+	OutcomePrices []string      `json:"outcome_prices"`
+	PositionIDs   []string      `json:"position_ids"`
+	Image         string        `json:"image"`
+	Volume        DecimalString `json:"volume"`
+	Tags          []string      `json:"tags"`
 
 	// Pending reports whether Combo enablement is still pending.
 	Pending bool `json:"pending"`

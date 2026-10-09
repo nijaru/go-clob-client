@@ -69,6 +69,11 @@ const comboQuoteReadyBody = `{
 	"expires_at": 1755000000000,
 	"builder_code": "0x0100000000000000000000000000000000000000000000000000000000000000",
 	"request": {
+		"rfq_id": "rfq-1",
+		"leg_position_ids": ["111", "222"],
+		"direction": "BUY",
+		"side": "YES",
+		"requested_size": {"unit":"notional","value_e6":"100000000"},
 		"condition_id": "0xc000000000000000000000000000000000000000000000000000000000000000",
 		"yes_position_id": "999",
 		"no_position_id": "998"

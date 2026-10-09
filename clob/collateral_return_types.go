@@ -24,6 +24,7 @@ const (
 )
 
 // CollateralReturnOperation describes one position operation in a plan.
+// Amount is an unsigned integer in e6 base units, not a human decimal.
 type CollateralReturnOperation struct {
 	Kind           CollateralReturnOperationKind `json:"kind"`
 	ConditionID    string                        `json:"condition_id,omitzero"`
@@ -34,6 +35,7 @@ type CollateralReturnOperation struct {
 }
 
 // CollateralReturnPositionAmount describes a position amount touched by a plan.
+// Amount is an unsigned integer in e6 base units, not a human decimal.
 type CollateralReturnPositionAmount struct {
 	PositionID string `json:"position_id"`
 	Amount     string `json:"amount"`
@@ -53,7 +55,9 @@ type CollateralReturnRouterCall struct {
 
 // CollateralReturnPlan is an inspectable, executable plan returned by the
 // collateral-return service. Execute it only after reviewing the value and
-// position fields. If Truncated is true, execute this chunk, wait for it to
+// position fields. Balance fields (StartingPUSD, NetPUSDOut, FinalPUSD and
+// RequiredPUSDInput) are human-readable decimals; operation and position
+// amounts remain e6 base-unit integers. If Truncated is true, execute this chunk, wait for it to
 // settle, then request a fresh plan for the remainder.
 type CollateralReturnPlan struct {
 	PlanHash             string                           `json:"plan_hash"`
@@ -66,7 +70,7 @@ type CollateralReturnPlan struct {
 	Operations           []CollateralReturnOperation      `json:"operations"`
 	OperationCount       int                              `json:"operation_count"`
 	Truncated            bool                             `json:"truncated"`
-	EstimatedCost        float64                          `json:"estimated_cost"`
+	EstimatedCost        DecimalString                    `json:"estimated_cost"`
 	RequiredPUSDInput    string                           `json:"required_pusd_input"`
 	RequiredPositions    []CollateralReturnPositionAmount `json:"required_positions"`
 	PositionSummary      CollateralReturnPositionSummary  `json:"position_summary"`
