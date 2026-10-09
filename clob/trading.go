@@ -149,84 +149,6 @@ func (c *SignerClient) CreateOrder(
 	})
 }
 
-// CreateMarketOrder builds and signs a market order.
-func (c *SignerClient) CreateMarketOrder(
-	ctx context.Context,
-	userOrder MarketOrderArgs,
-	options *CreateOrderOptions,
-) (*SignedOrder, error) {
-	if err := validateMarketOrderArgs(userOrder); err != nil {
-		return nil, err
-	}
-
-	// Position-backed (V3) orders skip the CLOB token market metadata
-	// resolution and the order-book price derivation.
-	if userOrder.PositionID != "" {
-		if userOrder.OrderType == "" {
-			userOrder.OrderType = OrderTypeFOK
-		}
-		if userOrder.OrderType != OrderTypeFOK && userOrder.OrderType != OrderTypeFAK {
-			return nil, fmt.Errorf("market orders only support FOK or FAK order types")
-		}
-		if userOrder.Price.IsZero() {
-			return nil, fmt.Errorf(
-				"market orders require an explicit price for V3 position-backed outcomes",
-			)
-		}
-		return c.buildSignedMarketOrder(ctx, userOrder, CreateOrderOptions{
-			TickSize: TickSizeHundredth,
-			NegRisk:  new(false),
-		})
-	}
-
-	tickSize, err := c.resolveTickSize(ctx, userOrder.TokenID, options)
-	if err != nil {
-		return nil, err
-	}
-
-	if userOrder.OrderType == "" {
-		userOrder.OrderType = OrderTypeFOK
-	}
-	if userOrder.OrderType != OrderTypeFOK && userOrder.OrderType != OrderTypeFAK {
-		return nil, fmt.Errorf("market orders only support FOK or FAK order types")
-	}
-
-	if userOrder.Price.IsZero() {
-		price, err := c.CalculateMarketPrice(
-			ctx,
-			userOrder.TokenID,
-			userOrder.Side,
-			userOrder.Amount,
-			userOrder.OrderType,
-		)
-		if err != nil {
-			return nil, err
-		}
-		userOrder.Price = price
-	}
-
-	tickSize, err = c.validateLimitPriceWithRefresh(
-		ctx,
-		userOrder.TokenID,
-		userOrder.Price,
-		tickSize,
-		options,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	isNegRisk, err := c.resolveNegRisk(ctx, userOrder.TokenID, options)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.buildSignedMarketOrder(ctx, userOrder, CreateOrderOptions{
-		TickSize: tickSize,
-		NegRisk:  new(isNegRisk),
-	})
-}
-
 // CreateAndPostOrder builds, signs, and posts a limit order in one step.
 func (c *AuthenticatedClient) CreateAndPostOrder(
 	ctx context.Context,
@@ -544,86 +466,6 @@ func (c *SignerClient) buildSignedLimitOrder(
 		TakerAmount:   toTokenDecimals(rawTakerAmount),
 		Side:          userOrder.Side,
 		Expiration:    userOrder.Expiration,
-		NegRisk:       derefBool(options.NegRisk),
-		SignatureType: c.signatureType,
-		Metadata:      userOrder.Metadata,
-		BuilderCode:   userOrder.BuilderCode,
-		DeferExec:     userOrder.DeferExec,
-	})
-}
-
-func (c *SignerClient) buildSignedMarketOrder(
-	ctx context.Context,
-	userOrder MarketOrderArgs,
-	options CreateOrderOptions,
-) (*SignedOrder, error) {
-	roundConfig, ok := roundingConfig[options.TickSize]
-	if !ok {
-		return nil, fmt.Errorf("unsupported tick size %q", options.TickSize)
-	}
-
-	price := roundDown(userOrder.Price, roundConfig.Price)
-	amount := userOrder.Amount
-
-	var rawMakerAmount udecimal.Decimal
-	var rawTakerAmount udecimal.Decimal
-
-	switch userOrder.Side {
-	case SideBuy:
-		// BUY: Amount is USDC notional. Adjust for fees if MaxSpend is set.
-		adjustedAmount := amount
-		if userOrder.MaxSpend != nil && !userOrder.MaxSpend.IsZero() {
-			metadata, err := c.resolveOrderMarketMetadata(ctx, userOrder.TokenID, false)
-			if err != nil {
-				return nil, fmt.Errorf("resolve V2 order metadata: %w", err)
-			}
-			feeInfo := metadata.FeeInfo
-			builderTakerFeeRate := udecimal.Zero
-			if userOrder.BuilderCode != "" {
-				builderFee, err := c.resolveBuilderFeeRateCached(ctx, userOrder.BuilderCode)
-				if err != nil {
-					return nil, fmt.Errorf("resolve builder fee rate: %w", err)
-				}
-				builderTakerFeeRate = udecimal.MustFromInt64(
-					int64(builderFee.BuilderTakerFeeRateBps),
-					4,
-				)
-			}
-			adj, err := adjustMarketBuyAmount(
-				amount,
-				*userOrder.MaxSpend,
-				price,
-				feeInfo.Rate,
-				feeInfo.Exponent,
-				builderTakerFeeRate,
-			)
-			if err != nil {
-				return nil, err
-			}
-			adjustedAmount = adj
-		}
-		// Preserve the full USDC amount; only the derived share quantity is quantized.
-		rawMakerAmount = adjustedAmount
-		val, err := rawMakerAmount.Div(price)
-		if err != nil {
-			return nil, fmt.Errorf("calculation error: %w", err)
-		}
-		rawTakerAmount = roundToAmount(val, roundConfig)
-	case SideSell:
-		// SELL: Amount is shares.
-		rawMakerAmount = roundDown(amount, roundConfig.Size)
-		rawTakerAmount = roundToAmount(rawMakerAmount.Mul(price), roundConfig)
-	default:
-		return nil, fmt.Errorf("invalid side %q", userOrder.Side)
-	}
-
-	return c.signOrder(ctx, orderBuildInput{
-		TokenID:       userOrder.TokenID,
-		PositionID:    userOrder.PositionID,
-		MakerAmount:   toTokenDecimals(rawMakerAmount),
-		TakerAmount:   toTokenDecimals(rawTakerAmount),
-		Side:          userOrder.Side,
-		Expiration:    0,
 		NegRisk:       derefBool(options.NegRisk),
 		SignatureType: c.signatureType,
 		Metadata:      userOrder.Metadata,
@@ -996,25 +838,6 @@ func validateLimitOrderArgs(order OrderArgs) error {
 	}
 	if err := validateGTDExpiration(order.Expiration, time.Now().Unix()); err != nil {
 		return err
-	}
-	return nil
-}
-
-func validateMarketOrderArgs(order MarketOrderArgs) error {
-	if order.TokenID == "" && order.PositionID == "" {
-		return fmt.Errorf("order requires exactly one of TokenID or PositionID")
-	}
-	if order.TokenID != "" && order.PositionID != "" {
-		return fmt.Errorf("order must not set both TokenID and PositionID")
-	}
-	if order.Amount.Cmp(udecimal.Zero) <= 0 {
-		return fmt.Errorf("amount must be positive")
-	}
-	if order.Price.Cmp(udecimal.Zero) < 0 {
-		return fmt.Errorf("price cannot be negative")
-	}
-	if order.Side != SideBuy && order.Side != SideSell {
-		return fmt.Errorf("invalid side %q", order.Side)
 	}
 	return nil
 }

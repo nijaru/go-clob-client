@@ -5,7 +5,7 @@ Contributions are welcome. Please follow these guidelines:
 ## Getting started
 
 1. Fork the repository and create a branch from `main`.
-2. Install Go 1.26.1+ and the formatting tools:
+2. Install Go 1.27+ (matching `go.mod` and CI) and the formatting tools:
    ```bash
    go install golang.org/x/tools/cmd/goimports@v0.50.0
    go install github.com/segmentio/golines@v0.13.0

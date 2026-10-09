@@ -8,11 +8,11 @@
 > Unofficial, community-maintained SDK. Not extensively tested in production trading environments. Use at your own risk.
 
 > [!NOTE]
-> Community project in maintenance mode. Stable wire-contract parity with the official
+> This project targets the stable capabilities of the official
 > [Rust](https://github.com/Polymarket/rs-clob-client-v2), [TypeScript](https://github.com/Polymarket/ts-sdk),
-> and [Python](https://github.com/Polymarket/py-sdk) SDKs is tracked, and new upstream surfaces
-> are adopted selectively. Trading and wallet flows are implemented against official fixtures,
-> not production use — validate with tiny sizes before risking funds.
+> and [Python](https://github.com/Polymarket/py-sdk) SDKs. Catch-up is ongoing; current capabilities
+> and limitations are described below. Trading and wallet flows are implemented against official
+> fixtures, not production use — validate with tiny sizes before risking funds.
 
 Go SDK for the [Polymarket](https://polymarket.com) CLOB and adjacent APIs. Tracks stable capability
 parity with the official [Rust V2](https://github.com/Polymarket/rs-clob-client-v2),
@@ -21,7 +21,7 @@ SDKs while keeping an idiomatic Go API.
 
 ## Install
 
-Requires **Go 1.26+**.
+Requires **Go 1.27+**.
 
 ```bash
 go get github.com/nijaru/go-clob-client@latest
@@ -88,6 +88,10 @@ It waits for confirmed or failed fill outcomes and returns typed timeout or all-
 ### Market Orders
 
 Market orders use `Amount` as USDC notional for BUY and share count for SELL.
+Set `MaxPrice` for BUY or `MinPrice` for SELL to protect the execution price without reading the
+orderbook. The bound must be positive and aligned to the market's tick grid. An explicit `Price`
+can tighten the bound but cannot weaken it. BUY orders whose rounded amounts could reach the next
+higher ask on the finest supported grid are rejected; increase the amount or change the cap.
 
 ```go
 // Sell 25 shares at market
@@ -104,13 +108,15 @@ resp, err := client.CreateAndPostMarketOrder(ctx, clob.MarketOrderArgs{
 	Side:    clob.SideBuy,
 }, nil, clob.OrderTypeFOK)
 
-// Buy $10 worth of shares, but spend at most $10.50 total (including fees)
+// Buy at no more than $0.50 per share, spending at most $10.50 including fees.
 maxSpend := udecimal.MustParse("10.50")
+maxPrice := udecimal.MustParse("0.50")
 resp, err := client.CreateAndPostMarketOrder(ctx, clob.MarketOrderArgs{
 	TokenID:  os.Getenv("POLYMARKET_TOKEN_ID"),
 	Amount:   udecimal.MustParse("10"),
 	Side:     clob.SideBuy,
 	MaxSpend: &maxSpend,
+	MaxPrice: &maxPrice,
 }, nil, clob.OrderTypeFOK)
 ```
 
@@ -137,7 +143,7 @@ resp, err := client.CreateAndPostOrder(ctx, clob.OrderArgs{
 
 ### Iterators
 
-List endpoints expose both a slice and a Go 1.26 range-over-function iterator:
+List endpoints expose both a slice and a range-over-function iterator:
 
 ```go
 for order, err := range client.IterOpenOrders(ctx, clob.OpenOrderParams{}) {

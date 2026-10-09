@@ -24,10 +24,13 @@ func main() {
 	}
 	defer client.Close()
 
+	// Do not pay more than $0.50 per share, even if the book moves.
+	maxPrice := udecimal.MustParse("0.50")
 	response, err := client.CreateAndPostMarketOrder(context.Background(), clob.MarketOrderArgs{
-		TokenID: os.Getenv("POLYMARKET_TOKEN_ID"),
-		Amount:  udecimal.MustParse("10"),
-		Side:    clob.SideBuy,
+		TokenID:  os.Getenv("POLYMARKET_TOKEN_ID"),
+		Amount:   udecimal.MustParse("10"),
+		Side:     clob.SideBuy,
+		MaxPrice: &maxPrice,
 	}, nil, clob.OrderTypeFOK)
 	if err != nil {
 		log.Fatal(err)

@@ -486,12 +486,15 @@ type MarketOrderArgs struct {
 	// Leave unset to pay fees on top of Amount.
 	MaxSpend *udecimal.Decimal
 
-	// MaxPrice is an optional price cap for BUY market orders.
-	// The order will not fill above this price.
+	// MaxPrice is an optional price cap for BUY market orders. It must be
+	// positive and tick-aligned. Protected orders skip book price derivation;
+	// an explicit Price can tighten the cap, never weaken it. Orders whose
+	// rounded amounts could reach the next higher ask are rejected.
 	MaxPrice *udecimal.Decimal
 
-	// MinPrice is an optional price floor for SELL market orders.
-	// The order will not fill below this price.
+	// MinPrice is an optional price floor for SELL market orders. It must be
+	// positive and tick-aligned. Protected orders skip book price derivation;
+	// an explicit Price can tighten the floor, never weaken it.
 	MinPrice *udecimal.Decimal
 
 	OrderType   OrderType

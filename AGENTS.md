@@ -108,8 +108,9 @@ Commands that should pass before shipping:
    non-perps surface, TS for perps, py for surface breadth): pull the checkouts under
    `~/github/Polymarket/`, record pins and drift in
    `~/github/nijaru/knowledge/projects/go-clob-client/upstream.md`, and deep-compare
-   only drift inside already-covered surfaces. Adopt nothing without an evidenced wire
-   contract and a consumer.
+   affected surfaces. Target the full stable capability union in coherent API slices;
+   new surfaces need an evidenced wire contract, not an existing Go consumer. Compare
+   merged default-branch behavior; do not treat feature branches or canaries as contracts.
 2. Record consequential design decisions in `~/github/nijaru/knowledge/projects/go-clob-client/decisions/` before broadening the surface.
 3. Implement one coherent API slice at a time with tests and an example.
 4. Keep `README.md` up to date as public capabilities, examples, status, or limitations change.
@@ -118,6 +119,8 @@ Commands that should pass before shipping:
 
 ## Current Focus
 
-Maintenance mode: no active surface work. Upstream drift, parked follow-ups,
+Full stable SDK parity catch-up: prioritize trading safety and existing-contract
+correctness, then migrate missing surfaces in coherent slices. Live trading and wallet
+validation remain separate from fixture-based implementation. Upstream drift, follow-ups,
 orientation, and history pointers live in
 `~/github/nijaru/knowledge/projects/go-clob-client/`.
