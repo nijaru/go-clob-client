@@ -1,6 +1,7 @@
 package realtime
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -136,9 +137,10 @@ func parseEvent(data []byte) (Event, bool) {
 		return Event{}, false
 	}
 	var p struct {
-		Symbol *string         `json:"symbol"`
-		Source *Source         `json:"source"`
-		Window json.RawMessage `json:"window_seconds"`
+		Symbol       *string         `json:"symbol"`
+		Source       *Source         `json:"source"`
+		Window       json.RawMessage `json:"window_seconds"`
+		MarketStatus json.RawMessage `json:"market_status"`
 	}
 	if json.Unmarshal(w.Payload, &p) != nil || p.Symbol == nil || p.Source == nil {
 		return Event{}, false
@@ -156,6 +158,18 @@ func parseEvent(data []byte) (Event, bool) {
 		Timestamp: time.UnixMilli(*w.TS).UTC(),
 		Sequence:  *w.Seq,
 		Dropped:   w.Dropped,
+	}
+	// Equity providers state the pricing market's status alongside the price.
+	// A malformed status rejects the frame; a new status value is preserved so
+	// an added state cannot silence the price feed.
+	if w.Channel == Equity || w.Channel == EquityTWAP {
+		if len(p.MarketStatus) > 0 && !bytes.Equal(p.MarketStatus, []byte("null")) {
+			var status string
+			if json.Unmarshal(p.MarketStatus, &status) != nil {
+				return Event{}, false
+			}
+			e.MarketStatus = MarketStatus(status)
+		}
 	}
 	if w.Channel.twap() {
 		e.WindowSeconds = 60
@@ -224,6 +238,9 @@ func hasNull(data []byte, fields ...string) bool {
 
 // Joining a shared filter gets current two-minute history, not a stale initial
 // snapshot. Copy before delivery so subscribers cannot mutate one another's data.
+// A spot equity update older than the retained history can still be the first
+// report of a new market status; that status is applied without regressing the
+// history. TWAP status changes only with a new TWAP price.
 func refreshSnapshot(previous *Event, event Event) Event {
 	if event.Snapshot != nil {
 		return event
@@ -234,6 +251,9 @@ func refreshSnapshot(previous *Event, event Event) Event {
 	}
 	point := event.Update.Point
 	if len(history) > 0 && history[len(history)-1].Timestamp.After(point.Timestamp) {
+		if previous != nil && event.Channel == Equity && event.MarketStatus != "" {
+			previous.MarketStatus = event.MarketStatus
+		}
 		return *previous
 	}
 	points := make([]Point, 0, len(history)+1)

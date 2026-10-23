@@ -44,6 +44,19 @@ const (
 	SourceMassive   Source = "massive"
 )
 
+// MarketStatus is the state of the market of the instrument an equity provider
+// prices. The empty value means the provider did not state it, never open.
+// Providers can price different instruments for one symbol and report different
+// states. Unknown values are preserved for forward compatibility, so consumers
+// should treat an unrecognized status as not stated rather than open.
+type MarketStatus string
+
+const (
+	MarketOpen    MarketStatus = "open"
+	MarketClosed  MarketStatus = "closed"
+	MarketUnknown MarketStatus = "unknown"
+)
+
 type Credentials struct {
 	APIKey     string `json:"apiKey"`
 	Secret     string `json:"secret"`
@@ -109,11 +122,18 @@ type Confirmation struct{ Provider *Source }
 // ConnectionID identifies the socket generation within this client. Timestamp,
 // Sequence, Dropped and Source are price-event metadata; acceptance events
 // carry only Channel, Symbol, ConnectionID, WindowSeconds and Confirmation.
+//
+// MarketStatus is the pricing market's state on equity channels and is empty
+// elsewhere or when the provider does not state one. On spot equity updates it
+// can change without a new price: a status-only update repeats the last price
+// timestamp with IsCarriedForward set, so updates must not be deduplicated by
+// price timestamp alone.
 type Event struct {
 	Type          EventType
 	Channel       Channel
 	Symbol        string
 	Source        Source
+	MarketStatus  MarketStatus
 	Timestamp     time.Time
 	Sequence      uint64
 	Dropped       *uint64

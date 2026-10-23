@@ -90,3 +90,126 @@ func TestRequestValidationBeforeNetworkAllocation(t *testing.T) {
 		t.Fatal("invalid request opened a connection")
 	}
 }
+
+func TestEquityMarketStatus(t *testing.T) {
+	spot := priceFixture("price.equity", "aapl", true)
+	spot = strings.Replace(
+		spot,
+		`"source":"newvendor",`,
+		`"source":"newvendor","market_status":"closed",`,
+		1,
+	)
+	event, ok := parseEvent([]byte(spot))
+	if !ok || event.MarketStatus != MarketClosed {
+		t.Fatalf("snapshot status = %q (ok=%v), want closed", event.MarketStatus, ok)
+	}
+	twap := priceFixture("price.equity.twap", "aapl", false)
+	twap = strings.Replace(
+		twap,
+		`"source":"newvendor",`,
+		`"source":"newvendor","market_status":"open",`,
+		1,
+	)
+	if event, ok := parseEvent([]byte(twap)); !ok || event.MarketStatus != MarketOpen {
+		t.Fatalf("twap status = %q (ok=%v), want open", event.MarketStatus, ok)
+	}
+	// Omitted status means not stated, never open.
+	if event, ok := parseEvent([]byte(priceFixture("price.equity", "aapl", false))); !ok ||
+		event.MarketStatus != "" {
+		t.Fatalf("absent status = %q (ok=%v), want unstated", event.MarketStatus, ok)
+	}
+	// Crypto channels carry no market status, even as an extension field.
+	crypto := priceFixture("price.crypto", "btcusd", false)
+	crypto = strings.Replace(
+		crypto,
+		`"source":"newvendor",`,
+		`"source":"newvendor","market_status":"closed",`,
+		1,
+	)
+	if event, ok := parseEvent([]byte(crypto)); !ok || event.MarketStatus != "" {
+		t.Fatalf("crypto status = %q (ok=%v), want unstated", event.MarketStatus, ok)
+	}
+	// A new status value is retained rather than silencing the price feed.
+	future := priceFixture("price.equity", "aapl", false)
+	future = strings.Replace(
+		future,
+		`"source":"newvendor",`,
+		`"source":"newvendor","market_status":"halted",`,
+		1,
+	)
+	if event, ok := parseEvent([]byte(future)); !ok || event.MarketStatus != "halted" {
+		t.Fatalf("future status = %q (ok=%v), want halted", event.MarketStatus, ok)
+	}
+	// A malformed status type still rejects the frame.
+	bad := priceFixture("price.equity", "aapl", false)
+	bad = strings.Replace(
+		bad,
+		`"source":"newvendor",`,
+		`"source":"newvendor","market_status":7,`,
+		1,
+	)
+	if _, ok := parseEvent([]byte(bad)); ok {
+		t.Fatal("accepted a numeric market status")
+	}
+}
+
+func TestStaleEquityStatusKeepsHistory(t *testing.T) {
+	snapshot := `{"v":1,"channel":"price.equity","seq":1,"ts":123456,"snapshot":true,"payload":{"symbol":"aapl","source":"pyth","market_status":"open","data":[{"timestamp":123456,"value":123.45,"full_accuracy_value":"123.450000000000000001"}]}}`
+	previous, ok := parseEvent([]byte(snapshot))
+	if !ok {
+		t.Fatal("snapshot rejected")
+	}
+	// A status-only update repeats the last price timestamp while the retained
+	// history already extends past it.
+	statusOnly := `{"v":1,"channel":"price.equity","seq":2,"ts":123458,"payload":{"symbol":"aapl","source":"pyth","market_status":"closed","timestamp":123450,"value":123.45,"full_accuracy_value":"123.450000000000000001","received_at":123458,"is_carried_forward":true}}`
+	update, ok := parseEvent([]byte(statusOnly))
+	if !ok {
+		t.Fatal("status-only update rejected")
+	}
+	refreshed := refreshSnapshot(&previous, update)
+	if refreshed.Type != SnapshotEvent || refreshed.MarketStatus != MarketClosed {
+		t.Fatalf("status not applied: %+v", refreshed)
+	}
+	if len(refreshed.Snapshot.Data) != 1 ||
+		refreshed.Snapshot.Data[0].Timestamp.UnixMilli() != 123456 {
+		t.Fatalf("history regressed to the stale price: %+v", refreshed.Snapshot.Data)
+	}
+	// TWAP status changes only with a new TWAP price.
+	twapSnapshot := strings.Replace(
+		snapshot,
+		`"channel":"price.equity"`,
+		`"channel":"price.equity.twap"`,
+		1,
+	)
+	twapSnapshot = strings.Replace(
+		twapSnapshot,
+		`"source":"pyth",`,
+		`"source":"pyth","window_seconds":60,`,
+		1,
+	)
+	twapPrevious, ok := parseEvent([]byte(twapSnapshot))
+	if !ok {
+		t.Fatal("twap snapshot rejected")
+	}
+	twapUpdate := strings.Replace(
+		strings.Replace(statusOnly, `"channel":"price.equity"`, `"channel":"price.equity.twap"`, 1),
+		`"window_seconds":60,`,
+		``,
+		1,
+	)
+	// The update fixture has no window yet; add the fixed TWAP window.
+	twapUpdate = strings.Replace(
+		twapUpdate,
+		`"source":"pyth",`,
+		`"source":"pyth","window_seconds":60,`,
+		1,
+	)
+	update, ok = parseEvent([]byte(twapUpdate))
+	if !ok {
+		t.Fatalf("twap update rejected: %s", twapUpdate)
+	}
+	refreshed = refreshSnapshot(&twapPrevious, update)
+	if refreshed.MarketStatus != MarketOpen {
+		t.Fatalf("twap status adopted without a new price: %+v", refreshed)
+	}
+}
