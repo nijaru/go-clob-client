@@ -105,7 +105,9 @@ If order liveness needs automatic heartbeats, explicitly call
 `Close`/`Shutdown` permanently close **only the heartbeat lifecycle**: they do not
 revoke credentials or disable foreground requests. `Deauthenticate(ctx)` joins
 that lifecycle and returns a public view; existing Go references are not consumed.
-Discard authenticated references when their ownership ends.
+Discard authenticated references when their ownership ends. A stale heartbeat ID is
+reported as `*clob.HeartbeatMismatchError` carrying the ID the service expects; the
+automatic loop adopts it and retries instead of wedging on the old ID.
 
 For confirmed fills, use `WaitForOrderFillSettlement` with the accepted response.
 Cancellation of a wait cannot undo an order or transaction already submitted.
@@ -140,7 +142,6 @@ The wire asset field is `tokenId` for both identifier kinds. Legacy fee-cache
 setters do not override V2/V3 market fee curves.
 
 ### RFQ
-
 Legacy RFQ REST operations and combo requester/quoter flows are distinct. Combo
 request/accept uses `BuilderAuth` and the builder gateway; no quotes and maker
 declines are ordinary results. `WaitForComboFill` treats FILLED/CONFIRMED as settled
@@ -151,6 +152,17 @@ only with a valid transaction hash.
 Session-key signers cannot use combo RFQ. Reconnect is explicit; ambiguous command
 cancellation closes the socket rather than miscorrelating a late acknowledgement.
 See the [local quoter example](examples/clob/combo_rfq_quoter/main.go).
+
+### Rewards, rebates and notifications
+
+Market reward discovery uses `GetRewardMarkets`, with range bounds, sorting and
+opaque cursors; `GetCurrentRewards` and `GetRewardsForMarket` accept a `sponsored`
+filter that selects sponsored or native rewards. `GetCurrentRebates` reads a
+maker's per-day USDC fee rebates. Total earnings retain their native and sponsored
+breakdowns separately. Notifications include taker-tier upgrades, whose payload
+carries the previous and new tier, the rebate in basis points, and the daily
+snapshot's calendar date; unknown notification kinds are still skipped rather
+than failing the feed.
 
 ## Wallet operations
 
@@ -232,14 +244,20 @@ Financial wire decimals retain their digits; accounting ZIPs stream to a
 caller-owned writer. Indexed JSON reads retry HTTP 429 twice, with cancellable
 waits and a five-second server-delay ceiling; accounting downloads do not retry.
 Known combo IDs normalize to structural condition IDs; unknown wallet activity
-keeps its raw payload.
+keeps its raw payload. `GetTokenReferences` resolves outcome assets by decimal
+asset ID or by condition ID, returning settlement metadata such as the module
+(legacy CTF, binary, neg-risk, combo), the on-chain outcome index and the market's
+order-book index, which can differ.
 
 Gamma provides offset and query-bound keyset discovery. Comment offsets count
 roots, not replies. Offset-only comments cap at 200 and search at 100 pages;
 iterators report incomplete enumeration instead of silently claiming exhaustion.
 Nullable state retains unknown versus explicit false/zero, financial decimals
 remain exact, and `OutcomeDetails` pairs legacy and native assets by wire index.
-Timestamps normalize Gamma's ISO/PostgreSQL forms to UTC. See
+Timestamps normalize Gamma's ISO/PostgreSQL forms to UTC. V2 markets expose their
+oracle metadata (`OnchainEventID`, `RequestID`, `ResolutionStatus`) separately from
+the legacy UMA lifecycle, and market/event discovery can filter on protocol
+version, V2 resolution state and V2 oracle selectors. See
 [Gamma package documentation](https://pkg.go.dev/github.com/nijaru/go-clob-client/gamma)
 for filter/keyset eligibility and wire models.
 
@@ -265,15 +283,22 @@ See
 
 `NewMarketStream(ctx)` pools public filters with independently cancellable handles.
 Account sessions own their handshake, heartbeat and reconnect. Overflow is an
-explicit error, not silent update loss. Book reconstruction and resync backfill
+explicit error, not silent update loss. Stream events expose the server-attested
+event horizon (`PerpsSessionEvent.EventTimestamp`); zero attests no horizon and is
+reported as nil, never as the Unix epoch. Book reconstruction and resync backfill
 remain caller-owned. Timestamp-only histories report nonprogress when exhaustive
-retrieval cannot be proven.
+retrieval cannot be proven; a full-millisecond tail is probed before the boundary
+moves.
 
 Legacy CLOB WebSocket/RTDS feeds remain available. RTDS shares broad wire topics,
 filters local interests independently, and exposes generic `Unsubscribe`. `realtime` separately implements
 Polybolt's authenticated crypto/equity spot and fixed 60-second TWAP feeds with
 pooled filters, acknowledgements, snapshots and provider provenance. Requested
-provider and actual source are distinct. `sports` is a public all-games feed, not
+provider and actual source are distinct. Equity events carry the pricing market's
+status (`open`, `closed`, `unknown`); an omitted status means not stated, never
+open, and a status can change on a spot update whose price is older than the
+retained history, so updates must not be deduplicated by price timestamp alone.
+`sports` is a public all-games feed, not
 a server-filtered subscription protocol. Reconnect does not imply replay or gap
 recovery. Stream examples default to local fixtures.
 
@@ -282,7 +307,7 @@ recovery. Stream examples default to local fixtures.
 | Example | Purpose |
 | --- | --- |
 | [`examples/clob`](examples/clob) | Public reads, auth, protected orders, CTF, wallets, session keys and RFQ |
-| [`examples/data`](examples/data) | Data v2 portfolios and analytics |
+| [`examples/data`](examples/data) | Data v2 portfolios, token references and analytics |
 | [`examples/gamma`](examples/gamma) | Search and keyset discovery |
 | [`examples/bridge`](examples/bridge) | Cross-chain assets; optional explicit address registration |
 | [`examples/perps`](examples/perps) | Market reads and local wallet preparation |
