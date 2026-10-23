@@ -80,9 +80,11 @@ func (p *ChildCommentNotificationPayload) UnmarshalJSON(raw []byte) error {
 	return nil
 }
 
-// TS DateLikeToIsoDateTimeStringSchema accepts epoch milliseconds or date text.
-// Parsing integers directly avoids float64 rounding of financial/event metadata.
-func decodeNotificationDate(raw []byte) (*time.Time, error) {
+// ParseTimestamp decodes a wire instant from the encodings the CLOB services
+// use for the same field: epoch milliseconds (JSON number or numeric text) and
+// ISO 8601 or calendar date text. Null and empty values are absent. Parsing
+// integers directly avoids float64 rounding of event metadata.
+func ParseTimestamp(raw []byte) (*time.Time, error) {
 	raw = bytes.TrimSpace(raw)
 	if len(raw) == 0 || bytes.Equal(raw, []byte("null")) || bytes.Equal(raw, []byte(`""`)) {
 		return nil, nil
@@ -91,7 +93,7 @@ func decodeNotificationDate(raw []byte) (*time.Time, error) {
 	if err := stdjson.Unmarshal(raw, &text); err != nil {
 		var number stdjson.Number
 		if err := stdjson.Unmarshal(raw, &number); err != nil {
-			return nil, fmt.Errorf("notification date: %w", err)
+			return nil, fmt.Errorf("timestamp: %w", err)
 		}
 		text = number.String()
 	}
@@ -109,5 +111,11 @@ func decodeNotificationDate(raw []byte) (*time.Time, error) {
 			return &instant, nil
 		}
 	}
-	return nil, fmt.Errorf("notification date: invalid value %q", text)
+	return nil, fmt.Errorf("timestamp: invalid value %q", text)
+}
+
+// decodeNotificationDate accepts the notification surface's date encodings,
+// which ParseTimestamp already covers.
+func decodeNotificationDate(raw []byte) (*time.Time, error) {
+	return ParseTimestamp(raw)
 }

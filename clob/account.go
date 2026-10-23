@@ -143,7 +143,9 @@ type HeartbeatResponse struct {
 	Error       string `json:"error,omitzero"`
 }
 
-// PostHeartbeat posts a heartbeat to maintain order liveness and maintain priority (2026 feature).
+// PostHeartbeat posts a heartbeat to maintain order liveness and maintain priority.
+// A stale ID is reported as *HeartbeatMismatchError, which carries the ID the
+// service currently expects.
 func (c *AuthenticatedClient) PostHeartbeat(
 	ctx context.Context,
 	heartbeatID string,
@@ -157,6 +159,11 @@ func (c *AuthenticatedClient) PostHeartbeat(
 
 	var out HeartbeatResponse
 	err := c.postJSON(ctx, heartbeatsEndpoint, req, polyhttp.AuthL2Builder, &out)
+	if err != nil {
+		if mismatch, ok := heartbeatMismatch(err); ok {
+			return &out, mismatch
+		}
+	}
 	return &out, err
 }
 

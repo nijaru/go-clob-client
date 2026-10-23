@@ -3,6 +3,7 @@ package ws
 import (
 	"slices"
 	"testing"
+	"time"
 
 	json "github.com/go-json-experiment/json"
 )
@@ -76,7 +77,8 @@ func TestNewMarketRoutingAndFinancialFields(t *testing.T) {
 		!slices.Equal(event.Tags, []string{"sports"}) ||
 		event.SportsMarketType != "spread" ||
 		event.GroupItemTitle != "Team A" ||
-		event.GameStartTime != "1772752581815" {
+		event.GameStartTime == nil ||
+		event.GameStartTime.UnixMilli() != 1772752581815 {
 		t.Fatalf("routing metadata lost: %+v", event)
 	}
 	if event.Line == nil || *event.Line != "-1.5" || event.OrderPriceMinTickSize == nil ||
@@ -84,5 +86,51 @@ func TestNewMarketRoutingAndFinancialFields(t *testing.T) {
 		*event.TakerBaseFee != "0.123456789012345678901" || event.FeesEnabled == nil || *event.FeesEnabled ||
 		string(event.FeeSchedule) != `{"rate":0.025,"exponent":2}` {
 		t.Fatalf("financial metadata lost: %+v", event)
+	}
+}
+
+func TestNewMarketGameStartTimeEncodings(t *testing.T) {
+	// The stream sends the start time as ISO date-time text, the same encoding
+	// market notifications use; older frames carry epoch milliseconds. Rejecting
+	// the text form dropped the whole new-market event.
+	decode := func(value string) (*time.Time, error) {
+		var event NewMarketEvent
+		payload := `{"event_type":"new_market","id":"m","market":"condition"`
+		if value != "" {
+			payload += `,"game_start_time":` + value
+		}
+		payload += `}`
+		if err := json.Unmarshal([]byte(payload), &event); err != nil {
+			return nil, err
+		}
+		return event.GameStartTime, nil
+	}
+	for _, tc := range []struct {
+		name  string
+		value string
+		want  string
+	}{
+		{"iso offset", `"2026-10-09T14:13:14.123+02:00"`, "2026-10-09T12:13:14.123Z"},
+		{"iso postgres space", `"2026-10-09 12:13:14.123"`, "2026-10-09T12:13:14.123Z"},
+		{"date only", `"2026-10-09"`, "2026-10-09T00:00:00Z"},
+		{"epoch number", `1791547994123`, "2026-10-09T12:13:14.123Z"},
+		{"epoch numeric text", `"1791547994123"`, "2026-10-09T12:13:14.123Z"},
+		{"absent", ``, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			start, err := decode(tc.value)
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch {
+			case tc.want == "" && start != nil:
+				t.Fatalf("start = %v, want absent", start)
+			case tc.want != "" && (start == nil || start.UTC().Format(time.RFC3339Nano) != tc.want):
+				t.Fatalf("start = %v, want %s", start, tc.want)
+			}
+		})
+	}
+	if _, err := decode(`"not-a-date"`); err == nil {
+		t.Fatal("accepted an invalid game_start_time")
 	}
 }

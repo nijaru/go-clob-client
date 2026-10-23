@@ -101,3 +101,29 @@ func TestBalanceNumericWire(t *testing.T) {
 		t.Fatalf("integer units rounded: %+v", result)
 	}
 }
+
+func TestTakerTierUpgradedNotification(t *testing.T) {
+	var notification Notification
+	if err := json.Unmarshal([]byte(
+		`{"type":11,"timestamp":1791547994123,"payload":{"previous_tier":1,"tier":2,"rebate_bps":25,"snapshot_date":"2026-10-09"}}`,
+	), &notification); err != nil {
+		t.Fatal(err)
+	}
+	tier := notification.Payload.TakerTierUpgraded
+	if notification.Type != NotificationTakerTierUpgraded || tier == nil {
+		t.Fatalf("type 11 not decoded: %+v", notification)
+	}
+	if tier.PreviousTier != 1 || tier.Tier != 2 || tier.RebateBPS != 25 ||
+		tier.SnapshotDate.Format(time.DateOnly) != "2026-10-09" {
+		t.Fatalf("tier upgrade payload: %+v", tier)
+	}
+	// The snapshot day is a calendar date, not an instant; other encodings
+	// would make the day depend on the reader's time zone.
+	for _, date := range []string{`1791547994123`, `"2026-10-09T00:00:00Z"`, `""`, `null`} {
+		if err := json.Unmarshal([]byte(
+			`{"type":11,"timestamp":1791547994123,"payload":{"previous_tier":1,"tier":2,"rebate_bps":25,"snapshot_date":`+date+`}}`,
+		), &notification); err == nil {
+			t.Fatalf("accepted snapshot_date %s", date)
+		}
+	}
+}

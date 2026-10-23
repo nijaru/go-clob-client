@@ -2,6 +2,7 @@ package ws
 
 import (
 	"strings"
+	"time"
 
 	json "github.com/go-json-experiment/json"
 	"github.com/go-json-experiment/json/jsontext"
@@ -462,8 +463,10 @@ type NewMarketEvent struct {
 	Active           *bool               `json:"active,omitzero"`
 	SportsMarketType string              `json:"sports_market_type,omitzero"`
 	Line             *clob.DecimalString `json:"line,omitzero"`
-	// GameStartTime preserves the epoch-millisecond wire value (number or string).
-	GameStartTime         clob.DecimalString  `json:"game_start_time,omitzero"`
+	// GameStartTime is the market's start instant. The stream encodes it as ISO
+	// date-time text, the same encoding market notifications use, while older
+	// frames carry epoch milliseconds; both decode here. Nil means not stated.
+	GameStartTime         *time.Time          `json:"game_start_time,omitzero"`
 	OrderPriceMinTickSize *clob.DecimalString `json:"order_price_min_tick_size,omitzero"`
 	GroupItemTitle        string              `json:"group_item_title,omitzero"`
 	TakerBaseFee          *clob.DecimalString `json:"taker_base_fee,omitzero"`
@@ -472,16 +475,26 @@ type NewMarketEvent struct {
 }
 
 // UnmarshalJSON accepts assets_ids, asset_ids and token_ids, in that order.
-// Presence, not non-emptiness, selects the authoritative spelling.
+// Presence, not non-emptiness, selects the authoritative spelling. It also
+// decodes game_start_time from either wire encoding.
 func (e *NewMarketEvent) UnmarshalJSON(data []byte) error {
 	type alias NewMarketEvent
 	var value alias
-	if err := json.Unmarshal(data, &value); err != nil {
+	wire := struct {
+		*alias
+		GameStartTime jsontext.Value `json:"game_start_time"`
+	}{alias: &value}
+	if err := json.Unmarshal(data, &wire); err != nil {
 		return err
 	}
 	if err := decodeMarketAlias(data, &value.AssetIDs, "assets_ids", "asset_ids", "token_ids"); err != nil {
 		return err
 	}
+	start, err := clob.ParseTimestamp(wire.GameStartTime)
+	if err != nil {
+		return err
+	}
+	value.GameStartTime = start
 	*e = NewMarketEvent(value)
 	return nil
 }
@@ -535,6 +548,7 @@ func decodeMarketAlias(data []byte, dst any, keys ...string) error {
 }
 
 // OrderStatus represents the lifecycle state of an order as streamed by the user channel.
+// The set is open: values introduced by the service flow through unchanged.
 type OrderStatus string
 
 const (
@@ -544,10 +558,20 @@ const (
 	OrderStatusDelayed   OrderStatus = "DELAYED"
 	OrderStatusUnmatched OrderStatus = "UNMATCHED"
 	OrderStatusCanceled  OrderStatus = "CANCELED"
-	OrderStatusFilled    OrderStatus = "FILLED"
-	OrderStatusExpired   OrderStatus = "EXPIRED"
-	OrderStatusRetrying  OrderStatus = "RETRYING"
-	OrderStatusFailed    OrderStatus = "FAILED"
+	// OrderStatusCanceledMarketResolved, OrderStatusCanceledNotEnoughBalance,
+	// OrderStatusCanceledMarketNotFound, OrderStatusCanceledExpiredOrder and
+	// OrderStatusCanceledOrderTimedOut are cancellation reasons carried as
+	// distinct statuses.
+	OrderStatusCanceledMarketResolved   OrderStatus = "CANCELED_MARKET_RESOLVED"
+	OrderStatusCanceledNotEnoughBalance OrderStatus = "CANCELED_NOT_ENOUGH_BALANCE"
+	OrderStatusCanceledMarketNotFound   OrderStatus = "CANCELED_MARKET_NOT_FOUND"
+	OrderStatusCanceledExpiredOrder     OrderStatus = "CANCELED_EXPIRED_ORDER"
+	OrderStatusCanceledOrderTimedOut    OrderStatus = "CANCELED_ORDER_TIMED_OUT"
+	OrderStatusInvalid                  OrderStatus = "INVALID"
+	OrderStatusFilled                   OrderStatus = "FILLED"
+	OrderStatusExpired                  OrderStatus = "EXPIRED"
+	OrderStatusRetrying                 OrderStatus = "RETRYING"
+	OrderStatusFailed                   OrderStatus = "FAILED"
 )
 
 // TradeStatus represents the lifecycle state of a trade as streamed by the user channel.

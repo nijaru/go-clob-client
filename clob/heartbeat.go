@@ -137,15 +137,38 @@ func (c *AuthenticatedClient) runHeartbeatLoop(
 				if ctx.Err() != nil {
 					return
 				}
-				slog.Warn("heartbeat failed", "err", err)
-				continue
+				// A stale ID never becomes current by waiting, and the rejected send
+				// did not refresh the deadline. Adopt the expected ID and retry now.
+				if mismatch, ok := errors.AsType[*HeartbeatMismatchError](err); ok {
+					c.adoptHeartbeatID(done, mismatch.HeartbeatID)
+					if resp, err = c.PostHeartbeat(ctx, mismatch.HeartbeatID); err != nil {
+						if ctx.Err() != nil {
+							return
+						}
+						slog.Warn("heartbeat failed", "err", err)
+						continue
+					}
+				} else {
+					slog.Warn("heartbeat failed", "err", err)
+					continue
+				}
 			}
 
-			c.heartbeatMu.Lock()
-			if c.heartbeatDone == done {
-				c.heartbeatID = resp.HeartbeatID
+			if resp.HeartbeatID == "" {
+				// A successful send always rotates the ID; retaining the current one
+				// keeps the deadline registered instead of restarting a registration.
+				slog.Warn("heartbeat response omitted the next ID", "heartbeat_id", heartbeatID)
+				continue
 			}
-			c.heartbeatMu.Unlock()
+			c.adoptHeartbeatID(done, resp.HeartbeatID)
 		}
+	}
+}
+
+func (c *AuthenticatedClient) adoptHeartbeatID(done chan struct{}, heartbeatID string) {
+	c.heartbeatMu.Lock()
+	defer c.heartbeatMu.Unlock()
+	if c.heartbeatDone == done {
+		c.heartbeatID = heartbeatID
 	}
 }

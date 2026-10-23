@@ -1,7 +1,9 @@
 package clob
 
 import (
+	stdjson "encoding/json"
 	"errors"
+	"strconv"
 
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
 )
@@ -115,3 +117,38 @@ func IsUnauthorized(err error) bool {
 }
 
 var errRemoteBuilderURLRequired = errors.New("remote builder auth requires a URL")
+
+// HeartbeatMismatchError reports that an order heartbeat used a stale ID.
+// HeartbeatID is the ID the service currently expects, and can be empty after
+// a legacy heartbeat. A rejected send does not refresh the order-cancellation
+// deadline, so retry with this ID and retain the next successful one.
+type HeartbeatMismatchError struct {
+	*APIError
+	HeartbeatID string
+}
+
+func (e *HeartbeatMismatchError) Error() string {
+	return "order heartbeat rejected: stale ID; expected " + strconv.Quote(e.HeartbeatID)
+}
+
+// Unwrap exposes the underlying API error for status and body inspection.
+func (e *HeartbeatMismatchError) Unwrap() error { return e.APIError }
+
+// heartbeatMismatch recognizes the service's rejection of a stale heartbeat ID.
+// The response carries only error_msg and heartbeat_id, so the expected ID is
+// read from the error body rather than a successful response model.
+func heartbeatMismatch(err error) (*HeartbeatMismatchError, bool) {
+	apiErr, ok := errors.AsType[*APIError](err)
+	if !ok || apiErr.StatusCode != 400 {
+		return nil, false
+	}
+	var body struct {
+		ErrorMsg    *string `json:"error_msg"`
+		HeartbeatID *string `json:"heartbeat_id"`
+	}
+	if stdjson.Unmarshal(apiErr.Body, &body) != nil || body.ErrorMsg == nil ||
+		*body.ErrorMsg != "Invalid Heartbeat ID" || body.HeartbeatID == nil {
+		return nil, false
+	}
+	return &HeartbeatMismatchError{APIError: apiErr, HeartbeatID: *body.HeartbeatID}, true
+}

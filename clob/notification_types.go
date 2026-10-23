@@ -40,6 +40,7 @@ const (
 	NotificationOrderFillFailed   NotificationType = 8
 	NotificationAutoRedeemed      NotificationType = 9
 	NotificationComboAutoRedeemed NotificationType = 10
+	NotificationTakerTierUpgraded NotificationType = 11
 )
 
 // NotificationPayload is a discriminated union keyed by Notification.Type.
@@ -55,6 +56,7 @@ type NotificationPayload struct {
 	OrderFillFailed   *OrderNotificationPayload
 	AutoRedeemed      *AutoRedeemedNotificationPayload
 	ComboAutoRedeemed *ComboAutoRedeemedNotificationPayload
+	TakerTierUpgraded *TakerTierUpgradedNotificationPayload
 }
 
 // OrderNotificationPayload is the payload of an order lifecycle notification
@@ -247,6 +249,41 @@ type ComboAutoRedeemedNotificationPayload struct {
 	TransactionHash string        `json:"txnHash"`
 }
 
+// TakerTierUpgradedNotificationPayload is the payload of a taker tier upgrade
+// notification: the account moved to a new taker tier in a daily snapshot.
+// RebateBPS is in basis points; SnapshotDate is the snapshot's UTC calendar day.
+type TakerTierUpgradedNotificationPayload struct {
+	PreviousTier int       `json:"previous_tier"`
+	Tier         int       `json:"tier"`
+	RebateBPS    int64     `json:"rebate_bps"`
+	SnapshotDate time.Time `json:"snapshot_date"`
+}
+
+// UnmarshalJSON requires the snapshot's date-only text encoding. Epoch
+// timestamps would make the snapshot's calendar day depend on the reader's
+// time zone.
+func (p *TakerTierUpgradedNotificationPayload) UnmarshalJSON(raw []byte) error {
+	type plain TakerTierUpgradedNotificationPayload
+	var wire struct {
+		plain
+		SnapshotDate *string `json:"snapshot_date"`
+	}
+	if err := stdjson.Unmarshal(raw, &wire); err != nil {
+		return err
+	}
+	if wire.SnapshotDate == nil {
+		return errors.New("taker tier upgraded notification: missing snapshot_date")
+	}
+	date, err := time.Parse(time.DateOnly, *wire.SnapshotDate)
+	if err != nil {
+		return fmt.Errorf("taker tier upgraded notification: invalid snapshot_date: %w", err)
+	}
+	value := TakerTierUpgradedNotificationPayload(wire.plain)
+	value.SnapshotDate = date
+	*p = value
+	return nil
+}
+
 // errUnknownNotificationType is returned by Notification.UnmarshalJSON when
 // the wire type is not one of the known notification kinds. GetNotifications
 // skips these so newly introduced kinds cannot fail the feed.
@@ -362,6 +399,16 @@ func (n *Notification) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		n.Payload.ComboAutoRedeemed = combo
+		n.fill(id, owner, ts, ntype)
+		return nil
+	case NotificationTakerTierUpgraded:
+		id, owner, ts, tier, err := decodeNotificationPayload[TakerTierUpgradedNotificationPayload](
+			data,
+		)
+		if err != nil {
+			return err
+		}
+		n.Payload.TakerTierUpgraded = tier
 		n.fill(id, owner, ts, ntype)
 		return nil
 	default:
