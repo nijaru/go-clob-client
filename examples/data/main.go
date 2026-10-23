@@ -40,4 +40,24 @@ func main() {
 		}
 		fmt.Printf("%s: %s shares @ avg %s\n", title, pos.CurrentSize, pos.AvgPrice)
 	}
+	if len(page.Items) == 0 {
+		return
+	}
+
+	// Token references add the issuing module, on-chain outcome index and the
+	// market's order-book index, which can differ from the outcome slot.
+	references, err := client.GetTokenReferences(ctx, data.TokenReferenceSelectors{
+		AssetIDs: []string{page.Items[0].AssetID},
+	})
+	if err != nil {
+		log.Fatalf("get token references: %v", err)
+	}
+	for _, reference := range references {
+		fmt.Printf(
+			"%s: module=%s outcome=%d\n",
+			reference.AssetID,
+			reference.Module,
+			reference.OutcomeIndex,
+		)
+	}
 }
