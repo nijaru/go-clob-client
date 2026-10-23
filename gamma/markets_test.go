@@ -2,6 +2,9 @@ package gamma
 
 import (
 	"net/http"
+	"net/url"
+	"slices"
+	"strings"
 	"testing"
 )
 
@@ -250,5 +253,69 @@ func TestClient_GetMarketTypes(t *testing.T) {
 	}
 	if len(resp.MarketTypes) != 2 || resp.MarketTypes[0] != "moneyline" {
 		t.Errorf("market types = %+v", resp)
+	}
+}
+
+func TestClient_MarketV2OracleMetadataAndFilters(t *testing.T) {
+	var query url.Values
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.Query()
+		writeJSON(w, []Market{{
+			ID:               "m1",
+			Version:          ptr(ProtocolVersionV2),
+			OnchainEventID:   ptr("0x02" + strings.Repeat("ab", 28) + "000000"),
+			RequestID:        ptr("0x" + strings.Repeat("cd", 31) + "00"),
+			ResolutionStatus: ptr(MarketResolutionActive),
+		}})
+	})
+	markets, err := client.GetMarkets(t.Context(), MarketFilterParams{
+		Versions:         []string{"v1", "v2"},
+		ResolutionStatus: "active",
+		OnchainEventIDs:  []string{"0x01"},
+		RequestIDs:       []string{"0x02"},
+	})
+	if err != nil {
+		t.Fatalf("GetMarkets: %v", err)
+	}
+	if got := query["version"]; !slices.Equal(got, []string{"v1", "v2"}) {
+		t.Fatalf("version = %v", got)
+	}
+	if query.Get("resolution_status") != "active" ||
+		!slices.Equal(query["onchain_event_ids"], []string{"0x01"}) ||
+		!slices.Equal(query["request_ids"], []string{"0x02"}) {
+		t.Fatalf("query = %v", query)
+	}
+	market := markets[0]
+	if market.OnchainEventID == nil || market.RequestID == nil ||
+		market.ResolutionStatus == nil || *market.ResolutionStatus != MarketResolutionActive {
+		t.Fatalf("oracle metadata lost: %+v", market)
+	}
+	// The V2 resolution state is distinct from the legacy UMA lifecycle.
+	if market.UmaResolutionStatus != nil {
+		t.Fatalf("uma lifecycle invented: %+v", market.UmaResolutionStatus)
+	}
+}
+
+func TestClient_MarketFilterValidation(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("invalid filters reached the service: %s", r.URL.RawQuery)
+		writeJSON(w, []Market{})
+	})
+	for name, params := range map[string]MarketFilterParams{
+		"unknown version":     {Versions: []string{"v3"}},
+		"three versions":      {Versions: []string{"v1", "v2", "v1"}},
+		"bad resolution":      {ResolutionStatus: "settled"},
+		"too many onchain":    {OnchainEventIDs: make([]string, 101)},
+		"too many requestids": {RequestIDs: make([]string, 101)},
+	} {
+		if _, err := client.GetMarkets(t.Context(), params); err == nil {
+			t.Fatalf("%s: accepted", name)
+		}
+		if _, err := client.GetMarketsPage(t.Context(), params, ""); err == nil {
+			t.Fatalf("%s: keyset accepted", name)
+		}
+		if _, err := client.GetEvents(t.Context(), EventFilterParams{Versions: []string{"v3"}}); err == nil {
+			t.Fatalf("%s: events accepted an unknown version", name)
+		}
 	}
 }

@@ -2,6 +2,7 @@ package gamma
 
 import (
 	"context"
+	"fmt"
 	"iter"
 	"net/url"
 	"strconv"
@@ -66,6 +67,9 @@ func (c *Client) GetMarketBySlug(
 
 // GetMarkets returns a list of markets based on the provided filters.
 func (c *Client) GetMarkets(ctx context.Context, params MarketFilterParams) ([]Market, error) {
+	if err := params.validateFilters(); err != nil {
+		return nil, err
+	}
 	if err := validateOffset(params.Limit, params.Offset, -1); err != nil {
 		return nil, err
 	}
@@ -134,8 +138,44 @@ func marketQuery(params MarketFilterParams) url.Values {
 	setString(query, "start_date_max", params.StartDateMax)
 	setString(query, "end_date_min", params.EndDateMin)
 	setString(query, "end_date_max", params.EndDateMax)
+	for _, version := range params.Versions {
+		query.Add("version", version)
+	}
+	for _, id := range params.OnchainEventIDs {
+		query.Add("onchain_event_ids", id)
+	}
+	for _, id := range params.RequestIDs {
+		query.Add("request_ids", id)
+	}
+	setString(query, "resolution_status", params.ResolutionStatus)
 
 	return query
+}
+
+// validateFilters rejects filter values the service cannot express. Versions
+// are limited to the two protocol versions, and the V2 oracle selectors are
+// bounded per request.
+func (p MarketFilterParams) validateFilters() error {
+	if err := validateVersions(p.Versions); err != nil {
+		return err
+	}
+	switch MarketResolutionStatus(p.ResolutionStatus) {
+	case "", MarketResolutionInactive, MarketResolutionActive, MarketResolutionResolved:
+	default:
+		return fmt.Errorf(
+			"gamma: resolution_status must be inactive, active, or resolved, got %q",
+			p.ResolutionStatus,
+		)
+	}
+	for key, values := range map[string][]string{
+		"onchain_event_ids": p.OnchainEventIDs,
+		"request_ids":       p.RequestIDs,
+	} {
+		if len(values) > 100 {
+			return fmt.Errorf("gamma: %s accepts at most 100 values", key)
+		}
+	}
+	return nil
 }
 
 // Only markets store their sortable volume and liquidity in numeric shadow columns.

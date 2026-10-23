@@ -69,118 +69,125 @@ type Market struct {
 	MinimumOrderSize            Decimal          `json:"minimumOrderSize,omitzero"`
 	MinimumBaseWithdrawalAmount Decimal          `json:"minimumBaseWithdrawalAmount,omitzero"`
 
-	FormatType                   *string            `json:"formatType,omitzero"`
-	LowerBound                   ScalarText         `json:"lowerBound,omitzero"`
-	UpperBound                   ScalarText         `json:"upperBound,omitzero"`
-	MarketGroup                  *int               `json:"marketGroup,omitzero"`
-	GroupItemTitle               *string            `json:"groupItemTitle,omitzero"`
-	GroupItemThreshold           ScalarText         `json:"groupItemThreshold,omitzero"`
-	PositionIDs                  []string           `json:"positionIds,omitzero"`
-	QuestionID                   *string            `json:"questionID,omitzero"`
-	UmaEndDate                   Timestamp          `json:"umaEndDate,omitzero"`
-	UmaResolutionStatus          *string            `json:"umaResolutionStatus,omitzero"`
-	VolumeNum                    Decimal            `json:"volumeNum,omitzero"`
-	LiquidityNum                 Decimal            `json:"liquidityNum,omitzero"`
-	SecondsDelay                 *int               `json:"secondsDelay,omitzero"`
-	TeamAID                      *string            `json:"teamAID,omitzero"`
-	TeamBID                      *string            `json:"teamBID,omitzero"`
-	UmaBond                      ScalarText         `json:"umaBond,omitzero"`
-	UmaReward                    Decimal            `json:"umaReward,omitzero"`
-	Volume24hAmm                 Decimal            `json:"volume24hrAmm,omitzero"`
-	Volume1wkAmm                 Decimal            `json:"volume1wkAmm,omitzero"`
-	Volume1moAmm                 Decimal            `json:"volume1moAmm,omitzero"`
-	Volume1yrAmm                 Decimal            `json:"volume1yrAmm,omitzero"`
-	Volume24hClob                Decimal            `json:"volume24hrClob,omitzero"`
-	Volume1wkClob                Decimal            `json:"volume1wkClob,omitzero"`
-	Volume1moClob                Decimal            `json:"volume1moClob,omitzero"`
-	Volume1yrClob                Decimal            `json:"volume1yrClob,omitzero"`
-	VolumeAmm                    Decimal            `json:"volumeAmm,omitzero"`
-	VolumeClob                   Decimal            `json:"volumeClob,omitzero"`
-	LiquidityAmm                 Decimal            `json:"liquidityAmm,omitzero"`
-	LiquidityClob                Decimal            `json:"liquidityClob,omitzero"`
-	MakerBaseFee                 Decimal            `json:"makerBaseFee,omitzero"`
-	TakerBaseFee                 Decimal            `json:"takerBaseFee,omitzero"`
-	MakerRebatesFeeShareBps      Decimal            `json:"makerRebatesFeeShareBps,omitzero"`
-	CustomLiveness               *int               `json:"customLiveness,omitzero"`
-	NotificationsEnabled         *bool              `json:"notificationsEnabled,omitzero"`
-	ClearBookOnStart             *bool              `json:"clearBookOnStart,omitzero"`
-	ChartColor                   *string            `json:"chartColor,omitzero"`
-	SeriesColor                  *string            `json:"seriesColor,omitzero"`
-	ShowGmpSeries                *bool              `json:"showGmpSeries,omitzero"`
-	ShowGmpOutcome               *bool              `json:"showGmpOutcome,omitzero"`
-	ManualActivation             *bool              `json:"manualActivation,omitzero"`
-	NegRiskOther                 *bool              `json:"negRiskOther,omitzero"`
-	RfqEnabled                   *bool              `json:"rfqEnabled,omitzero"`
-	HoldingRewardsEnabled        *bool              `json:"holdingRewardsEnabled,omitzero"`
-	ClobRewards                  []ClobReward       `json:"clobRewards,omitzero"`
-	StartDate                    Timestamp          `json:"startDate,omitzero"`
-	XAxisValue                   *string            `json:"xAxisValue,omitzero"`
-	YAxisValue                   *string            `json:"yAxisValue,omitzero"`
-	DenominationToken            *FlexibleID        `json:"denominationToken,omitzero"`
-	Image                        *string            `json:"image,omitzero"`
-	Icon                         *string            `json:"icon,omitzero"`
-	LowerBoundDate               *string            `json:"lowerBoundDate,omitzero"`
-	UpperBoundDate               *string            `json:"upperBoundDate,omitzero"`
-	MarketMakerAddress           *string            `json:"marketMakerAddress,omitzero"`
-	CreatedBy                    *int               `json:"createdBy,omitzero"`
-	UpdatedBy                    *int               `json:"updatedBy,omitzero"`
-	ClosedTime                   Timestamp          `json:"closedTime,omitzero"`
-	WideFormat                   *bool              `json:"wideFormat,omitzero"`
-	New                          *bool              `json:"new,omitzero"`
-	MailchimpTag                 *string            `json:"mailchimpTag,omitzero"`
-	Featured                     *bool              `json:"featured,omitzero"`
-	ResolvedBy                   *string            `json:"resolvedBy,omitzero"`
-	EnableOrderBook              *bool              `json:"enableOrderBook,omitzero"`
-	CurationOrder                *int               `json:"curationOrder,omitzero"`
-	EndDateIso                   *string            `json:"endDateIso,omitzero"`
-	StartDateIso                 *string            `json:"startDateIso,omitzero"`
-	UmaEndDateIso                *string            `json:"umaEndDateIso,omitzero"`
-	HasReviewedDates             *bool              `json:"hasReviewedDates,omitzero"`
-	ReadyForCron                 *bool              `json:"readyForCron,omitzero"`
-	CommentsEnabled              *bool              `json:"commentsEnabled,omitzero"`
-	Volume1wk                    Decimal            `json:"volume1wk,omitzero"`
-	Volume1mo                    Decimal            `json:"volume1mo,omitzero"`
-	Volume1yr                    Decimal            `json:"volume1yr,omitzero"`
-	GameStartTime                Timestamp          `json:"gameStartTime,omitzero"`
-	DisqusThread                 *string            `json:"disqusThread,omitzero"`
-	ShortOutcomes                *string            `json:"shortOutcomes,omitzero"`
-	FpmmLive                     *bool              `json:"fpmmLive,omitzero"`
-	Score                        *int               `json:"score,omitzero"`
-	ImageOptimized               *ImageOptimization `json:"imageOptimized,omitzero"`
-	IconOptimized                *ImageOptimization `json:"iconOptimized,omitzero"`
-	Events                       []Event            `json:"events,omitzero"`
-	Categories                   []Category         `json:"categories,omitzero"`
-	Tags                         []Tag              `json:"tags,omitzero"`
-	Creator                      *string            `json:"creator,omitzero"`
-	Funded                       *bool              `json:"funded,omitzero"`
-	PastSlugs                    *string            `json:"pastSlugs,omitzero"`
-	ReadyTimestamp               Timestamp          `json:"readyTimestamp,omitzero"`
-	FundedTimestamp              Timestamp          `json:"fundedTimestamp,omitzero"`
-	AcceptingOrdersTimestamp     Timestamp          `json:"acceptingOrdersTimestamp,omitzero"`
-	AutomaticallyResolved        *bool              `json:"automaticallyResolved,omitzero"`
-	OneDayPriceChange            Decimal            `json:"oneDayPriceChange,omitzero"`
-	OneHourPriceChange           Decimal            `json:"oneHourPriceChange,omitzero"`
-	OneWeekPriceChange           Decimal            `json:"oneWeekPriceChange,omitzero"`
-	OneMonthPriceChange          Decimal            `json:"oneMonthPriceChange,omitzero"`
-	OneYearPriceChange           Decimal            `json:"oneYearPriceChange,omitzero"`
-	AutomaticallyActive          *bool              `json:"automaticallyActive,omitzero"`
-	GameID                       *string            `json:"gameId,omitzero"`
-	GroupItemRange               *string            `json:"groupItemRange,omitzero"`
-	SportsMarketType             *string            `json:"sportsMarketType,omitzero"`
-	Line                         Decimal            `json:"line,omitzero"`
-	UmaResolutionStatuses        *string            `json:"umaResolutionStatuses,omitzero"`
-	PendingDeployment            *bool              `json:"pendingDeployment,omitzero"`
-	Deploying                    *bool              `json:"deploying,omitzero"`
-	DeployingTimestamp           Timestamp          `json:"deployingTimestamp,omitzero"`
-	ScheduledDeploymentTimestamp Timestamp          `json:"scheduledDeploymentTimestamp,omitzero"`
-	EventStartTime               Timestamp          `json:"eventStartTime,omitzero"`
-	SubmittedBy                  *string            `json:"submittedBy,omitzero"`
-	RequiresTranslation          *bool              `json:"requiresTranslation,omitzero"`
-	PagerDutyNotificationEnabled *bool              `json:"pagerDutyNotificationEnabled,omitzero"`
-	Approved                     *bool              `json:"approved,omitzero"`
-	CYOM                         *bool              `json:"cyom,omitzero"`
-	FeesEnabled                  *bool              `json:"feesEnabled,omitzero"`
-	SentDiscord                  *bool              `json:"sentDiscord,omitzero"`
+	FormatType         *string    `json:"formatType,omitzero"`
+	LowerBound         ScalarText `json:"lowerBound,omitzero"`
+	UpperBound         ScalarText `json:"upperBound,omitzero"`
+	MarketGroup        *int       `json:"marketGroup,omitzero"`
+	GroupItemTitle     *string    `json:"groupItemTitle,omitzero"`
+	GroupItemThreshold ScalarText `json:"groupItemThreshold,omitzero"`
+	PositionIDs        []string   `json:"positionIds,omitzero"`
+	QuestionID         *string    `json:"questionID,omitzero"`
+	// OnchainEventID is the parent V2 on-chain event ID shared by the markets of
+	// a neg-risk event. RequestID is the oracle request ID: a condition ID or
+	// the parent event ID. ResolutionStatus is the V2 resolution state, distinct
+	// from the legacy UMA lifecycle in UmaResolutionStatus.
+	OnchainEventID               *string                 `json:"onchainEventId,omitzero"`
+	RequestID                    *string                 `json:"requestId,omitzero"`
+	ResolutionStatus             *MarketResolutionStatus `json:"resolutionStatus,omitzero"`
+	UmaEndDate                   Timestamp               `json:"umaEndDate,omitzero"`
+	UmaResolutionStatus          *string                 `json:"umaResolutionStatus,omitzero"`
+	VolumeNum                    Decimal                 `json:"volumeNum,omitzero"`
+	LiquidityNum                 Decimal                 `json:"liquidityNum,omitzero"`
+	SecondsDelay                 *int                    `json:"secondsDelay,omitzero"`
+	TeamAID                      *string                 `json:"teamAID,omitzero"`
+	TeamBID                      *string                 `json:"teamBID,omitzero"`
+	UmaBond                      ScalarText              `json:"umaBond,omitzero"`
+	UmaReward                    Decimal                 `json:"umaReward,omitzero"`
+	Volume24hAmm                 Decimal                 `json:"volume24hrAmm,omitzero"`
+	Volume1wkAmm                 Decimal                 `json:"volume1wkAmm,omitzero"`
+	Volume1moAmm                 Decimal                 `json:"volume1moAmm,omitzero"`
+	Volume1yrAmm                 Decimal                 `json:"volume1yrAmm,omitzero"`
+	Volume24hClob                Decimal                 `json:"volume24hrClob,omitzero"`
+	Volume1wkClob                Decimal                 `json:"volume1wkClob,omitzero"`
+	Volume1moClob                Decimal                 `json:"volume1moClob,omitzero"`
+	Volume1yrClob                Decimal                 `json:"volume1yrClob,omitzero"`
+	VolumeAmm                    Decimal                 `json:"volumeAmm,omitzero"`
+	VolumeClob                   Decimal                 `json:"volumeClob,omitzero"`
+	LiquidityAmm                 Decimal                 `json:"liquidityAmm,omitzero"`
+	LiquidityClob                Decimal                 `json:"liquidityClob,omitzero"`
+	MakerBaseFee                 Decimal                 `json:"makerBaseFee,omitzero"`
+	TakerBaseFee                 Decimal                 `json:"takerBaseFee,omitzero"`
+	MakerRebatesFeeShareBps      Decimal                 `json:"makerRebatesFeeShareBps,omitzero"`
+	CustomLiveness               *int                    `json:"customLiveness,omitzero"`
+	NotificationsEnabled         *bool                   `json:"notificationsEnabled,omitzero"`
+	ClearBookOnStart             *bool                   `json:"clearBookOnStart,omitzero"`
+	ChartColor                   *string                 `json:"chartColor,omitzero"`
+	SeriesColor                  *string                 `json:"seriesColor,omitzero"`
+	ShowGmpSeries                *bool                   `json:"showGmpSeries,omitzero"`
+	ShowGmpOutcome               *bool                   `json:"showGmpOutcome,omitzero"`
+	ManualActivation             *bool                   `json:"manualActivation,omitzero"`
+	NegRiskOther                 *bool                   `json:"negRiskOther,omitzero"`
+	RfqEnabled                   *bool                   `json:"rfqEnabled,omitzero"`
+	HoldingRewardsEnabled        *bool                   `json:"holdingRewardsEnabled,omitzero"`
+	ClobRewards                  []ClobReward            `json:"clobRewards,omitzero"`
+	StartDate                    Timestamp               `json:"startDate,omitzero"`
+	XAxisValue                   *string                 `json:"xAxisValue,omitzero"`
+	YAxisValue                   *string                 `json:"yAxisValue,omitzero"`
+	DenominationToken            *FlexibleID             `json:"denominationToken,omitzero"`
+	Image                        *string                 `json:"image,omitzero"`
+	Icon                         *string                 `json:"icon,omitzero"`
+	LowerBoundDate               *string                 `json:"lowerBoundDate,omitzero"`
+	UpperBoundDate               *string                 `json:"upperBoundDate,omitzero"`
+	MarketMakerAddress           *string                 `json:"marketMakerAddress,omitzero"`
+	CreatedBy                    *int                    `json:"createdBy,omitzero"`
+	UpdatedBy                    *int                    `json:"updatedBy,omitzero"`
+	ClosedTime                   Timestamp               `json:"closedTime,omitzero"`
+	WideFormat                   *bool                   `json:"wideFormat,omitzero"`
+	New                          *bool                   `json:"new,omitzero"`
+	MailchimpTag                 *string                 `json:"mailchimpTag,omitzero"`
+	Featured                     *bool                   `json:"featured,omitzero"`
+	ResolvedBy                   *string                 `json:"resolvedBy,omitzero"`
+	EnableOrderBook              *bool                   `json:"enableOrderBook,omitzero"`
+	CurationOrder                *int                    `json:"curationOrder,omitzero"`
+	EndDateIso                   *string                 `json:"endDateIso,omitzero"`
+	StartDateIso                 *string                 `json:"startDateIso,omitzero"`
+	UmaEndDateIso                *string                 `json:"umaEndDateIso,omitzero"`
+	HasReviewedDates             *bool                   `json:"hasReviewedDates,omitzero"`
+	ReadyForCron                 *bool                   `json:"readyForCron,omitzero"`
+	CommentsEnabled              *bool                   `json:"commentsEnabled,omitzero"`
+	Volume1wk                    Decimal                 `json:"volume1wk,omitzero"`
+	Volume1mo                    Decimal                 `json:"volume1mo,omitzero"`
+	Volume1yr                    Decimal                 `json:"volume1yr,omitzero"`
+	GameStartTime                Timestamp               `json:"gameStartTime,omitzero"`
+	DisqusThread                 *string                 `json:"disqusThread,omitzero"`
+	ShortOutcomes                *string                 `json:"shortOutcomes,omitzero"`
+	FpmmLive                     *bool                   `json:"fpmmLive,omitzero"`
+	Score                        *int                    `json:"score,omitzero"`
+	ImageOptimized               *ImageOptimization      `json:"imageOptimized,omitzero"`
+	IconOptimized                *ImageOptimization      `json:"iconOptimized,omitzero"`
+	Events                       []Event                 `json:"events,omitzero"`
+	Categories                   []Category              `json:"categories,omitzero"`
+	Tags                         []Tag                   `json:"tags,omitzero"`
+	Creator                      *string                 `json:"creator,omitzero"`
+	Funded                       *bool                   `json:"funded,omitzero"`
+	PastSlugs                    *string                 `json:"pastSlugs,omitzero"`
+	ReadyTimestamp               Timestamp               `json:"readyTimestamp,omitzero"`
+	FundedTimestamp              Timestamp               `json:"fundedTimestamp,omitzero"`
+	AcceptingOrdersTimestamp     Timestamp               `json:"acceptingOrdersTimestamp,omitzero"`
+	AutomaticallyResolved        *bool                   `json:"automaticallyResolved,omitzero"`
+	OneDayPriceChange            Decimal                 `json:"oneDayPriceChange,omitzero"`
+	OneHourPriceChange           Decimal                 `json:"oneHourPriceChange,omitzero"`
+	OneWeekPriceChange           Decimal                 `json:"oneWeekPriceChange,omitzero"`
+	OneMonthPriceChange          Decimal                 `json:"oneMonthPriceChange,omitzero"`
+	OneYearPriceChange           Decimal                 `json:"oneYearPriceChange,omitzero"`
+	AutomaticallyActive          *bool                   `json:"automaticallyActive,omitzero"`
+	GameID                       *string                 `json:"gameId,omitzero"`
+	GroupItemRange               *string                 `json:"groupItemRange,omitzero"`
+	SportsMarketType             *string                 `json:"sportsMarketType,omitzero"`
+	Line                         Decimal                 `json:"line,omitzero"`
+	UmaResolutionStatuses        *string                 `json:"umaResolutionStatuses,omitzero"`
+	PendingDeployment            *bool                   `json:"pendingDeployment,omitzero"`
+	Deploying                    *bool                   `json:"deploying,omitzero"`
+	DeployingTimestamp           Timestamp               `json:"deployingTimestamp,omitzero"`
+	ScheduledDeploymentTimestamp Timestamp               `json:"scheduledDeploymentTimestamp,omitzero"`
+	EventStartTime               Timestamp               `json:"eventStartTime,omitzero"`
+	SubmittedBy                  *string                 `json:"submittedBy,omitzero"`
+	RequiresTranslation          *bool                   `json:"requiresTranslation,omitzero"`
+	PagerDutyNotificationEnabled *bool                   `json:"pagerDutyNotificationEnabled,omitzero"`
+	Approved                     *bool                   `json:"approved,omitzero"`
+	CYOM                         *bool                   `json:"cyom,omitzero"`
+	FeesEnabled                  *bool                   `json:"feesEnabled,omitzero"`
+	SentDiscord                  *bool                   `json:"sentDiscord,omitzero"`
 	// Rust describes a string-encoded epoch integer; TS describes a timestamp
 	// string. Preserve the wire value rather than guessing its units.
 	TwitterCardLastRefreshed json.RawMessage `json:"twitterCardLastRefreshed,omitzero"`
@@ -250,4 +257,18 @@ const (
 	ComboStatusEnabled ComboStatus = "enabled"
 	// ComboStatusDisabled marks a market withdrawn from combo betting.
 	ComboStatusDisabled ComboStatus = "disabled"
+)
+
+// MarketResolutionStatus is a V2 market's resolution state. It is distinct from
+// the legacy UMA lifecycle reported by UmaResolutionStatus. Unknown values pass
+// through as-is.
+type MarketResolutionStatus string
+
+const (
+	// MarketResolutionInactive marks a market with no active oracle request.
+	MarketResolutionInactive MarketResolutionStatus = "inactive"
+	// MarketResolutionActive marks a pending resolution request.
+	MarketResolutionActive MarketResolutionStatus = "active"
+	// MarketResolutionResolved marks a settled market.
+	MarketResolutionResolved MarketResolutionStatus = "resolved"
 )

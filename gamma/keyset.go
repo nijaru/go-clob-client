@@ -72,6 +72,9 @@ func (c *Client) GetMarketsPage(
 	if p.Offset != 0 {
 		return nil, fmt.Errorf("gamma markets keyset: offset is not supported")
 	}
+	if err := p.validateFilters(); err != nil {
+		return nil, err
+	}
 	query := marketQuery(p)
 	query.Set("limit", strconv.Itoa(iteratorLimit(p.Limit, 20, math.MaxInt)))
 	return keysetPage[Market](ctx, c, marketsEndpoint+"/keyset", "markets", query, cursor)
@@ -112,6 +115,9 @@ func (c *Client) GetEventsPage(
 	}
 	if p.Offset != 0 {
 		return nil, fmt.Errorf("gamma events keyset: offset is not supported")
+	}
+	if err := p.validateFilters(); err != nil {
+		return nil, err
 	}
 	query := eventQuery(p)
 	if p.Closed == nil {

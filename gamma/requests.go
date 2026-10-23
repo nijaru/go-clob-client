@@ -131,6 +131,14 @@ type MarketFilterParams struct {
 	StartDateMax        string   `url:"start_date_max,omitzero"`
 	EndDateMin          string   `url:"end_date_min,omitzero"`
 	EndDateMax          string   `url:"end_date_max,omitzero"`
+	// Versions filters by market protocol version (v1, v2). OnchainEventIDs and
+	// RequestIDs select V2 markets by their oracle metadata, at most 100 values
+	// each. ResolutionStatus is a V2 resolution state, distinct from the legacy
+	// UMA lifecycle in UmaResolutionStatus.
+	Versions         []string
+	OnchainEventIDs  []string
+	RequestIDs       []string
+	ResolutionStatus string
 }
 
 // EventFilterParams defines filters for event listing.
@@ -182,6 +190,8 @@ type EventFilterParams struct {
 	StartDateMax     string   `url:"start_date_max,omitzero"`
 	EndDateMin       string   `url:"end_date_min,omitzero"`
 	EndDateMax       string   `url:"end_date_max,omitzero"`
+	// Versions filters by event protocol version (v1, v2).
+	Versions []string
 }
 
 // CommentFilterParams identifies a parent thread and controls its ordering,

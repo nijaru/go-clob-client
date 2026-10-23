@@ -2,6 +2,7 @@ package gamma
 
 import (
 	"context"
+	"fmt"
 	"iter"
 	"net/url"
 	"strconv"
@@ -67,6 +68,9 @@ func (c *Client) GetEventBySlug(
 
 // GetEvents returns a list of events based on the provided filters.
 func (c *Client) GetEvents(ctx context.Context, params EventFilterParams) ([]Event, error) {
+	if err := params.validateFilters(); err != nil {
+		return nil, err
+	}
 	if err := validateOffset(params.Limit, params.Offset, -1); err != nil {
 		return nil, err
 	}
@@ -140,8 +144,29 @@ func eventQuery(params EventFilterParams) url.Values {
 	setString(query, "start_date_max", params.StartDateMax)
 	setString(query, "end_date_min", params.EndDateMin)
 	setString(query, "end_date_max", params.EndDateMax)
+	for _, version := range params.Versions {
+		query.Add("version", version)
+	}
 
 	return query
+}
+
+func (p EventFilterParams) validateFilters() error {
+	return validateVersions(p.Versions)
+}
+
+// validateVersions bounds the protocol version filter to the two versions the
+// service defines.
+func validateVersions(versions []string) error {
+	if len(versions) > 2 {
+		return fmt.Errorf("gamma: version accepts at most two values")
+	}
+	for _, version := range versions {
+		if version != string(ProtocolVersionV1) && version != string(ProtocolVersionV2) {
+			return fmt.Errorf("gamma: version must be v1 or v2, got %q", version)
+		}
+	}
+	return nil
 }
 
 // IterEvents returns an iterator for events based on the provided filters.
