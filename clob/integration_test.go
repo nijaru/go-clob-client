@@ -80,7 +80,7 @@ func newOrderLifecycleServer(t *testing.T) (*httptest.Server, *orderLifecycleSer
 			ols.handleGetOpenOrders(t, w, r)
 
 		case tradesEndpoint:
-			json.NewEncoder(w).Encode(Page[Trade]{Data: []Trade{}, NextCursor: "-1"})
+			json.NewEncoder(w).Encode(Page[Trade]{Data: []Trade{}, NextCursor: endCursor})
 
 		case cancelAllEndpoint:
 			ols.handleCancelAll(t, w, r)
@@ -202,7 +202,7 @@ func (ols *orderLifecycleServer) handleGetOpenOrders(
 
 	json.NewEncoder(w).Encode(Page[OpenOrder]{
 		Data:       orders,
-		NextCursor: "-1",
+		NextCursor: endCursor,
 	})
 }
 

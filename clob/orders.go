@@ -97,26 +97,9 @@ func (c *AuthenticatedClient) IterOpenOrders(
 	ctx context.Context,
 	params OpenOrderParams,
 ) iter.Seq2[OpenOrder, error] {
-	return func(yield func(OpenOrder, error) bool) {
-		cursor := initialCursor
-		for cursor != endCursor {
-			page, err := c.GetOpenOrdersPage(ctx, params, cursor)
-			if err != nil {
-				yield(OpenOrder{}, err)
-				return
-			}
-			for _, order := range page.Data {
-				if !yield(order, nil) {
-					return
-				}
-			}
-			nextCursor, done := nextPageCursor(cursor, page.NextCursor)
-			if done {
-				return
-			}
-			cursor = nextCursor
-		}
-	}
+	return paginate("", func(cursor string) (*Page[OpenOrder], error) {
+		return c.GetOpenOrdersPage(ctx, params, cursor)
+	})
 }
 
 // GetOpenOrdersPage returns a single page of authenticated open orders.
@@ -169,26 +152,9 @@ func (c *AuthenticatedClient) GetPreMigrationOrdersPage(
 func (c *AuthenticatedClient) IterPreMigrationOrders(
 	ctx context.Context,
 ) iter.Seq2[OpenOrder, error] {
-	return func(yield func(OpenOrder, error) bool) {
-		cursor := initialCursor
-		for cursor != endCursor {
-			page, err := c.GetPreMigrationOrdersPage(ctx, cursor)
-			if err != nil {
-				yield(OpenOrder{}, err)
-				return
-			}
-			for _, order := range page.Data {
-				if !yield(order, nil) {
-					return
-				}
-			}
-			nextCursor, done := nextPageCursor(cursor, page.NextCursor)
-			if done {
-				return
-			}
-			cursor = nextCursor
-		}
-	}
+	return paginate("", func(cursor string) (*Page[OpenOrder], error) {
+		return c.GetPreMigrationOrdersPage(ctx, cursor)
+	})
 }
 
 // GetTrades returns all paginated authenticated trades that match the provided filters.
@@ -208,26 +174,9 @@ func (c *AuthenticatedClient) IterTrades(
 	ctx context.Context,
 	params TradeParams,
 ) iter.Seq2[Trade, error] {
-	return func(yield func(Trade, error) bool) {
-		cursor := initialCursor
-		for cursor != endCursor {
-			page, err := c.GetTradesPage(ctx, params, cursor)
-			if err != nil {
-				yield(Trade{}, err)
-				return
-			}
-			for _, trade := range page.Data {
-				if !yield(trade, nil) {
-					return
-				}
-			}
-			nextCursor, done := nextPageCursor(cursor, page.NextCursor)
-			if done {
-				return
-			}
-			cursor = nextCursor
-		}
-	}
+	return paginate("", func(cursor string) (*Page[Trade], error) {
+		return c.GetTradesPage(ctx, params, cursor)
+	})
 }
 
 // GetTradesPage returns a single page of authenticated trades.
@@ -395,27 +344,9 @@ func (c *AuthenticatedClient) IterBuilderTrades(
 	ctx context.Context,
 	params TradeParams,
 ) iter.Seq2[BuilderTrade, error] {
-	return func(yield func(BuilderTrade, error) bool) {
-		cursor := initialCursor
-		for cursor != endCursor {
-			page, err := c.GetBuilderTradesPage(ctx, params, cursor)
-			if err != nil {
-				var zero BuilderTrade
-				yield(zero, err)
-				return
-			}
-			for _, trade := range page.Data {
-				if !yield(trade, nil) {
-					return
-				}
-			}
-			nextCursor, done := nextPageCursor(cursor, page.NextCursor)
-			if done {
-				return
-			}
-			cursor = nextCursor
-		}
-	}
+	return paginate("", func(cursor string) (*Page[BuilderTrade], error) {
+		return c.GetBuilderTradesPage(ctx, params, cursor)
+	})
 }
 
 // GetBuilderTrades returns all paginated builder trades that match the provided filters.

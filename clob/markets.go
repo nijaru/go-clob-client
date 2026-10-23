@@ -43,26 +43,9 @@ func (c *Client) GetSamplingSimplifiedMarkets(ctx context.Context) ([]Simplified
 func (c *Client) IterSamplingSimplifiedMarkets(
 	ctx context.Context,
 ) iter.Seq2[SimplifiedMarket, error] {
-	return func(yield func(SimplifiedMarket, error) bool) {
-		cursor := initialCursor
-		for cursor != endCursor {
-			page, err := c.GetSamplingSimplifiedMarketsPage(ctx, cursor)
-			if err != nil {
-				yield(SimplifiedMarket{}, err)
-				return
-			}
-			for _, market := range page.Data {
-				if !yield(market, nil) {
-					return
-				}
-			}
-			nextCursor, done := nextPageCursor(cursor, page.NextCursor)
-			if done {
-				return
-			}
-			cursor = nextCursor
-		}
-	}
+	return paginate("", func(cursor string) (*Page[SimplifiedMarket], error) {
+		return c.GetSamplingSimplifiedMarketsPage(ctx, cursor)
+	})
 }
 
 // GetSamplingSimplifiedMarketsPage returns a typed sampling-simplified markets page.
@@ -87,26 +70,9 @@ func (c *Client) GetSamplingMarkets(ctx context.Context) ([]Market, error) {
 
 // IterSamplingMarkets returns an iterator over markets from the sampling endpoint.
 func (c *Client) IterSamplingMarkets(ctx context.Context) iter.Seq2[Market, error] {
-	return func(yield func(Market, error) bool) {
-		cursor := initialCursor
-		for cursor != endCursor {
-			page, err := c.GetSamplingMarketsPage(ctx, cursor)
-			if err != nil {
-				yield(Market{}, err)
-				return
-			}
-			for _, market := range page.Data {
-				if !yield(market, nil) {
-					return
-				}
-			}
-			nextCursor, done := nextPageCursor(cursor, page.NextCursor)
-			if done {
-				return
-			}
-			cursor = nextCursor
-		}
-	}
+	return paginate("", func(cursor string) (*Page[Market], error) {
+		return c.GetSamplingMarketsPage(ctx, cursor)
+	})
 }
 
 // GetSamplingMarketsPage returns a typed sampling markets page.
@@ -131,26 +97,9 @@ func (c *Client) GetSimplifiedMarkets(ctx context.Context) ([]SimplifiedMarket, 
 
 // IterSimplifiedMarkets returns an iterator over all simplified markets.
 func (c *Client) IterSimplifiedMarkets(ctx context.Context) iter.Seq2[SimplifiedMarket, error] {
-	return func(yield func(SimplifiedMarket, error) bool) {
-		cursor := initialCursor
-		for cursor != endCursor {
-			page, err := c.GetSimplifiedMarketsPage(ctx, cursor)
-			if err != nil {
-				yield(SimplifiedMarket{}, err)
-				return
-			}
-			for _, market := range page.Data {
-				if !yield(market, nil) {
-					return
-				}
-			}
-			nextCursor, done := nextPageCursor(cursor, page.NextCursor)
-			if done {
-				return
-			}
-			cursor = nextCursor
-		}
-	}
+	return paginate("", func(cursor string) (*Page[SimplifiedMarket], error) {
+		return c.GetSimplifiedMarketsPage(ctx, cursor)
+	})
 }
 
 // GetSimplifiedMarketsPage returns a typed simplified markets page.
@@ -175,26 +124,9 @@ func (c *Client) GetMarkets(ctx context.Context) ([]Market, error) {
 
 // IterMarkets returns an iterator over all markets.
 func (c *Client) IterMarkets(ctx context.Context) iter.Seq2[Market, error] {
-	return func(yield func(Market, error) bool) {
-		cursor := initialCursor
-		for cursor != endCursor {
-			page, err := c.GetMarketsPage(ctx, cursor)
-			if err != nil {
-				yield(Market{}, err)
-				return
-			}
-			for _, market := range page.Data {
-				if !yield(market, nil) {
-					return
-				}
-			}
-			nextCursor, done := nextPageCursor(cursor, page.NextCursor)
-			if done {
-				return
-			}
-			cursor = nextCursor
-		}
-	}
+	return paginate("", func(cursor string) (*Page[Market], error) {
+		return c.GetMarketsPage(ctx, cursor)
+	})
 }
 
 // GetMarketsPage returns a typed markets page.
