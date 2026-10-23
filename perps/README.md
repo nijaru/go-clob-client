@@ -45,7 +45,10 @@ defer session.Close()
 
 A session follows its context and reconnects/resubscribes automatically. Consume
 both `Events()` and `Errors()`. Typed `AsOrder`, `AsFills`, `AsPortfolio` and other
-`As*` decoders coexist with raw event JSON. Book events are deltas. Reconnect and
+`As*` decoders coexist with raw event JSON. Each event carries the server-attested
+event horizon (`EventTimestamp`, Unix milliseconds); zero attests no horizon and is
+reported as nil, never as the Unix epoch, and local recovery resyncs leave it nil.
+Book events are deltas. Reconnect and
 sequence-gap events require caller-owned backfill/snapshot recovery. Notification
 and builder-receipt sequences are sparse, not contiguous. Deduplicate overlapping
 builder history and `AsBuilderFills` updates by the nonempty opaque string
@@ -171,8 +174,8 @@ backfill remain caller-owned.
 
 ## Capability inventory
 
-Compared against merged TypeScript [`087f9443`](https://github.com/Polymarket/ts-sdk/tree/087f9443635316e4e6be5dc4e22bd93f08cea443)
-and Python [`ed8d04ca`](https://github.com/Polymarket/py-sdk/tree/ed8d04cade617d2f4c6f90ebe1842249eaf5c59b).
+Compared against merged TypeScript [`2975d87e`](https://github.com/Polymarket/ts-sdk/tree/2975d87e)
+and Python [`7032ed06`](https://github.com/Polymarket/py-sdk/tree/7032ed06).
 The inventory covers public operations in TS `decorators/perps.ts`,
 `websockets/perps/session.ts` and public subscriptions, plus Python
 `clients/async_public.py`, `clients/async_secure.py` and `_internal/perps_session.py`.
@@ -186,8 +189,8 @@ rather than a single-item wrapper, is not counted as a missing capability.
 | Public account discovery | Registration; anonymous ordered active/historical position snapshots |
 | Public streams | Trades, BBO, book, tickers, statistics, candles; shared-socket independently context-owned handles, dynamic filter refcounts, instrument/all-topic selection, heartbeat and reconnect |
 | Owner credentials | Create, validate/resume, revoke; external typed-data signer boundary |
-| Account snapshots | Balances, portfolio, seven-day stats, leverage/margin config, auto-cancel status; owner-authenticated position snapshots |
-| Orders and history | Open orders and filtered order lookup/history; fills with sort/trade-ID cursor; funding payments, deposits, withdrawals, internal transfers, equity and PnL iterators |
+| Account snapshots | Balances, portfolio (margin, available order margin, fee tier, per-position ADL index), seven-day stats, leverage/margin config, auto-cancel status; owner-authenticated position snapshots |
+| Orders and history | Open orders and filtered order lookup/history; fills with sort/trade-ID cursor, auto-deleveraging and liquidation detail; funding payments, deposits, withdrawals, internal transfers, equity and PnL iterators |
 | Notifications | All eight known variants including ADL; pages/iterator, unread count, mark IDs or inclusive timestamp/ID boundary read, server resync |
 | Entry orders | GTC, GTD, IOC, FOK; price-less IOC/FOK, post-only, reduce-only, client IDs, command deadlines, per-item batch acknowledgements, placement update waiters |
 | Conditional exits | Atomic order-scoped TP/SL, position-scoped full/partial exits, fixed market/limit order triggers and trailing market stop loss |
@@ -205,9 +208,10 @@ rather than a single-item wrapper, is not counted as a missing capability.
   Constructors use offline derivation; deployed legacy-wallet discovery is
   separate. Funding, perps ledger-credit waits and reorg finality are caller-owned.
 - Timestamp-only histories cannot guarantee access to every record in a full
-  equal-timestamp boundary. Go returns `ErrPaginationNonProgress` rather than
-  advancing past potentially unseen records. This is an explicit safety
-  difference, not proof of exhaustive history access.
+  equal-timestamp boundary. The client re-reads the final millisecond before
+  moving the window, and returns `ErrPaginationNonProgress` when the overlap
+  itself cannot be exhausted rather than advancing past unseen records. This is
+  an explicit safety difference, not proof of exhaustive history access.
 - No reconstructed book or automatic resync backfill. Several response structs
   preserve fields without reproducing every upstream schema validator. Fixture
   verification does not establish live service, wallet or relayer compatibility.

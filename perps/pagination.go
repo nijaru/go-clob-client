@@ -88,8 +88,38 @@ func descendingHistory[T any](
 			next++
 		}
 		next = min(state.Params.End, next)
+		boundary := out.Data
 		if next == state.Params.End && len(items) == 0 {
-			return PerpsPage[T]{}, ErrPaginationNonProgress
+			if !overlapMillis {
+				return PerpsPage[T]{}, ErrPaginationNonProgress
+			}
+			// The page ended at the inclusive bound without new rows. Re-read the
+			// whole overlap interval before moving the bound: the last row can sit
+			// exactly on it, and submillisecond storage can pack more rows into the
+			// same millisecond.
+			probe := state.Params
+			probe.Start = max(state.Params.Start, next-1)
+			probe.End = next
+			var tail PerpsPage[T]
+			if err := c.getAuthenticatedJSON(ctx, path, historyQuery(probe), &tail); err != nil {
+				return PerpsPage[T]{}, err
+			}
+			if tail.More {
+				return PerpsPage[T]{}, ErrPaginationNonProgress
+			}
+			for _, item := range tail.Data {
+				if !seen[key(item)] {
+					items = append(items, item)
+				}
+			}
+			next--
+			boundary = tail.Data
+			if next < state.Params.Start {
+				out.Data = items
+				out.More = false
+				out.NextCursor = ""
+				return out, nil
+			}
 		}
 		if next < state.Params.Start {
 			return PerpsPage[T]{}, ErrPaginationNonProgress
@@ -106,7 +136,7 @@ func descendingHistory[T any](
 		if overlapMillis {
 			cutoff--
 		}
-		for _, item := range out.Data {
+		for _, item := range boundary {
 			if timestamp(item) >= cutoff && !known[key(item)] {
 				id := key(item)
 				state.Seen = append(state.Seen, id)

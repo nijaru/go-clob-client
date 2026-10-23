@@ -382,6 +382,7 @@ func (o *marketOwner) payload(payload []byte) error {
 		ID        int             `json:"id"`
 		Channel   string          `json:"ch"`
 		Timestamp int64           `json:"ts"`
+		ETS       *int64          `json:"ets"`
 		Sequence  *int64          `json:"sq"`
 		Data      json.RawMessage `json:"data"`
 	}
@@ -409,7 +410,16 @@ func (o *marketOwner) payload(payload []byte) error {
 	if frame.Channel == "" {
 		return nil
 	} // heartbeat response
-	event := PerpsSessionEvent{Channel: frame.Channel, Timestamp: frame.Timestamp, Data: frame.Data}
+	horizon, err := parseEventHorizon(frame.ETS)
+	if err != nil {
+		return err
+	}
+	event := PerpsSessionEvent{
+		Channel:        frame.Channel,
+		Timestamp:      frame.Timestamp,
+		EventTimestamp: horizon,
+		Data:           frame.Data,
+	}
 	market, err := event.AsMarket()
 	if err != nil {
 		return fmt.Errorf("perps: decode public market event: %w", err)

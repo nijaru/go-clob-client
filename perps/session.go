@@ -62,9 +62,13 @@ const (
 // PerpsSessionResync is emitted when the server asks the notifications stream
 // to be backfilled or the session reconnects.
 type PerpsSessionResync struct {
-	Reason           PerpsResyncReason
-	Channel          string
-	Timestamp        int64
+	Reason    PerpsResyncReason
+	Channel   string
+	Timestamp int64
+	// EventTimestamp is the server-attested newest reflected event time in Unix
+	// milliseconds. Nil means the horizon is unknown, as it is for local
+	// recovery after a sequence gap.
+	EventTimestamp   *int64
 	Sequence         int64
 	PreviousSequence *int64
 }
@@ -73,15 +77,32 @@ type PerpsSessionResync struct {
 // JSON so callers can decode channel-specific payloads without precision loss
 // or an SDK release for every new event field. Known notification frames also
 // populate Notification; server resync frames populate Resync.
+// EventTimestamp is the newest event time the server has reflected, in Unix
+// milliseconds; nil means the horizon is unknown. It can trail Timestamp and
+// is not the local delivery instant.
 type PerpsSessionEvent struct {
-	Channel      string
-	Timestamp    int64
-	Sequence     int64
-	Type         string
-	Data         json.RawMessage
-	Notification *PerpsNotification
-	Resync       *PerpsSessionResync
-	Market       *MarketEvent
+	Channel        string
+	Timestamp      int64
+	EventTimestamp *int64
+	Sequence       int64
+	Type           string
+	Data           json.RawMessage
+	Notification   *PerpsNotification
+	Resync         *PerpsSessionResync
+	Market         *MarketEvent
+}
+
+// parseEventHorizon decodes the wire event horizon. Zero attests no horizon;
+// it is not an event at the Unix epoch. Nil means the field was absent.
+func parseEventHorizon(ets *int64) (*int64, error) {
+	if ets == nil || *ets == 0 {
+		return nil, nil
+	}
+	if *ets < 0 {
+		return nil, errors.New("perps: negative event horizon")
+	}
+	value := *ets
+	return &value, nil
 }
 
 type sessionFrame struct {
@@ -415,6 +436,7 @@ func (s *Session) handlePayload(payload []byte) {
 	var frame struct {
 		Channel   string          `json:"ch"`
 		Timestamp int64           `json:"ts"`
+		ETS       *int64          `json:"ets"`
 		Sequence  *int64          `json:"sq"`
 		Type      string          `json:"type"`
 		Data      json.RawMessage `json:"data"`
@@ -426,21 +448,28 @@ func (s *Session) handlePayload(payload []byte) {
 	if frame.Channel == "" {
 		return
 	}
+	horizon, err := parseEventHorizon(frame.ETS)
+	if err != nil {
+		s.reportError(err)
+		return
+	}
 	sequence := int64(0)
 	if frame.Sequence != nil {
 		sequence = *frame.Sequence
 	}
 	if frame.Channel == "notifications" && frame.Type == "resync" {
 		s.emitEvent(PerpsSessionEvent{
-			Channel:   frame.Channel,
-			Timestamp: frame.Timestamp,
-			Sequence:  sequence,
-			Type:      "resync",
+			Channel:        frame.Channel,
+			Timestamp:      frame.Timestamp,
+			EventTimestamp: horizon,
+			Sequence:       sequence,
+			Type:           "resync",
 			Resync: &PerpsSessionResync{
-				Reason:    PerpsResyncServerRequest,
-				Channel:   frame.Channel,
-				Timestamp: frame.Timestamp,
-				Sequence:  sequence,
+				Reason:         PerpsResyncServerRequest,
+				Channel:        frame.Channel,
+				Timestamp:      frame.Timestamp,
+				EventTimestamp: horizon,
+				Sequence:       sequence,
 			},
 		})
 		return
@@ -452,11 +481,12 @@ func (s *Session) handlePayload(payload []byte) {
 		}
 	}
 	event := PerpsSessionEvent{
-		Channel:   frame.Channel,
-		Timestamp: frame.Timestamp,
-		Sequence:  sequence,
-		Type:      frame.Type,
-		Data:      append(json.RawMessage(nil), frame.Data...),
+		Channel:        frame.Channel,
+		Timestamp:      frame.Timestamp,
+		EventTimestamp: horizon,
+		Sequence:       sequence,
+		Type:           frame.Type,
+		Data:           append(json.RawMessage(nil), frame.Data...),
 	}
 	if frame.Channel == "notifications" {
 		event.Type = "notification"

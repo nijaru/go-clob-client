@@ -138,6 +138,17 @@ type PerpsInstrument struct {
 	MaxLeverage       int                        `json:"max_leverage"`
 	IsolatedOnly      bool                       `json:"isolated_only"`
 	RiskTiers         []PerpsRiskTier            `json:"risk_tiers"`
+	// UILiveTime is an advisory visibility time. Nil means the instrument is
+	// hidden; it does not restrict trading.
+	UILiveTime *int64               `json:"ui_live_time,omitempty"`
+	Logo       *PerpsInstrumentLogo `json:"logo,omitempty"`
+}
+
+// PerpsInstrumentLogo is an instrument's immutable theme-specific logo URLs.
+// It is absent until the logo is uploaded.
+type PerpsInstrumentLogo struct {
+	Light string `json:"light"`
+	Dark  string `json:"dark"`
 }
 
 // PerpsRiskTier maps a notional lower bound to a maximum allowed leverage.
@@ -368,11 +379,16 @@ type PerpsPortfolioPosition struct {
 	UnrealizedPnL     string `json:"unrealized_pnl"`
 	ReturnOnEquity    string `json:"return_on_equity"`
 	CumulativeFunding string `json:"cumulative_funding"`
+	// ADLIndex is the auto-deleveraging risk tier; higher values mean higher risk.
+	ADLIndex int `json:"adl_index"`
 }
 
 // PerpsMarginSummary summarizes portfolio margin usage.
 type PerpsMarginSummary struct {
-	TotalAccountValue      string `json:"total_account_value"`
+	TotalAccountValue string `json:"total_account_value"`
+	// AvailableOrderMargin is collateral available for additional order initial
+	// margin, in USD.
+	AvailableOrderMargin   string `json:"available_order_margin"`
 	TotalInitialMargin     string `json:"total_initial_margin"`
 	TotalMaintenanceMargin string `json:"total_maintenance_margin"`
 	TotalPositionValue     string `json:"total_position_value"`
@@ -384,7 +400,9 @@ type PerpsPortfolio struct {
 	Margin        PerpsMarginSummary       `json:"margin"`
 	Withdrawable  string                   `json:"withdrawable"`
 	InLiquidation bool                     `json:"in_liquidation"`
-	Timestamp     int64                    `json:"timestamp"`
+	// FeeTier is a zero-based index into the perpetual fee schedule's tiers.
+	FeeTier   int   `json:"fee_tier"`
+	Timestamp int64 `json:"timestamp"`
 }
 
 // PerpsAccountConfig is leverage and margin mode for one instrument.
@@ -441,8 +459,29 @@ type PerpsAccountFill struct {
 	PreviousEntryPrice string             `json:"previous_entry_price"`
 	PnL                string             `json:"pnl"`
 	Liquidation        bool               `json:"liquidation"`
-	Timestamp          int64              `json:"timestamp"`
-	Hash               string             `json:"hash"`
+	// ADL marks a fill produced by auto-deleveraging.
+	ADL bool `json:"adl"`
+	// LiquidationDetails is present for backstop liquidations. Ordinary
+	// order-book liquidations omit it, and Mark is separate from Price.
+	LiquidationDetails *PerpsLiquidationDetails `json:"liquidation_details,omitempty"`
+	Timestamp          int64                    `json:"timestamp"`
+	Hash               string                   `json:"hash"`
+}
+
+// PerpsLiquidationMethod identifies how a liquidated position was closed.
+type PerpsLiquidationMethod string
+
+const (
+	PerpsLiquidationMarket   PerpsLiquidationMethod = "market"
+	PerpsLiquidationBackstop PerpsLiquidationMethod = "backstop"
+)
+
+// PerpsLiquidationDetails is a liquidation command's context, kept separate
+// from the fill's accounting price. Mark is the mark price the liquidation used.
+type PerpsLiquidationDetails struct {
+	LiquidatedUser *string                `json:"liquidated_user,omitempty"`
+	Mark           string                 `json:"mark"`
+	Method         PerpsLiquidationMethod `json:"method"`
 }
 
 // PerpsAccountFundingPayment is an account funding payment entry.

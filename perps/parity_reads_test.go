@@ -98,39 +98,100 @@ func TestPublicAndOwnerPositionSnapshots(t *testing.T) {
 	}
 }
 
-func TestInternalTransfersOverlapAndNonprogress(t *testing.T) {
+func TestInternalTransfersFullMillisecondTail(t *testing.T) {
+	// The service stores submillisecond timestamps. Rows sharing the final
+	// millisecond, or a row sitting exactly on the inclusive bound, used to end
+	// the walk with ErrPaginationNonProgress. The client now re-reads the whole
+	// overlap interval before moving the bound.
+	row := func(id int64) string {
+		return `{"transfer_id":` + strconv.FormatInt(id, 10) +
+			`,"type":"internal_transfer","asset":"USDC","amount":"1","direction":"out","counterparty":"` +
+			fixtureRecipient + `","created_timestamp":1000}`
+	}
+	type request struct{ start, end string }
+	var requests []request
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/account/internal-transfers" {
+			t.Errorf("path=%s", r.URL.Path)
+		}
+		requests = append(requests, request{
+			r.URL.Query().Get("start_timestamp"),
+			r.URL.Query().Get("end_timestamp"),
+		})
+		body := func(data string, more bool) {
+			_, _ = w.Write(
+				[]byte(`{"data":[` + data + `],"more":` + strconv.FormatBool(more) + `}`),
+			)
+		}
+		switch len(requests) {
+		case 1:
+			body(row(42), true)
+		case 2:
+			body(row(42)+","+row(43), true)
+		case 3:
+			// No new rows at the inclusive bound; the client must probe it.
+			body(row(42)+","+row(43), true)
+		case 4:
+			// The probe sees the complete millisecond.
+			body(row(42)+","+row(43), false)
+		default:
+			body("", false)
+		}
+	}))
+	t.Cleanup(server.Close)
+	client := fixtureClient(t, Config{Host: server.URL})
+	var ids []int64
+	var lastErr error
+	for items, err := range client.IterInternalTransfers(
+		t.Context(),
+		AccountHistoryParams{Start: 1, End: 2000},
+	) {
+		if err != nil {
+			lastErr = err
+			break
+		}
+		for _, item := range items {
+			ids = append(ids, item.ID)
+		}
+	}
+	if lastErr != nil || !reflect.DeepEqual(ids, []int64{42, 43}) {
+		t.Fatalf("IDs=%v error=%v", ids, lastErr)
+	}
+	want := []request{
+		{"1", "2000"},
+		{"1", "1001"},
+		{"1", "1001"},
+		// The probe uses the overlap's lower bound, not the last row's millisecond.
+		{"1000", "1001"},
+		{"1", "1000"},
+	}
+	if !reflect.DeepEqual(requests, want) {
+		t.Fatalf("requests=%v, want %v", requests, want)
+	}
+}
+
+func TestInternalTransfersUnresolvableTail(t *testing.T) {
+	// If the overlap probe still reports more records, the walk cannot move the
+	// bound without skipping data and must stop with ErrPaginationNonProgress.
 	requests := 0
+	response := func(w http.ResponseWriter) {
+		_, _ = w.Write(
+			[]byte(
+				`{"data":[{"transfer_id":42,"type":"internal_transfer","asset":"USDC","amount":"1","direction":"out","counterparty":"` + fixtureRecipient + `","created_timestamp":1000},{"transfer_id":43,"type":"internal_transfer","asset":"USDC","amount":"2","direction":"in","counterparty":"` + fixtureRecipient + `","created_timestamp":1000}],"more":true}`,
+			),
+		)
+	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests++
 		if r.URL.Path != "/v1/account/internal-transfers" {
 			t.Errorf("path=%s", r.URL.Path)
 		}
-		switch requests {
-		case 1:
-			if r.URL.Query().Get("end_timestamp") != "2000" {
-				t.Error("initial end missing")
-			}
-			_, _ = w.Write(
-				[]byte(
-					`{"data":[{"transfer_id":42,"type":"internal_transfer","asset":"USDC","amount":"1","direction":"out","counterparty":"` + fixtureRecipient + `","created_timestamp":1000}],"more":true}`,
-				),
-			)
-		case 2:
-			if r.URL.Query().Get("end_timestamp") != "1001" {
-				t.Error("submillisecond boundary was skipped")
-			}
-			_, _ = w.Write(
-				[]byte(
-					`{"data":[{"transfer_id":42,"type":"internal_transfer","asset":"USDC","amount":"1","direction":"out","counterparty":"` + fixtureRecipient + `","created_timestamp":1000},{"transfer_id":43,"type":"internal_transfer","asset":"USDC","amount":"2","direction":"in","counterparty":"` + fixtureRecipient + `","created_timestamp":1000}],"more":true}`,
-				),
-			)
-		default:
-			_, _ = w.Write(
-				[]byte(
-					`{"data":[{"transfer_id":42,"type":"internal_transfer","asset":"USDC","amount":"1","direction":"out","counterparty":"` + fixtureRecipient + `","created_timestamp":1000},{"transfer_id":43,"type":"internal_transfer","asset":"USDC","amount":"2","direction":"in","counterparty":"` + fixtureRecipient + `","created_timestamp":1000}],"more":true}`,
-				),
-			)
+		if requests == 3 &&
+			(r.URL.Query().Get("start_timestamp") != "1000" ||
+				r.URL.Query().Get("end_timestamp") != "1001") {
+			t.Error("tail probe used the wrong interval")
 		}
+		response(w)
 	}))
 	t.Cleanup(server.Close)
 	client := fixtureClient(t, Config{Host: server.URL})
