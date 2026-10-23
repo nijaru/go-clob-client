@@ -61,6 +61,8 @@ const (
 	rewardsUserMarketsEndpoint     = "/rewards/user/markets"
 	rewardsMarketsCurrentEndpoint  = "/rewards/markets/current"
 	rewardsMarketsEndpoint         = "/rewards/markets/"
+	rewardsMarketsMultiEndpoint    = "/rewards/markets/multi"
+	rebatesCurrentEndpoint         = "/rebates/current"
 )
 
 const (

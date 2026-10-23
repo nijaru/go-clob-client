@@ -15,13 +15,17 @@ type UserEarning struct {
 	AssetRate    string `json:"asset_rate"`
 }
 
-// TotalUserEarning is a daily aggregate user earnings row.
+// TotalUserEarning is a daily aggregate user earnings row. NativeEarnings and
+// SponsoredEarnings break the total down by funding source and are nil when the
+// service does not report them.
 type TotalUserEarning struct {
-	Date         string `json:"date"`
-	AssetAddress string `json:"asset_address"`
-	MakerAddress string `json:"maker_address"`
-	Earnings     string `json:"earnings"`
-	AssetRate    string `json:"asset_rate"`
+	Date              string         `json:"date"`
+	AssetAddress      string         `json:"asset_address"`
+	MakerAddress      string         `json:"maker_address"`
+	Earnings          string         `json:"earnings"`
+	AssetRate         string         `json:"asset_rate"`
+	NativeEarnings    *DecimalString `json:"native_earnings,omitzero"`
+	SponsoredEarnings *DecimalString `json:"sponsored_earnings,omitzero"`
 }
 
 // RewardsPercentages maps market IDs to their reward percentages.
@@ -141,7 +145,7 @@ func (e *TotalUserEarning) UnmarshalJSON(data []byte) error {
 	return unmarshalResponseDates(
 		data,
 		(*alias)(e),
-		[]string{"earnings", "asset_rate"},
+		[]string{"earnings", "asset_rate", "native_earnings", "sponsored_earnings"},
 		true,
 		"date",
 	)
@@ -206,4 +210,145 @@ type UserRewardsFilterParams struct {
 	OrderBy       string
 	Position      string
 	NoCompetition bool
+}
+
+// CurrentRewardsParams filters current reward summaries. Cursor resumes a page
+// traversal; the empty value starts at the first page. Sponsored restricts rows
+// to sponsored (true) or native (false) rewards; nil uses the service default.
+type CurrentRewardsParams struct {
+	Sponsored *bool
+	Cursor    string
+}
+
+// MarketRewardsParams filters one market's reward rows. ConditionID selects the
+// market; Cursor resumes a page traversal. Sponsored restricts rows to
+// sponsored (true) or native (false) rewards; nil uses the service default.
+type MarketRewardsParams struct {
+	ConditionID string
+	Sponsored   *bool
+	Cursor      string
+}
+
+// TotalEarningsParams selects a day's total earnings. Sponsored restricts rows
+// to sponsored (true) or native (false) earnings; nil uses the service default.
+type TotalEarningsParams struct {
+	Date      string
+	Sponsored *bool
+}
+
+// RewardMarketSort selects the ordering of reward market discovery.
+type RewardMarketSort string
+
+const (
+	RewardMarketSortMarketID          RewardMarketSort = "market_id"
+	RewardMarketSortCreatedAt         RewardMarketSort = "created_at"
+	RewardMarketSortVolume24hr        RewardMarketSort = "volume_24hr"
+	RewardMarketSortSpread            RewardMarketSort = "spread"
+	RewardMarketSortCompetitiveness   RewardMarketSort = "competitiveness"
+	RewardMarketSortMaxSpread         RewardMarketSort = "max_spread"
+	RewardMarketSortMinSize           RewardMarketSort = "min_size"
+	RewardMarketSortQuestion          RewardMarketSort = "question"
+	RewardMarketSortOneDayPriceChange RewardMarketSort = "one_day_price_change"
+	RewardMarketSortRatePerDay        RewardMarketSort = "rate_per_day"
+	RewardMarketSortPrice             RewardMarketSort = "price"
+	RewardMarketSortEndDate           RewardMarketSort = "end_date"
+	RewardMarketSortStartDate         RewardMarketSort = "start_date"
+	RewardMarketSortRewardEndDate     RewardMarketSort = "reward_end_date"
+)
+
+// RewardMarketSortDirection is the ordering direction for reward market
+// discovery. An empty value leaves the service default (ascending).
+type RewardMarketSortDirection string
+
+const (
+	RewardMarketSortAscending  RewardMarketSortDirection = "ASC"
+	RewardMarketSortDescending RewardMarketSortDirection = "DESC"
+)
+
+// RewardMarket is an active market with its reward configurations and discovery
+// metadata. Configurations can be empty. CreatedAt and EndDate are ISO
+// timestamps normalized from the service's epoch milliseconds; EndDate is empty
+// when the market has no reward end.
+type RewardMarket struct {
+	ConditionID           string          `json:"condition_id"`
+	MarketID              string          `json:"market_id"`
+	MarketSlug            string          `json:"market_slug"`
+	Question              string          `json:"question"`
+	Image                 string          `json:"image"`
+	MarketCompetitiveness string          `json:"market_competitiveness"`
+	RewardsConfig         []RewardsConfig `json:"rewards_config"`
+	RewardsMaxSpread      string          `json:"rewards_max_spread"`
+	RewardsMinSize        string          `json:"rewards_min_size"`
+	Spread                string          `json:"spread"`
+	Tokens                []OutcomeToken  `json:"tokens"`
+	GroupItemTitle        string          `json:"group_item_title"`
+	Volume24hr            string          `json:"volume_24hr"`
+	EventID               string          `json:"event_id"`
+	EventSlug             string          `json:"event_slug"`
+	CreatedAt             string          `json:"created_at"`
+	OneDayPriceChange     string          `json:"one_day_price_change"`
+	EndDate               string          `json:"end_date"`
+}
+
+// UnmarshalJSON accepts numeric or string Decimal fields and epoch-millisecond
+// dates from the reward discovery endpoint.
+func (r *RewardMarket) UnmarshalJSON(data []byte) error {
+	type alias RewardMarket
+	return unmarshalResponseDates(
+		data,
+		(*alias)(r),
+		[]string{
+			"market_competitiveness",
+			"rewards_max_spread",
+			"rewards_min_size",
+			"spread",
+			"volume_24hr",
+			"one_day_price_change",
+		},
+		true,
+		"created_at",
+		"end_date",
+	)
+}
+
+// RewardMarketsParams filters reward market discovery. Zero bounds are absent.
+// Per the service contract, positive minimum bounds are exclusive and maximum
+// bounds are inclusive. PageSize 0 uses the service default.
+type RewardMarketsParams struct {
+	Query         string
+	TagSlugs      []string
+	MarketID      *int64
+	EventIDs      []int64
+	EventTitle    string
+	OrderBy       RewardMarketSort
+	SortDirection RewardMarketSortDirection
+	MinVolume24hr *DecimalString
+	MaxVolume24hr *DecimalString
+	MinSpread     *DecimalString
+	MaxSpread     *DecimalString
+	MinPrice      *DecimalString
+	MaxPrice      *DecimalString
+	PageSize      int
+	Cursor        string
+}
+
+// RebatedFee is a maker fee rebate for a calendar day, in USDC units.
+type RebatedFee struct {
+	Date            string        `json:"date"`
+	ConditionID     string        `json:"condition_id"`
+	AssetAddress    string        `json:"asset_address"`
+	MakerAddress    string        `json:"maker_address"`
+	RebatedFeesUSDC DecimalString `json:"rebated_fees_usdc"`
+}
+
+// UnmarshalJSON accepts numeric or string USDC amounts.
+func (r *RebatedFee) UnmarshalJSON(data []byte) error {
+	type alias RebatedFee
+	return unmarshalResponseStrings(data, (*alias)(r), "rebated_fees_usdc")
+}
+
+// RebatesParams selects a maker's rebates for one calendar day.
+type RebatesParams struct {
+	Date         string
+	MakerAddress string
 }

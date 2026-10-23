@@ -455,22 +455,28 @@ func TestTypedAuthenticatedSurfaces(t *testing.T) {
 		t.Fatalf("get reward percentages: %+v %v", percentages, err)
 	}
 
-	currentRewardsPage, err := client.GetCurrentRewardsPage(t.Context(), "")
+	currentRewardsPage, err := client.GetCurrentRewardsPage(t.Context(), CurrentRewardsParams{})
 	if err != nil || len(currentRewardsPage.Data) != 1 {
 		t.Fatalf("get current rewards page: %+v %v", currentRewardsPage, err)
 	}
 
-	currentRewards, err := client.GetCurrentRewards(t.Context())
+	currentRewards, err := client.GetCurrentRewards(t.Context(), CurrentRewardsParams{})
 	if err != nil || len(currentRewards) != 1 {
 		t.Fatalf("get current rewards: %+v %v", currentRewards, err)
 	}
 
-	marketRewardsPage, err := client.GetRewardsForMarketPage(t.Context(), "cond-1", "")
+	marketRewardsPage, err := client.GetRewardsForMarketPage(
+		t.Context(),
+		MarketRewardsParams{ConditionID: "cond-1"},
+	)
 	if err != nil || len(marketRewardsPage.Data) != 1 {
 		t.Fatalf("get rewards for market page: %+v %v", marketRewardsPage, err)
 	}
 
-	marketRewards, err := client.GetRewardsForMarket(t.Context(), "cond-1")
+	marketRewards, err := client.GetRewardsForMarket(
+		t.Context(),
+		MarketRewardsParams{ConditionID: "cond-1"},
+	)
 	if err != nil || len(marketRewards) != 1 {
 		t.Fatalf("get rewards for market: %+v %v", marketRewards, err)
 	}
@@ -485,7 +491,10 @@ func TestTypedAuthenticatedSurfaces(t *testing.T) {
 		t.Fatalf("get earnings for user: %+v %v", earnings, err)
 	}
 
-	totalEarnings, err := client.GetTotalEarningsForUserForDay(t.Context(), "2026-03-12")
+	totalEarnings, err := client.GetTotalEarningsForUserForDay(
+		t.Context(),
+		TotalEarningsParams{Date: "2026-03-12"},
+	)
 	if err != nil || len(totalEarnings) != 1 {
 		t.Fatalf("get total earnings for user: %+v %v", totalEarnings, err)
 	}

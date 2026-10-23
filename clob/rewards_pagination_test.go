@@ -210,22 +210,28 @@ func TestRewardsPaginationHelpers(t *testing.T) {
 		t.Fatalf("unexpected user rewards: %+v %v", userRewards, err)
 	}
 
-	currentRewardsPage, err := client.GetCurrentRewardsPage(t.Context(), "")
+	currentRewardsPage, err := client.GetCurrentRewardsPage(t.Context(), CurrentRewardsParams{})
 	if err != nil || len(currentRewardsPage.Data) != 1 ||
 		currentRewardsPage.NextCursor != "cursor-2" {
 		t.Fatalf("unexpected current rewards page: %+v %v", currentRewardsPage, err)
 	}
-	currentRewards, err := client.GetCurrentRewards(t.Context())
+	currentRewards, err := client.GetCurrentRewards(t.Context(), CurrentRewardsParams{})
 	if err != nil || len(currentRewards) != 2 {
 		t.Fatalf("unexpected current rewards: %+v %v", currentRewards, err)
 	}
 
-	marketRewardsPage, err := client.GetRewardsForMarketPage(t.Context(), "cond-1", "")
+	marketRewardsPage, err := client.GetRewardsForMarketPage(
+		t.Context(),
+		MarketRewardsParams{ConditionID: "cond-1"},
+	)
 	if err != nil || len(marketRewardsPage.Data) != 1 ||
 		marketRewardsPage.NextCursor != "cursor-2" {
 		t.Fatalf("unexpected market rewards page: %+v %v", marketRewardsPage, err)
 	}
-	marketRewards, err := client.GetRewardsForMarket(t.Context(), "cond-1")
+	marketRewards, err := client.GetRewardsForMarket(
+		t.Context(),
+		MarketRewardsParams{ConditionID: "cond-1"},
+	)
 	if err != nil || len(marketRewards) != 2 {
 		t.Fatalf("unexpected market rewards: %+v %v", marketRewards, err)
 	}
