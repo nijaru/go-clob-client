@@ -117,12 +117,12 @@ func (c *SignerClient) buildSignedLimitOrder(
 	}
 
 	price := userOrder.Price
-	size := userOrder.Size
-
-	if decimalPlaces(size) > roundConfig.Size {
+	// Match the exchange's lot size without increasing the requested quantity.
+	size := roundDown(userOrder.Size, roundConfig.Size)
+	if size.IsZero() {
 		return nil, fmt.Errorf(
-			"size %s exceeds maximum %d decimal places for tick size %q",
-			size, roundConfig.Size, options.TickSize,
+			"size %s rounds down to zero at lot size %d decimal places",
+			userOrder.Size, roundConfig.Size,
 		)
 	}
 

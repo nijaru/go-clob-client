@@ -282,7 +282,54 @@ func TestCreateMarketOrderDerivesPriceFromBook(t *testing.T) {
 	}
 }
 
-func TestCreateOrderRejectsExcessSizePrecision(t *testing.T) {
+func TestCreateOrderRoundsExcessSizePrecision(t *testing.T) {
+	t.Parallel()
+
+	server := newTradingTestServer(t, nil)
+	defer server.Close()
+
+	client, err := NewAuthenticatedClient(Config{
+		Host:       server.URL,
+		PrivateKey: "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c",
+		Credentials: &Credentials{
+			Key:        "api-key",
+			Secret:     "c2VjcmV0",
+			Passphrase: "pass",
+		},
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	client.saltGenerator = func() (uint64, error) { return 42, nil }
+
+	for _, tc := range []struct {
+		name   string
+		side   Side
+		maker  string
+		taker  string
+	}{
+		{name: "buy", side: SideBuy, maker: "4554000", taker: "10120000"},
+		{name: "sell", side: SideSell, maker: "10120000", taker: "4554000"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			order, err := client.CreateOrder(t.Context(), OrderArgs{
+				TokenID: "100",
+				Price:   udecimal.MustParse("0.45"),
+				Size:    udecimal.MustParse("10.123"),
+				Side:    tc.side,
+			}, &CreateOrderOptions{TickSize: TickSizeHundredth, NegRisk: new(false)})
+			if err != nil {
+				t.Fatalf("create order: %v", err)
+			}
+			if order.Order.MakerAmount != tc.maker || order.Order.TakerAmount != tc.taker {
+				t.Fatalf("unexpected amounts: maker=%s taker=%s; want %s/%s",
+					order.Order.MakerAmount, order.Order.TakerAmount, tc.maker, tc.taker)
+			}
+		})
+	}
+}
+
+func TestCreateOrderRejectsSizeRoundedToZero(t *testing.T) {
 	t.Parallel()
 
 	server := newTradingTestServer(t, nil)
@@ -301,15 +348,18 @@ func TestCreateOrderRejectsExcessSizePrecision(t *testing.T) {
 		t.Fatalf("new client: %v", err)
 	}
 
-	// Tick size 0.01 → roundConfig.Size = 2; size with 3 dp should be rejected.
-	_, err = client.CreateOrder(t.Context(), OrderArgs{
-		TokenID: "100",
-		Price:   udecimal.MustParse("0.45"),
-		Size:    udecimal.MustParse("10.123"),
-		Side:    SideBuy,
-	}, &CreateOrderOptions{TickSize: TickSizeHundredth, NegRisk: new(false)})
-	if err == nil {
-		t.Fatal("expected error for size with excess decimal places")
+	for _, side := range []Side{SideBuy, SideSell} {
+		t.Run(string(side), func(t *testing.T) {
+			_, err := client.CreateOrder(t.Context(), OrderArgs{
+				TokenID: "100",
+				Price:   udecimal.MustParse("0.45"),
+				Size:    udecimal.MustParse("0.009"),
+				Side:    side,
+			}, &CreateOrderOptions{TickSize: TickSizeHundredth, NegRisk: new(false)})
+			if err == nil {
+				t.Fatal("expected error when requested size rounds down to zero")
+			}
+		})
 	}
 }
 
