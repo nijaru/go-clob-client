@@ -58,6 +58,33 @@ func (c *Client) postJSON(
 	})
 }
 
+// postTradingJSON isolates order-placement admission from reads and cancels.
+func (c *Client) postTradingJSON(
+	ctx context.Context,
+	path string,
+	body any,
+	auth polyhttp.AuthLevel,
+	out any,
+) error {
+	return c.withRetry(ctx, false, c.rateLimiters.orders, func() error {
+		return c.http.PostJSON(ctx, path, body, auth, out)
+	})
+}
+
+// cancelTradingJSON uses its own budget. Never retry an ambiguous cancel
+// without reconciling server state first.
+func (c *Client) cancelTradingJSON(
+	ctx context.Context,
+	path string,
+	body any,
+	auth polyhttp.AuthLevel,
+	out any,
+) error {
+	return c.withRetry(ctx, false, c.rateLimiters.cancels, func() error {
+		return c.http.DeleteJSON(ctx, path, body, auth, out)
+	})
+}
+
 func (c *Client) deleteJSON(
 	ctx context.Context,
 	path string,
