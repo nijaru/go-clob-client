@@ -199,7 +199,7 @@ func (c *AuthenticatedClient) PostOrder(
 	request PostOrderRequest,
 ) (*PostOrderResponse, error) {
 	var out PostOrderResponse
-	err := c.postJSON(ctx, postOrderEndpoint, request, polyhttp.AuthL2Builder, &out)
+	err := c.postTradingJSON(ctx, postOrderEndpoint, request, polyhttp.AuthL2Builder, &out)
 	if isOrderVersionMismatch(err) {
 		c.invalidateServerVersion()
 	}
@@ -219,7 +219,7 @@ func (c *AuthenticatedClient) PostOrders(
 		)
 	}
 	var out []PostOrderResponse
-	err := c.postJSON(ctx, postOrdersEndpoint, requests, polyhttp.AuthL2Builder, &out)
+	err := c.postTradingJSON(ctx, postOrdersEndpoint, requests, polyhttp.AuthL2Builder, &out)
 	if isOrderVersionMismatch(err) {
 		c.invalidateServerVersion()
 	}
@@ -292,7 +292,7 @@ func (c *AuthenticatedClient) CancelOrder(
 	orderID string,
 ) (*CancelOrdersResponse, error) {
 	var out CancelOrdersResponse
-	err := c.deleteJSON(
+	err := c.cancelTradingJSON(
 		ctx,
 		cancelOrderEndpoint,
 		OrderPayload{OrderID: orderID},
@@ -308,14 +308,14 @@ func (c *AuthenticatedClient) CancelOrders(
 	orderIDs []string,
 ) (*CancelOrdersResponse, error) {
 	var out CancelOrdersResponse
-	err := c.deleteJSON(ctx, cancelOrdersEndpoint, orderIDs, polyhttp.AuthL2Builder, &out)
+	err := c.cancelTradingJSON(ctx, cancelOrdersEndpoint, orderIDs, polyhttp.AuthL2Builder, &out)
 	return &out, err
 }
 
 // CancelAll cancels all open orders for the authenticated account.
 func (c *AuthenticatedClient) CancelAll(ctx context.Context) (*CancelOrdersResponse, error) {
 	var out CancelOrdersResponse
-	err := c.deleteJSON(ctx, cancelAllEndpoint, nil, polyhttp.AuthL2Builder, &out)
+	err := c.cancelTradingJSON(ctx, cancelAllEndpoint, nil, polyhttp.AuthL2Builder, &out)
 	return &out, err
 }
 
