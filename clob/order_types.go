@@ -439,8 +439,8 @@ type OrderArgs struct {
 	Price      udecimal.Decimal
 	// Size is the requested share quantity; signing rounds it down to the
 	// exchange lot size (currently two decimal places), never up.
-	Size udecimal.Decimal
-	Side Side
+	Size       udecimal.Decimal
+	Side       Side
 	Expiration uint64
 	// MaxSpend caps BUY notional plus platform and builder taker fees.
 	// When necessary, Size is reduced to fit the cap.
