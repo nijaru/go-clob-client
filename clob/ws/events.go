@@ -50,31 +50,32 @@ func extractEventType(data []byte) (EventType, bool) {
 	return "", false
 }
 
-func (c *Client) handleMessage(ctx context.Context, data []byte) {
+// handleMessage returns false only when consumer lag prevents safe delivery.
+// A caller must abandon the connection and report a continuity gap in that case.
+func (c *Client) handleMessage(ctx context.Context, data []byte) bool {
 	trimmed := bytes.TrimSpace(data)
 	if len(trimmed) == 0 || (trimmed[0] != '{' && trimmed[0] != '[') {
-		// Non-JSON message (text heartbeat, etc.) — not an error.
-		return
+		return true
 	}
 	if trimmed[0] == '[' {
 		var messages []stdjson.RawMessage
 		if err := stdjson.Unmarshal(trimmed, &messages); err != nil {
-			return
+			return true
 		}
 		for _, message := range messages {
-			// Rust tolerates malformed/unknown elements inside a transport batch;
-			// report only malformed singleton frames to the asynchronous error path.
-			c.handleEventMessage(ctx, message, false)
+			if !c.handleEventMessage(ctx, message, false) {
+				return false
+			}
 		}
-		return
+		return true
 	}
-	c.handleEventMessage(ctx, trimmed, true)
+	return c.handleEventMessage(ctx, trimmed, true)
 }
 
-func (c *Client) handleEventMessage(ctx context.Context, data []byte, reportDecodeError bool) {
+func (c *Client) handleEventMessage(ctx context.Context, data []byte, reportDecodeError bool) bool {
 	eventType, ok := extractEventType(data)
 	if !ok {
-		return
+		return true
 	}
 
 	var event Event
@@ -100,27 +101,29 @@ func (c *Client) handleEventMessage(ctx context.Context, data []byte, reportDeco
 	case EventTypeMarketResolved:
 		event = &MarketResolvedEvent{}
 	default:
-		// Unknown event types are forward-compatible additions to the wire protocol.
-		// Drop them while keeping the connection usable, as the official SDKs do.
-		return
+		// Unknown event types are forward-compatible protocol additions.
+		return true
 	}
 
 	if err := json.Unmarshal(data, event); err != nil {
 		if reportDecodeError {
 			c.emitError(fmt.Errorf("decode %s event: %w", eventType, err))
 		}
-		return
+		return true
 	}
-	c.emitEvent(ctx, event)
+	if !c.emitEvent(ctx, event) {
+		return false
+	}
 
 	book, ok := event.(*BookEvent)
 	if !ok || !c.isMidpointSubscribed(book.AssetID) {
-		return
+		return true
 	}
 	midpoint, ok := midpointFromBook(book)
 	if ok {
-		c.emitEvent(ctx, midpoint)
+		return c.emitEvent(ctx, midpoint)
 	}
+	return true
 }
 
 func (c *Client) isMidpointSubscribed(assetID string) bool {
