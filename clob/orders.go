@@ -192,7 +192,7 @@ func (c *AuthenticatedClient) GetTradesPage(
 	return &out, err
 }
 
-// PostOrder posts a single signed order.
+// PostOrder submits a signed order and returns the exchange acknowledgment without polling for settlement.
 func (c *AuthenticatedClient) PostOrder(
 	ctx context.Context,
 	request PostOrderRequest,
@@ -202,19 +202,11 @@ func (c *AuthenticatedClient) PostOrder(
 	if isOrderVersionMismatch(err) {
 		c.invalidateServerVersion()
 	}
-	if err == nil && shouldResolvePostOrder(request, out) {
-		hashes := transactionHashesForTradeIDs(
-			out.TradeIDs,
-			c.waitForResolvedTrades(ctx, out.TradeIDs),
-		)
-		if len(hashes) > 0 {
-			out.TransactionsHashes = hashes
-		}
-	}
+
 	return &out, err
 }
 
-// PostOrders posts multiple signed orders in a batch.
+// PostOrders posts a batch without waiting for trade settlement.
 func (c *AuthenticatedClient) PostOrders(
 	ctx context.Context,
 	requests []PostOrderRequest,
@@ -230,7 +222,42 @@ func (c *AuthenticatedClient) PostOrders(
 	if isOrderVersionMismatch(err) {
 		c.invalidateServerVersion()
 	}
-	if err == nil {
+
+	return out, err
+}
+
+// PostOrderAndResolve enriches a posted order with best-effort transaction
+// hashes for immediately matched trades. Resolution can poll for up to 30 seconds.
+func (c *AuthenticatedClient) PostOrderAndResolve(
+	ctx context.Context,
+	request PostOrderRequest,
+) (*PostOrderResponse, error) {
+	out, err := c.PostOrder(ctx, request)
+	if err != nil {
+		return out, err
+	}
+	if shouldResolvePostOrder(request, *out) {
+		hashes := transactionHashesForTradeIDs(
+			out.TradeIDs,
+			c.waitForResolvedTrades(ctx, out.TradeIDs),
+		)
+		if len(hashes) > 0 {
+			out.TransactionsHashes = hashes
+		}
+	}
+	return out, nil
+}
+
+// PostOrdersAndResolve resolves matched trade hashes with one shared timeout.
+func (c *AuthenticatedClient) PostOrdersAndResolve(
+	ctx context.Context,
+	requests []PostOrderRequest,
+) ([]PostOrderResponse, error) {
+	out, err := c.PostOrders(ctx, requests)
+	if err != nil {
+		return out, err
+	}
+	{
 		var tradeIDs []string
 		pending := make([]int, 0, len(out))
 		for i := range out {
@@ -257,7 +284,7 @@ func (c *AuthenticatedClient) PostOrders(
 			}
 		}
 	}
-	return out, err
+	return out, nil
 }
 
 // CancelOrder cancels a single order by ID.
