@@ -11,7 +11,7 @@ import (
 
 const orderResolutionPrivateKey = "0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae1a40cf83f4a2f9c"
 
-func TestPostOrderResolvesTradeIDs(t *testing.T) {
+func TestPostOrderAndResolveResolvesTradeIDs(t *testing.T) {
 	var tradeCalls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -41,7 +41,7 @@ func TestPostOrderResolvesTradeIDs(t *testing.T) {
 	defer server.Close()
 
 	client := newOrderResolutionClient(t, server.URL)
-	response, err := client.PostOrder(t.Context(), orderResolutionRequest(false))
+	response, err := client.PostOrderAndResolve(t.Context(), orderResolutionRequest(false))
 	if err != nil {
 		t.Fatalf("PostOrder: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestPostOrderResolvesTradeIDs(t *testing.T) {
 	}
 }
 
-func TestPostOrderSkipsTradeResolutionForDeferredExecution(t *testing.T) {
+func TestPostOrderAndResolveSkipsTradeResolutionForDeferredExecution(t *testing.T) {
 	var tradeCalls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -75,7 +75,7 @@ func TestPostOrderSkipsTradeResolutionForDeferredExecution(t *testing.T) {
 	defer server.Close()
 
 	client := newOrderResolutionClient(t, server.URL)
-	response, err := client.PostOrder(t.Context(), orderResolutionRequest(true))
+	response, err := client.PostOrderAndResolve(t.Context(), orderResolutionRequest(true))
 	if err != nil {
 		t.Fatalf("PostOrder: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestPostOrderSkipsTradeResolutionForDeferredExecution(t *testing.T) {
 	}
 }
 
-func TestPostOrdersSharesTradeResolution(t *testing.T) {
+func TestPostOrdersAndResolveSharesTradeResolution(t *testing.T) {
 	var tradeCalls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -113,7 +113,7 @@ func TestPostOrdersSharesTradeResolution(t *testing.T) {
 	defer server.Close()
 
 	client := newOrderResolutionClient(t, server.URL)
-	responses, err := client.PostOrders(t.Context(), []PostOrderRequest{
+	responses, err := client.PostOrdersAndResolve(t.Context(), []PostOrderRequest{
 		orderResolutionRequest(false),
 		orderResolutionRequest(false),
 	})
@@ -133,7 +133,7 @@ func TestPostOrdersSharesTradeResolution(t *testing.T) {
 	}
 }
 
-func TestPostOrderWaitsForConfirmedTrade(t *testing.T) {
+func TestPostOrderAndResolveWaitsForConfirmedTrade(t *testing.T) {
 	var tradeCalls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -162,7 +162,7 @@ func TestPostOrderWaitsForConfirmedTrade(t *testing.T) {
 	defer server.Close()
 
 	client := newOrderResolutionClient(t, server.URL)
-	response, err := client.PostOrder(t.Context(), orderResolutionRequest(false))
+	response, err := client.PostOrderAndResolve(t.Context(), orderResolutionRequest(false))
 	if err != nil {
 		t.Fatalf("PostOrder: %v", err)
 	}
@@ -174,7 +174,7 @@ func TestPostOrderWaitsForConfirmedTrade(t *testing.T) {
 	}
 }
 
-func TestPostOrderRecognizesPrefixedFailedTrade(t *testing.T) {
+func TestPostOrderAndResolveRecognizesPrefixedFailedTrade(t *testing.T) {
 	var tradeCalls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -195,7 +195,7 @@ func TestPostOrderRecognizesPrefixedFailedTrade(t *testing.T) {
 	defer server.Close()
 
 	client := newOrderResolutionClient(t, server.URL)
-	response, err := client.PostOrder(t.Context(), orderResolutionRequest(false))
+	response, err := client.PostOrderAndResolve(t.Context(), orderResolutionRequest(false))
 	if err != nil {
 		t.Fatalf("PostOrder: %v", err)
 	}
