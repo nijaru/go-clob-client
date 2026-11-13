@@ -172,4 +172,3 @@ func midpointFromBook(book *BookEvent) (*MidpointEvent, bool) {
 		Timestamp: book.Timestamp,
 	}, true
 }
-

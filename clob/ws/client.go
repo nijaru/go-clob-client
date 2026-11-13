@@ -49,9 +49,9 @@ type Client struct {
 	conn     *websocket.Conn
 	connDone chan struct{} // closed when conn.Close() completes
 
-	eventMu     sync.Mutex // serializes delivery with gap invalidation
-	events      chan Event
-	errs        chan error
+	eventMu      sync.Mutex // serializes delivery with gap invalidation
+	events       chan Event
+	errs         chan error
 	stop         chan struct{}
 	ctx          context.Context
 	cancel       context.CancelFunc

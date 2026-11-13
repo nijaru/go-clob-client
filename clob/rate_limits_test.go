@@ -36,7 +36,10 @@ func TestRequestBudgetsKeepCancelAndReadResponsive(t *testing.T) {
 	}
 	waitCtx, cancel := context.WithTimeout(t.Context(), 30*time.Millisecond)
 	defer cancel()
-	if err := client.postTradingJSON(waitCtx, "/order", nil, polyhttp.AuthNone, nil); !errors.Is(err, context.DeadlineExceeded) {
+	if err := client.postTradingJSON(waitCtx, "/order", nil, polyhttp.AuthNone, nil); !errors.Is(
+		err,
+		context.DeadlineExceeded,
+	) {
 		t.Fatalf("second placement error = %v; want deadline", err)
 	}
 	if err := client.cancelTradingJSON(t.Context(), "/cancel", nil, polyhttp.AuthNone, nil); err != nil {

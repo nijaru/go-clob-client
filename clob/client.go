@@ -371,4 +371,3 @@ func (c *Client) Host() string {
 func (c *Client) resolveContractConfig(negRisk bool) (contractConfig, error) {
 	return getContractConfig(c.chainID)
 }
-
