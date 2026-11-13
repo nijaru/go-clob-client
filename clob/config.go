@@ -2,7 +2,6 @@ package clob
 
 import (
 	"fmt"
-	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -113,12 +112,9 @@ type Config struct {
 	// for retry-eligible requests.
 	// Defaults to 1 second.
 	RetryBackoff time.Duration
-	// RateLimit is the maximum number of requests per second.
-	// Defaults to 5 req/s. Set to a negative value to disable rate limiting.
-	RateLimit float64
-	// RateBurst is the maximum burst size for the rate limiter.
-	// Defaults to 10.
-	RateBurst int
+	// Rates configures independent local request budgets. The zero value
+	// performs no client-side throttling; Polymarket server limits still apply.
+	Rates RateLimits
 	// OnRateLimitUpdate is invoked with the parsed Poly-RateLimit-* state
 	// whenever a response reports it, both successful and failed. Errors
 	// raised by the listener are ignored and must not affect request
@@ -134,8 +130,8 @@ func (c Config) validate() error {
 		c.RateBurst < 0 {
 		return fmt.Errorf("retry, cache, heartbeat, and burst settings must not be negative")
 	}
-	if math.IsNaN(c.RateLimit) || math.IsInf(c.RateLimit, 0) {
-		return fmt.Errorf("RateLimit must be finite")
+	if err := c.Rates.validate(); err != nil {
+		return err
 	}
 	for _, host := range []string{c.Host, c.GeoblockHost, c.RelayerHost, c.BuilderGatewayHost, c.CollateralReturnHost} {
 		u, err := url.Parse(host)
@@ -203,13 +199,6 @@ func (c Config) normalized() Config {
 
 	if c.RetryBackoff == 0 {
 		c.RetryBackoff = 1 * time.Second
-	}
-
-	if c.RateLimit == 0 {
-		c.RateLimit = 5
-	}
-	if c.RateBurst == 0 {
-		c.RateBurst = 10
 	}
 
 	return c
