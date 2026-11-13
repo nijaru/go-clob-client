@@ -115,7 +115,7 @@ func newClient(url string, creds *clob.Credentials) *Client {
 	return &Client{
 		url:               url,
 		creds:             creds,
-		events:            make(chan Event, 100),
+		events:            make(chan Event, 256),
 		errs:              make(chan error, 10),
 		stop:              make(chan struct{}),
 		ctx:               ctx,
@@ -765,7 +765,7 @@ func (c *Client) readLoop(
 			if ctx.Err() != nil {
 				return
 			}
-			c.markDisconnected(conn)
+			c.markDisconnected(conn, GapDisconnected)
 
 			// If auto-reconnect enabled, try to reconnect
 			if c.autoReconnect {
@@ -789,8 +789,14 @@ func (c *Client) readLoop(
 			continue
 		}
 
-		// Decode event
-		c.handleMessage(ctx, data)
+		// The reader must never block behind a slow consumer: it also
+		// processes heartbeat responses and controls reconnect recovery.
+		if !c.handleMessage(ctx, data) {
+			c.markDisconnected(conn, GapConsumerLagged)
+			_ = conn.CloseNow()
+			c.scheduleReconnect()
+			return
+		}
 	}
 }
 
@@ -827,7 +833,7 @@ func (c *Client) heartbeatLoop(
 				if ctx.Err() != nil {
 					return
 				}
-				c.markDisconnected(conn)
+				c.markDisconnected(conn, GapDisconnected)
 				c.scheduleReconnect()
 				return
 			}
@@ -850,7 +856,7 @@ func (c *Client) heartbeatLoop(
 				}
 			case <-timeout.C:
 				_ = conn.Close(websocket.StatusPolicyViolation, "heartbeat timeout")
-				c.markDisconnected(conn)
+				c.markDisconnected(conn, GapDisconnected)
 				c.scheduleReconnect()
 				return
 			}
@@ -871,18 +877,52 @@ func (c *Client) sendJSON(ctx context.Context, v any) error {
 	return c.conn.Write(ctx, websocket.MessageText, data)
 }
 
-func (c *Client) markDisconnected(conn *websocket.Conn) {
+// markDisconnected marks a connection unhealthy once. Every unexpected
+// disconnection invalidates local stream state: the server cannot replay gaps.
+func (c *Client) markDisconnected(conn *websocket.Conn, reason GapReason) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.conn == conn {
-		c.conn = nil
+	if c.conn != conn {
+		c.mu.Unlock()
+		return
+	}
+	c.conn = nil
+	cancel := c.connCancel
+	c.connCancel = nil
+	closed := c.closed
+	c.mu.Unlock()
+
+	if cancel != nil {
+		cancel()
+	}
+	if !closed {
+		c.reportGap(reason)
 	}
 }
 
-func (c *Client) emitEvent(ctx context.Context, event Event) {
+// reportGap discards stale queued events and places a gap marker in the
+// event stream itself, so consumers need not race an independent error channel.
+func (c *Client) reportGap(reason GapReason) {
+	for {
+		select {
+		case <-c.events:
+		default:
+			c.events <- &GapEvent{Reason: reason}
+			c.emitError(fmt.Errorf("clob websocket: continuity lost (%s)", reason))
+			return
+		}
+	}
+}
+
+// emitEvent does not block the network reader behind a slow consumer.
+func (c *Client) emitEvent(ctx context.Context, event Event) bool {
+	if ctx.Err() != nil {
+		return false
+	}
 	select {
 	case c.events <- event:
-	case <-ctx.Done():
+		return true
+	default:
+		return false
 	}
 }
 
@@ -931,7 +971,7 @@ func (c *Client) attemptReconnect() {
 			}
 
 			// Add ±25% jitter to prevent thundering herd
-			jitter := time.Duration(rand.Float64()*0.5-0.25) * backoff
+			jitter := time.Duration((rand.Float64()*0.5 - 0.25) * float64(backoff))
 			nextBackoff := backoff + jitter
 
 			timer.Reset(nextBackoff)
