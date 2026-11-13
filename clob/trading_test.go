@@ -303,10 +303,10 @@ func TestCreateOrderRoundsExcessSizePrecision(t *testing.T) {
 	client.saltGenerator = func() (uint64, error) { return 42, nil }
 
 	for _, tc := range []struct {
-		name   string
-		side   Side
-		maker  string
-		taker  string
+		name  string
+		side  Side
+		maker string
+		taker string
 	}{
 		{name: "buy", side: SideBuy, maker: "4554000", taker: "10120000"},
 		{name: "sell", side: SideSell, maker: "10120000", taker: "4554000"},
