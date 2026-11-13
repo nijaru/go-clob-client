@@ -53,6 +53,23 @@ type Event interface {
 	isEvent()
 }
 
+// GapReason describes why event continuity can no longer be trusted.
+type GapReason string
+
+const (
+	GapDisconnected   GapReason = "disconnected"
+	GapConsumerLagged GapReason = "consumer_lagged"
+)
+
+// GapEvent invalidates any locally reconstructed book or account state.
+// The CLOB WebSocket does not replay missed events. Market subscribers must
+// restore a fresh snapshot; user subscribers must reconcile through REST.
+type GapEvent struct {
+	Reason GapReason
+}
+
+func (*GapEvent) isEvent() {}
+
 func (*BookEvent) isEvent()           {}
 func (*PriceChangeEvent) isEvent()    {}
 func (*TickSizeChangeEvent) isEvent() {}
