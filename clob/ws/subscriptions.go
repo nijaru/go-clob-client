@@ -355,6 +355,11 @@ func (c *Client) recordSubscription(sub subscription) (subscription, bool) {
 	defer c.subsMu.Unlock()
 
 	c.subs = append(c.subs, sub)
+	if sub.channelType == channelTypeMidpoints {
+		for _, assetID := range sub.assetIDs {
+			c.midpointRefs[assetID]++
+		}
+	}
 	sendSub := sub
 	if sub.target.isUser() {
 		if len(sub.markets) == 0 {
@@ -450,6 +455,9 @@ func (c *Client) rollbackRemovedSubscription(sub subscription) {
 	} else {
 		for _, assetID := range sub.assetIDs {
 			c.marketRefs[assetID]++
+			if sub.channelType == channelTypeMidpoints {
+				c.midpointRefs[assetID]++
+			}
 		}
 	}
 	c.recomputeCustomFeatureLocked()
@@ -482,6 +490,13 @@ func (c *Client) decrementSubscriptionRefsLocked(sub subscription) []string {
 	}
 
 	for _, assetID := range sub.assetIDs {
+		if sub.channelType == channelTypeMidpoints {
+			if count := c.midpointRefs[assetID]; count <= 1 {
+				delete(c.midpointRefs, assetID)
+			} else {
+				c.midpointRefs[assetID] = count - 1
+			}
+		}
 		switch count := c.marketRefs[assetID]; {
 		case count <= 1:
 			delete(c.marketRefs, assetID)

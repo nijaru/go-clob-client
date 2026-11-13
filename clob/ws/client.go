@@ -61,6 +61,7 @@ type Client struct {
 	subs          []subscription
 	marketRefs    map[string]int
 	userRefs      map[string]int
+	midpointRefs  map[string]int
 	customFeature bool
 
 	heartbeatInterval time.Duration
@@ -121,6 +122,7 @@ func newClient(url string, creds *clob.Credentials) *Client {
 		autoReconnect:     true,
 		marketRefs:        make(map[string]int),
 		userRefs:          make(map[string]int),
+		midpointRefs:      make(map[string]int),
 		heartbeatInterval: defaultHeartbeatInterval,
 		heartbeatTimeout:  defaultHeartbeatTimeout,
 	}

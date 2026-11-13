@@ -127,23 +127,10 @@ func (c *Client) handleEventMessage(ctx context.Context, data []byte, reportDeco
 }
 
 func (c *Client) isMidpointSubscribed(assetID string) bool {
-	if assetID == "" {
-		return false
-	}
-
 	c.subsMu.RLock()
-	defer c.subsMu.RUnlock()
-	for _, sub := range c.subs {
-		if sub.channelType != channelTypeMidpoints {
-			continue
-		}
-		for _, subscribedAssetID := range sub.assetIDs {
-			if subscribedAssetID == assetID {
-				return true
-			}
-		}
-	}
-	return false
+	_, ok := c.midpointRefs[assetID]
+	c.subsMu.RUnlock()
+	return ok
 }
 
 func midpointFromBook(book *BookEvent) (*MidpointEvent, bool) {
