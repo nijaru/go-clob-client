@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"time"
 
+	"golang.org/x/time/rate"
+
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
 )
 
@@ -30,7 +32,7 @@ func (c *Client) getJSON(
 	auth polyhttp.AuthLevel,
 	out any,
 ) error {
-	return c.withRetry(ctx, true, func() error {
+	return c.withRetry(ctx, true, c.rateLimiters.reads, func() error {
 		return c.http.GetJSON(ctx, path, query, auth, out)
 	})
 }
@@ -51,7 +53,7 @@ func (c *Client) postJSON(
 	auth polyhttp.AuthLevel,
 	out any,
 ) error {
-	return c.withRetry(ctx, false, func() error {
+	return c.withRetry(ctx, false, c.rateLimiters.other, func() error {
 		return c.http.PostJSON(ctx, path, body, auth, out)
 	})
 }
@@ -63,7 +65,7 @@ func (c *Client) deleteJSON(
 	auth polyhttp.AuthLevel,
 	out any,
 ) error {
-	return c.withRetry(ctx, false, func() error {
+	return c.withRetry(ctx, false, c.rateLimiters.other, func() error {
 		return c.http.DeleteJSON(ctx, path, body, auth, out)
 	})
 }
@@ -76,7 +78,7 @@ func (c *Client) deleteJSONQuery(
 	auth polyhttp.AuthLevel,
 	out any,
 ) error {
-	return c.withRetry(ctx, false, func() error {
+	return c.withRetry(ctx, false, c.rateLimiters.other, func() error {
 		return c.http.DeleteJSONQuery(ctx, path, query, body, auth, out)
 	})
 }
@@ -89,7 +91,7 @@ func (c *Client) getJSONWithNonce(
 	nonce int64,
 	out any,
 ) error {
-	return c.withRetry(ctx, false, func() error {
+	return c.withRetry(ctx, false, c.rateLimiters.other, func() error {
 		return c.http.GetJSONWithNonce(ctx, path, query, auth, nonce, out)
 	})
 }
@@ -102,7 +104,7 @@ func (c *Client) postJSONWithNonce(
 	nonce int64,
 	out any,
 ) error {
-	return c.withRetry(ctx, false, func() error {
+	return c.withRetry(ctx, false, c.rateLimiters.other, func() error {
 		return c.http.PostJSONWithNonce(ctx, path, body, auth, nonce, out)
 	})
 }
@@ -116,15 +118,19 @@ func (c *Client) doJSON(
 	out any,
 	extraHeaders map[string]string,
 ) error {
-	return c.withRetry(ctx, method == http.MethodGet, func() error {
+	limiter := c.rateLimiters.other
+	if method == http.MethodGet {
+		limiter = c.rateLimiters.reads
+	}
+	return c.withRetry(ctx, method == http.MethodGet, limiter, func() error {
 		return c.http.DoJSON(ctx, method, path, query, body, auth, nil, extraHeaders, out)
 	})
 }
 
-func (c *Client) withRetry(ctx context.Context, retryEnabled bool, fn func() error) error {
+func (c *Client) withRetry(ctx context.Context, retryEnabled bool, limiter *rate.Limiter, fn func() error) error {
 	if !retryEnabled {
-		if c.rateLimiter != nil {
-			if err := c.waitRateLimit(ctx); err != nil {
+		if limiter != nil {
+			if err := waitRateLimit(ctx, limiter); err != nil {
 				return err
 			}
 		}
@@ -140,8 +146,8 @@ func (c *Client) withRetry(ctx context.Context, retryEnabled bool, fn func() err
 	}()
 
 	for i := 0; i <= c.retryMax; i++ {
-		if c.rateLimiter != nil {
-			if err := c.waitRateLimit(ctx); err != nil {
+		if limiter != nil {
+			if err := waitRateLimit(ctx, limiter); err != nil {
 				return err
 			}
 		}
@@ -195,8 +201,8 @@ func (c *Client) withRetry(ctx context.Context, retryEnabled bool, fn func() err
 // rate.Wait may reject a reservation before a deadline actually expires.
 // Wait for that deadline so callers receive the context's typed error rather
 // than a rate-limiter-specific string; the request is never issued.
-func (c *Client) waitRateLimit(ctx context.Context) error {
-	err := c.rateLimiter.Wait(ctx)
+func waitRateLimit(ctx context.Context, limiter *rate.Limiter) error {
+	err := limiter.Wait(ctx)
 	if err == nil {
 		return nil
 	}
