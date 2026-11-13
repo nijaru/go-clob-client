@@ -49,8 +49,9 @@ type Client struct {
 	conn     *websocket.Conn
 	connDone chan struct{} // closed when conn.Close() completes
 
-	events       chan Event
-	errs         chan error
+	eventMu     sync.Mutex // serializes delivery with gap invalidation
+	events      chan Event
+	errs        chan error
 	stop         chan struct{}
 	ctx          context.Context
 	cancel       context.CancelFunc
@@ -902,10 +903,14 @@ func (c *Client) markDisconnected(conn *websocket.Conn, reason GapReason) {
 // reportGap discards stale queued events and places a gap marker in the
 // event stream itself, so consumers need not race an independent error channel.
 func (c *Client) reportGap(reason GapReason) {
+	c.eventMu.Lock()
+	defer c.eventMu.Unlock()
+
 	for {
 		select {
 		case <-c.events:
 		default:
+			// With producers serialized, the marker cannot be overtaken.
 			c.events <- &GapEvent{Reason: reason}
 			c.emitError(fmt.Errorf("clob websocket: continuity lost (%s)", reason))
 			return
@@ -915,6 +920,9 @@ func (c *Client) reportGap(reason GapReason) {
 
 // emitEvent does not block the network reader behind a slow consumer.
 func (c *Client) emitEvent(ctx context.Context, event Event) bool {
+	c.eventMu.Lock()
+	defer c.eventMu.Unlock()
+
 	if ctx.Err() != nil {
 		return false
 	}
