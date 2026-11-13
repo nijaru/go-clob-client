@@ -192,7 +192,8 @@ func (c *AuthenticatedClient) GetTradesPage(
 	return &out, err
 }
 
-// PostOrder submits a signed order and returns the exchange acknowledgment without polling for settlement.
+// PostOrder returns the exchange acknowledgment without polling for settlement.
+// An accepted order may remain unfilled. A request failure may be ambiguous.
 func (c *AuthenticatedClient) PostOrder(
 	ctx context.Context,
 	request PostOrderRequest,
@@ -257,30 +258,28 @@ func (c *AuthenticatedClient) PostOrdersAndResolve(
 	if err != nil {
 		return out, err
 	}
-	{
-		var tradeIDs []string
-		pending := make([]int, 0, len(out))
-		for i := range out {
-			var request PostOrderRequest
-			if i < len(requests) {
-				request = requests[i]
-			}
-			if !shouldResolvePostOrder(request, out[i]) {
-				continue
-			}
-			pending = append(pending, i)
-			tradeIDs = append(tradeIDs, out[i].TradeIDs...)
+	var tradeIDs []string
+	pending := make([]int, 0, len(out))
+	for i := range out {
+		var request PostOrderRequest
+		if i < len(requests) {
+			request = requests[i]
 		}
-		if len(tradeIDs) > 0 {
-			resolved := c.waitForResolvedTrades(ctx, tradeIDs)
-			for _, i := range pending {
-				hashes := transactionHashesForTradeIDs(
-					out[i].TradeIDs,
-					resolved,
-				)
-				if len(hashes) > 0 {
-					out[i].TransactionsHashes = hashes
-				}
+		if !shouldResolvePostOrder(request, out[i]) {
+			continue
+		}
+		pending = append(pending, i)
+		tradeIDs = append(tradeIDs, out[i].TradeIDs...)
+	}
+	if len(tradeIDs) > 0 {
+		resolved := c.waitForResolvedTrades(ctx, tradeIDs)
+		for _, i := range pending {
+			hashes := transactionHashesForTradeIDs(
+				out[i].TradeIDs,
+				resolved,
+			)
+			if len(hashes) > 0 {
+				out[i].TransactionsHashes = hashes
 			}
 		}
 	}
