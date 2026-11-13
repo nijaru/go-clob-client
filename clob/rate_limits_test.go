@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -12,9 +13,9 @@ import (
 )
 
 func TestRequestBudgetsKeepCancelAndReadResponsive(t *testing.T) {
-	var calls int
+	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls++
+		calls.Add(1)
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{}`))
 	}))
@@ -45,7 +46,7 @@ func TestRequestBudgetsKeepCancelAndReadResponsive(t *testing.T) {
 	if err := client.getJSON(t.Context(), "/read", nil, polyhttp.AuthNone, &result); err != nil {
 		t.Fatalf("read blocked by trading budget: %v", err)
 	}
-	if calls != 3 {
-		t.Fatalf("server calls = %d, want 3 (order, cancel, read)", calls)
+	if calls.Load() != 3 {
+		t.Fatalf("server calls = %d, want 3 (order, cancel, read)", calls.Load())
 	}
 }
