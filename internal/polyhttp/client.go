@@ -226,7 +226,6 @@ func (c *Client) doJSON(
 	}
 
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Connection", "keep-alive")
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", c.UserAgent)
 

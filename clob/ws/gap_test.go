@@ -18,7 +18,7 @@ import (
 // indefinitely or allowing a consumer to apply silently incomplete deltas.
 func TestLaggedConsumerReceivesGapAndReconnects(t *testing.T) {
 	var connections atomic.Int32
-	reconnected := make(chan struct{})
+	reconnected := make(chan struct{}, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := websocket.Accept(w, r, nil)
 		if err != nil {
@@ -27,7 +27,10 @@ func TestLaggedConsumerReceivesGapAndReconnects(t *testing.T) {
 		defer conn.CloseNow()
 
 		if connections.Add(1) != 1 {
-			close(reconnected)
+			select {
+			case reconnected <- struct{}{}:
+			default:
+			}
 			<-r.Context().Done()
 			return
 		}

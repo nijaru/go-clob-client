@@ -2,10 +2,10 @@ package ws
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
-	"errors"
 
 	"github.com/nijaru/go-clob-client/clob"
 )

@@ -127,7 +127,7 @@ func (c Config) validate() error {
 		return fmt.Errorf("set exactly one of PrivateKey and Signer")
 	}
 	if c.RetryMax < 0 || c.RetryBackoff < 0 || c.TickSizeCacheTTL < 0 || c.HeartbeatInterval < 0 {
-		return fmt.Errorf("retry, cache, heartbeat, and burst settings must not be negative")
+		return fmt.Errorf("retry, cache, and heartbeat settings must not be negative")
 	}
 	if err := c.Rates.validate(); err != nil {
 		return err

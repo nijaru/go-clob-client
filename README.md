@@ -145,6 +145,20 @@ responses with transaction hashes (best effort, up to 30 seconds of polling).
 `WaitForOrderFillSettlement` checks terminal settlement for the fills identified
 by the acknowledgment. Never automatically retry ambiguous trading commands.
 
+### Request budgets and streaming gaps
+
+The CLOB client has no implicit requests-per-second throttle. Configure
+`Config.Rates` with independent `RateBudget` values for `Reads`, `Orders`,
+`Cancels`, and `Other` when your application needs local admission control.
+A rate of zero disables the local budget, not the exchange's server-side limits.
+Cancellation capacity is independent of placement capacity.
+
+The `clob/ws` event queue is bounded. On disconnect or consumer lag,
+`Events()` emits a `*ws.GapEvent` after discarding stale buffered events;
+a trading application must invalidate reconstructed state and reconcile
+account state through REST. Reconnects resubscribe, but do not replay lost
+user executions.
+
 ### Trading safety
 
 - Client construction does not submit orders, start heartbeats, deploy wallets or

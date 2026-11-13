@@ -41,6 +41,13 @@ func TestPostOrderAndResolveResolvesTradeIDs(t *testing.T) {
 	defer server.Close()
 
 	client := newOrderResolutionClient(t, server.URL)
+	ack, err := client.PostOrder(t.Context(), orderResolutionRequest(false))
+	if err != nil {
+		t.Fatalf("immediate post: %v", err)
+	}
+	if len(ack.TradeIDs) != 1 || len(ack.TransactionsHashes) != 0 || tradeCalls.Load() != 0 {
+		t.Fatalf("post blocked on settlement: ack=%+v lookups=%d", ack, tradeCalls.Load())
+	}
 	response, err := client.PostOrderAndResolve(t.Context(), orderResolutionRequest(false))
 	if err != nil {
 		t.Fatalf("PostOrder: %v", err)
