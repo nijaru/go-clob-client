@@ -173,7 +173,6 @@ func TestBuilderAuthRotationConcurrentWithRevoke(t *testing.T) {
 	defer server.Close()
 	client := newComboTestClient(t, server.URL)
 	client.http.BaseURL = server.URL
-	client.rateLimiter = nil
 	done := make(chan struct{})
 	var wg sync.WaitGroup
 	wg.Go(func() {
