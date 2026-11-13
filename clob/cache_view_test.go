@@ -16,7 +16,7 @@ func TestFeeCacheSetterWinsOverPendingRead(t *testing.T) {
 		fmt.Fprint(w, `{"base_fee":3}`)
 	}))
 	defer server.Close()
-	client, err := NewClient(Config{Host: server.URL, RateLimit: -1})
+	client, err := NewClient(Config{Host: server.URL})
 	if err != nil {
 		t.Fatal(err)
 	}
