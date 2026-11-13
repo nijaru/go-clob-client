@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-
 	"github.com/nijaru/go-clob-client/clob/ws/rtds"
 	"github.com/nijaru/go-clob-client/internal/polyauth"
 	"github.com/nijaru/go-clob-client/internal/polyhttp"
