@@ -136,6 +136,15 @@ For market orders, use `MaxPrice` to cap a BUY price or `MinPrice` to floor a SE
 price. `Amount` is USDC notional for BUY and shares for SELL; `MaxSpend` caps BUY
 spending including fees. See the [market-order example](examples/clob/market_order/main.go).
 
+### Order acknowledgments and settlement
+
+`PostOrder`, `PostOrders`, and build-and-post helpers return the exchange acknowledgment
+without waiting for trade settlement. Accepted orders are not necessarily filled.
+`PostOrderAndResolve` and `PostOrdersAndResolve` optionally enrich matched
+responses with transaction hashes (best effort, up to 30 seconds of polling).
+`WaitForOrderFillSettlement` checks terminal settlement for the fills identified
+by the acknowledgment. Never automatically retry ambiguous trading commands.
+
 ### Trading safety
 
 - Client construction does not submit orders, start heartbeats, deploy wallets or
