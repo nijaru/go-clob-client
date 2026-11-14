@@ -77,6 +77,26 @@ func (c *Client) SubscribeMarketResolutions(ctx context.Context, assetIDs []stri
 	return c.addAndSend(ctx, newMarketSubscription(channelTypeMarketRes, assetIDs, false, true))
 }
 
+// UnsubscribeLastTradePrice removes the logical last-trade-price interest for these assets.
+func (c *Client) UnsubscribeLastTradePrice(ctx context.Context, assetIDs []string) error {
+	return c.removeAndSend(ctx, channelTypeLastTradePrice, assetIDs)
+}
+
+// UnsubscribeBestBidAsk removes the logical best-bid/ask interest for these assets.
+func (c *Client) UnsubscribeBestBidAsk(ctx context.Context, assetIDs []string) error {
+	return c.removeAndSend(ctx, channelTypeBestBidAsk, assetIDs)
+}
+
+// UnsubscribeNewMarkets removes the logical new-market interest for these assets.
+func (c *Client) UnsubscribeNewMarkets(ctx context.Context, assetIDs []string) error {
+	return c.removeAndSend(ctx, channelTypeNewMarkets, assetIDs)
+}
+
+// UnsubscribeMarketResolutions removes the logical market-resolution interest for these assets.
+func (c *Client) UnsubscribeMarketResolutions(ctx context.Context, assetIDs []string) error {
+	return c.removeAndSend(ctx, channelTypeMarketRes, assetIDs)
+}
+
 // SubscribeUserEvents subscribes to all user events (orders and trades) for the given markets.
 // Requires credentials set via NewAuthenticatedClient or WithCredentials.
 func (c *Client) SubscribeUserEvents(ctx context.Context, markets []string) error {
@@ -116,6 +136,8 @@ func (c *Client) addAndSend(ctx context.Context, sub subscription) error {
 		return err
 	}
 
+	c.subOpMu.Lock()
+	defer c.subOpMu.Unlock()
 	sendSub, shouldSend := c.recordSubscription(sub)
 	if !shouldSend {
 		return nil
@@ -137,6 +159,8 @@ func (c *Client) removeAndSend(ctx context.Context, channelType string, ids []st
 		return err
 	}
 
+	c.subOpMu.Lock()
+	defer c.subOpMu.Unlock()
 	removedSub, toUnsubscribe, ok := c.removeRecordedSubscription(target, channelType, ids)
 	if !ok || len(toUnsubscribe) == 0 {
 		return nil
@@ -292,11 +316,12 @@ func subscriptionKey(target subscriptionTarget, ids []string) string {
 	return prefix + ":" + strings.Join(normalized, ",")
 }
 
-func (c *Client) replayTrackedSubscriptions(ctx context.Context) {
+// replayTrackedSubscriptions is called with subOpMu held by connect.
+func (c *Client) replayTrackedSubscriptions(ctx context.Context) error {
 	c.subsMu.RLock()
 	if len(c.subs) == 0 {
 		c.subsMu.RUnlock()
-		return
+		return nil
 	}
 
 	marketActive := false
@@ -331,10 +356,7 @@ func (c *Client) replayTrackedSubscriptions(ctx context.Context) {
 			initialDump:          initialDump,
 			customFeatureEnabled: customFeature,
 		}); err != nil {
-			select {
-			case c.errs <- fmt.Errorf("resubscribe market: %w", err):
-			default:
-			}
+			return fmt.Errorf("resubscribe market: %w", err)
 		}
 	}
 	if userActive {
@@ -342,12 +364,10 @@ func (c *Client) replayTrackedSubscriptions(ctx context.Context) {
 			target:  subscriptionTargetUser,
 			markets: userMarkets,
 		}); err != nil {
-			select {
-			case c.errs <- fmt.Errorf("resubscribe user: %w", err):
-			default:
-			}
+			return fmt.Errorf("resubscribe user: %w", err)
 		}
 	}
+	return nil
 }
 
 func (c *Client) recordSubscription(sub subscription) (subscription, bool) {
@@ -418,26 +438,19 @@ func (c *Client) removeRecordedSubscription(
 	defer c.subsMu.Unlock()
 
 	key := subscriptionKey(target, ids)
-	fallbackIndex := -1
-	for idx, sub := range c.subs {
-		if sub.target != target || sub.key != key {
-			continue
+	index := -1
+	for i, sub := range c.subs {
+		if sub.target == target && sub.channelType == channelType && sub.key == key {
+			index = i
+			break
 		}
-		if sub.channelType != channelType {
-			if fallbackIndex < 0 {
-				fallbackIndex = idx
-			}
-			continue
-		}
-		fallbackIndex = idx
-		break
 	}
-	if fallbackIndex < 0 {
+	if index < 0 {
 		return subscription{}, nil, false
 	}
 
-	sub := c.subs[fallbackIndex]
-	c.subs = append(c.subs[:fallbackIndex], c.subs[fallbackIndex+1:]...)
+	sub := c.subs[index]
+	c.subs = append(c.subs[:index], c.subs[index+1:]...)
 	toUnsubscribe := c.decrementSubscriptionRefsLocked(sub)
 	c.recomputeCustomFeatureLocked()
 	return sub, toUnsubscribe, true

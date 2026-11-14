@@ -54,4 +54,4 @@ jobs:
         run: go test -race -count=1 ./clob/...
 
       - name: WebSocket decode benchmarks
-        run: go test ./clob/ws -run '^ -bench 'Benchmark(ExtractEventType|HandleMessageBookEvent) -benchmem -count=3
+        run: go test ./clob/ws -run NeverMatchThisPattern -bench Benchmark -benchmem -count=3

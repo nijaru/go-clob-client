@@ -57,6 +57,7 @@ type Client struct {
 	reconnecting bool
 
 	autoReconnect bool
+	subOpMu       sync.Mutex // serializes subscription mutations and replay
 	subsMu        sync.RWMutex
 	subs          []subscription
 	marketRefs    map[string]int
@@ -156,6 +157,11 @@ func (c *Client) connect(ctx context.Context) error {
 	}
 	conn.SetReadLimit(defaultReadLimit)
 
+	// Keep replay and ordinary subscribe/unsubscribe commands ordered on the
+	// same physical connection, including across reconnects.
+	c.subOpMu.Lock()
+	defer c.subOpMu.Unlock()
+
 	loopCtx, cancel := context.WithCancel(c.ctx)
 
 	c.mu.Lock()
@@ -184,8 +190,14 @@ func (c *Client) connect(ctx context.Context) error {
 	go c.readLoop(loopCtx, conn, done, pongs)
 	go c.heartbeatLoop(loopCtx, conn, pongs)
 
-	c.replayTrackedSubscriptions(ctx)
-
+	if err := c.replayTrackedSubscriptions(ctx); err != nil {
+		c.markDisconnected(conn, GapDisconnected)
+		_ = conn.CloseNow()
+		return fmt.Errorf("replay subscriptions: %w", err)
+	}
+	if !c.IsConnected() {
+		return fmt.Errorf("websocket disconnected during subscription replay")
+	}
 	return nil
 }
 
@@ -223,7 +235,7 @@ func (c *Client) Close() error {
 
 func (c *Client) scheduleReconnect() {
 	c.mu.Lock()
-	if c.closed || !c.autoReconnect || c.reconnecting {
+	if c.closed || !c.autoReconnect || c.reconnecting || c.conn != nil {
 		c.mu.Unlock()
 		return
 	}
@@ -377,11 +389,15 @@ func (c *Client) sendJSON(ctx context.Context, v any) error {
 		return err
 	}
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.conn == nil {
+	conn := c.conn
+	closed := c.closed
+	c.mu.Unlock()
+	if conn == nil || closed {
 		return fmt.Errorf("not connected")
 	}
-	return c.conn.Write(ctx, websocket.MessageText, data)
+	// Do not hold the lifecycle lock across network I/O: Close and reconnect
+	// must remain able to interrupt a blocked write.
+	return conn.Write(ctx, websocket.MessageText, data)
 }
 
 // markDisconnected marks a connection unhealthy once. Every unexpected
@@ -451,7 +467,14 @@ func (c *Client) attemptReconnect() {
 	defer func() {
 		c.mu.Lock()
 		c.reconnecting = false
+		retry := !c.closed && c.autoReconnect && c.conn == nil
 		c.mu.Unlock()
+		// If a newly connected socket drops before this goroutine exits,
+		// the reader could not schedule another reconnect while reconnecting
+		// was still true. Hand off the retry explicitly.
+		if retry {
+			c.scheduleReconnect()
+		}
 	}()
 
 	backoff := 1 * time.Second

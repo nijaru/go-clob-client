@@ -836,8 +836,8 @@ func TestMarketSubscriptionsRefcountAndCustomFeatureFlag(t *testing.T) {
 	}
 	assertNoSubscriptionMessage(t, messages)
 
-	if err := client.UnsubscribeOrderBook(t.Context(), []string{"asset-1"}); err != nil {
-		t.Fatalf("unsubscribe remaining market ref: %v", err)
+	if err := client.UnsubscribeBestBidAsk(t.Context(), []string{"asset-1"}); err != nil {
+		t.Fatalf("unsubscribe remaining best-bid/ask ref: %v", err)
 	}
 	msg = mustReceiveSubscriptionMessage(t, messages)
 	if got := msg["operation"]; got != "unsubscribe" {
@@ -845,6 +845,45 @@ func TestMarketSubscriptionsRefcountAndCustomFeatureFlag(t *testing.T) {
 	}
 	if got := messageStrings(msg["assets_ids"]); len(got) != 1 || got[0] != "asset-1" {
 		t.Fatalf("assets_ids = %#v, want [asset-1]", got)
+	}
+}
+
+// Logical interests share the same server subscription, but unsubscribing a
+// different event type must never remove the remaining interest.
+func TestUnsubscribeDoesNotRemoveDifferentLogicalInterest(t *testing.T) {
+	t.Parallel()
+	server, messages := newSubscriptionTestServer(t)
+	defer server.Close()
+
+	client := NewClient("ws" + strings.TrimPrefix(server.URL, "http"))
+	if err := client.Connect(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+
+	if err := client.SubscribeMidpoints(t.Context(), []string{"asset-1"}); err != nil {
+		t.Fatal(err)
+	}
+	mustReceiveSubscriptionMessage(t, messages)
+	if err := client.UnsubscribePrices(t.Context(), []string{"asset-1"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := client.SubscriptionCount(); got != 1 {
+		t.Fatalf("wrong logical interest removed: count=%d", got)
+	}
+	if !client.isMidpointSubscribed("asset-1") {
+		t.Fatal("midpoint interest removed by unrelated unsubscribe")
+	}
+	assertNoSubscriptionMessage(t, messages)
+	if err := client.UnsubscribeMidpoints(t.Context(), []string{"asset-1"}); err != nil {
+		t.Fatal(err)
+	}
+	msg := mustReceiveSubscriptionMessage(t, messages)
+	if msg["operation"] != "unsubscribe" {
+		t.Fatalf("unexpected final message: %#v", msg)
+	}
+	if got := client.SubscriptionCount(); got != 0 {
+		t.Fatalf("subscriptions left after unsubscribe: %d", got)
 	}
 }
 
