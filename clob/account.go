@@ -133,7 +133,7 @@ func (c *AuthenticatedClient) CancelMarketOrders(
 	request CancelMarketOrdersRequest,
 ) (*CancelOrdersResponse, error) {
 	var out CancelOrdersResponse
-	err := c.deleteJSON(ctx, cancelMarketOrdersEndpoint, request, polyhttp.AuthL2Builder, &out)
+	err := c.cancelTradingJSON(ctx, cancelMarketOrdersEndpoint, request, polyhttp.AuthL2Builder, &out)
 	return &out, err
 }
 
@@ -158,7 +158,7 @@ func (c *AuthenticatedClient) PostHeartbeat(
 	}
 
 	var out HeartbeatResponse
-	err := c.postJSON(ctx, heartbeatsEndpoint, req, polyhttp.AuthL2Builder, &out)
+	err := c.heartbeatJSON(ctx, req, polyhttp.AuthL2Builder, &out)
 	if err != nil {
 		if mismatch, ok := heartbeatMismatch(err); ok {
 			return &out, mismatch

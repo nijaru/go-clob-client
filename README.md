@@ -149,9 +149,9 @@ by the acknowledgment. Never automatically retry ambiguous trading commands.
 
 The CLOB client has no implicit requests-per-second throttle. Configure
 `Config.Rates` with independent `RateBudget` values for `Reads`, `Orders`,
-`Cancels`, and `Other` when your application needs local admission control.
+`Cancels`, `Heartbeats`, and `Other` when your application needs local admission control.
 A rate of zero disables the local budget, not the exchange's server-side limits.
-Cancellation capacity is independent of placement capacity.
+Cancellation and order-heartbeat capacity are independent of placement and ordinary API requests.
 
 The `clob/ws` event queue is bounded. On disconnect or consumer lag,
 `Events()` emits a `*ws.GapEvent` after discarding stale buffered events;

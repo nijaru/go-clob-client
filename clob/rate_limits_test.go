@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -51,5 +52,61 @@ func TestRequestBudgetsKeepCancelAndReadResponsive(t *testing.T) {
 	}
 	if calls.Load() != 3 {
 		t.Fatalf("server calls = %d, want 3 (order, cancel, read)", calls.Load())
+	}
+}
+
+// Market-scoped cancellation and account heartbeats must be able to proceed
+// while unrelated API requests exhaust their optional local budget.
+func TestAccountControlLanesIgnoreOtherRateBudget(t *testing.T) {
+	t.Parallel()
+	var paths []string
+	var mu sync.Mutex
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		paths = append(paths, r.URL.Path)
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case cancelMarketOrdersEndpoint:
+			_, _ = w.Write([]byte(`{"canceled":[]}`))
+		case heartbeatsEndpoint:
+			_, _ = w.Write([]byte(`{"heartbeat_id":"next"}`))
+		default:
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewAuthenticatedClient(Config{
+		Host: server.URL,
+		PrivateKey: orderResolutionPrivateKey,
+		Credentials: &Credentials{Key: "key", Secret: "c2VjcmV0", Passphrase: "pass"},
+		Rates: RateLimits{Other: RateBudget{PerSecond: 1, Burst: 1}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+
+	if err := client.postJSON(t.Context(), "/probe", nil, polyhttp.AuthNone, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), 150*time.Millisecond)
+	defer cancel()
+	if _, err := client.CancelMarketOrders(ctx, CancelMarketOrdersRequest{Market: "market"}); err != nil {
+		t.Fatalf("cancel delayed by unrelated requests: %v", err)
+	}
+	heartbeat, err := client.PostHeartbeat(ctx, "")
+	if err != nil {
+		t.Fatalf("heartbeat delayed by unrelated requests: %v", err)
+	}
+	if heartbeat.HeartbeatID != "next" {
+		t.Fatalf("unexpected heartbeat: %+v", heartbeat)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(paths) != 3 {
+		t.Fatalf("request paths = %v, want probe, cancel market, heartbeat", paths)
 	}
 }

@@ -71,6 +71,19 @@ func (c *Client) postTradingJSON(
 	})
 }
 
+// heartbeatJSON reserves a separate optional budget so routine requests
+// cannot delay the liveness signal protecting outstanding orders.
+func (c *Client) heartbeatJSON(
+	ctx context.Context,
+	body any,
+	auth polyhttp.AuthLevel,
+	out any,
+) error {
+	return c.withRetry(ctx, false, c.rateLimiters.heartbeats, func() error {
+		return c.http.PostJSON(ctx, heartbeatsEndpoint, body, auth, out)
+	})
+}
+
 // cancelTradingJSON uses its own budget. Never retry an ambiguous cancel
 // without reconciling server state first.
 func (c *Client) cancelTradingJSON(

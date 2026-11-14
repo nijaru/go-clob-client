@@ -19,21 +19,23 @@ type RateBudget struct {
 type RateLimits struct {
 	Reads   RateBudget
 	Orders  RateBudget
-	Cancels RateBudget
-	Other   RateBudget
+	Cancels    RateBudget
+	Heartbeats RateBudget
+	Other      RateBudget
 }
 
 type requestLimiters struct {
 	reads   *rate.Limiter
 	orders  *rate.Limiter
-	cancels *rate.Limiter
-	other   *rate.Limiter
+	cancels    *rate.Limiter
+	heartbeats *rate.Limiter
+	other      *rate.Limiter
 }
 
 func (r RateLimits) validate() error {
 	for name, budget := range map[string]RateBudget{
 		"reads": r.Reads, "orders": r.Orders,
-		"cancels": r.Cancels, "other": r.Other,
+		"cancels": r.Cancels, "heartbeats": r.Heartbeats, "other": r.Other,
 	} {
 		if math.IsNaN(budget.PerSecond) || math.IsInf(budget.PerSecond, 0) ||
 			budget.PerSecond < 0 || budget.Burst < 0 {
@@ -47,8 +49,9 @@ func (r RateLimits) limiters() requestLimiters {
 	return requestLimiters{
 		reads:   r.Reads.newLimiter(),
 		orders:  r.Orders.newLimiter(),
-		cancels: r.Cancels.newLimiter(),
-		other:   r.Other.newLimiter(),
+		cancels:    r.Cancels.newLimiter(),
+		heartbeats: r.Heartbeats.newLimiter(),
+		other:      r.Other.newLimiter(),
 	}
 }
 
