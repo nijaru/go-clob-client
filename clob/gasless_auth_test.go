@@ -195,7 +195,11 @@ func TestRelayerAPIKeyGaslessAndRevocation(t *testing.T) {
 	if _, err := client.AuthorizeSessionKey(
 		ownerCtx, AuthorizeSessionKeyRequest{Address: common.HexToAddress("0x9")},
 	); err == nil || authorizationHits.Load() != 1 {
-		t.Fatalf("owner relayer key did not reach authorization endpoint: err=%v calls=%d", err, authorizationHits.Load())
+		t.Fatalf(
+			"owner relayer key did not reach authorization endpoint: err=%v calls=%d",
+			err,
+			authorizationHits.Load(),
+		)
 	}
 	if err := client.RevokeSessionKey(ownerCtx, RevokeSessionKeyRequest{Address: common.HexToAddress("0x9"), IdempotencyKey: "revocation-key"}); err != nil {
 		t.Fatal(err)

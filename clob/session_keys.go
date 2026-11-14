@@ -28,7 +28,7 @@ const (
 )
 
 var (
-	ErrSessionKeyOwnerRequired   = errors.New("session keys require a Deposit Wallet owner")
+	ErrSessionKeyOwnerRequired      = errors.New("session keys require a Deposit Wallet owner")
 	ErrSessionKeyAuthorizerRequired = errors.New(
 		"session-key mutation requires builder authentication or a relayer API key",
 	)
@@ -67,7 +67,10 @@ func (c *AuthenticatedClient) requireSessionKeyRelayerAuth(ctx context.Context) 
 		return ErrSessionKeyAuthorizerRequired
 	}
 	if auth.APIKey != nil && auth.APIKey.Address != c.signer.Address() {
-		return fmt.Errorf("%w: relayer key address must match the Deposit Wallet owner EOA", ErrInvalidRelayerAuth)
+		return fmt.Errorf(
+			"%w: relayer key address must match the Deposit Wallet owner EOA",
+			ErrInvalidRelayerAuth,
+		)
 	}
 	return nil
 }
