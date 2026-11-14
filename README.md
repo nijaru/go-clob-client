@@ -136,6 +136,37 @@ For market orders, use `MaxPrice` to cap a BUY price or `MinPrice` to floor a SE
 price. `Amount` is USDC notional for BUY and shares for SELL; `MaxSpend` caps BUY
 spending including fees. See the [market-order example](examples/clob/market_order/main.go).
 
+### Protocol V2 neg-risk operations
+
+`WalletOperations` supports `PrepareNegRiskConvert`,
+`PrepareNegRiskHorizontalSplit`, and `PrepareNegRiskHorizontalMerge`,
+with corresponding `ConvertNegRisk`, `HorizontalSplitNegRisk`,
+and `HorizontalMergeNegRisk` execution methods. The operations match the
+official Router V2 ABI and use the chain-configured router address.
+Their `WalletNegRiskRequest` takes a protocol-V2 neg-risk condition ID and
+a positive base-unit `*big.Int` amount (1,000,000 = one pUSD).
+Preparation validates the event module, arity, reserved bits, and condition
+index without initiating a transaction. For example:
+
+```go
+ops, err := clob.NewWalletOperations(signer, clob.WalletOperationsConfig{})
+if err != nil {
+    return err
+}
+calls, err := ops.PrepareNegRiskHorizontalSplit(clob.WalletNegRiskRequest{
+    ConditionID: conditionID,
+    Amount:      big.NewInt(1_000_000),
+})
+// Inspect calls and required approvals before choosing to submit.
+```
+
+These methods **do not grant approvals automatically**. Horizontal split
+needs pUSD allowance for the router; convert and horizontal merge need
+PositionManager operator approval. The configured Polygon router supports
+these operations; no Amoy router is configured. The execution methods
+submit wallet transactions and return handles; callers must check transaction
+outcomes and should never assume an accepted request is confirmed.
+
 ### Order acknowledgments and settlement
 
 `PostOrder`, `PostOrders`, and build-and-post helpers return the exchange acknowledgment
