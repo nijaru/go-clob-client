@@ -239,7 +239,7 @@ func TestSessionKeyBoundaryValidation(t *testing.T) {
 	client.builderAuth = nil
 	if _, err := client.AuthorizeSessionKey(t.Context(), AuthorizeSessionKeyRequest{}); !errors.Is(
 		err,
-		ErrSessionKeyBuilderRequired,
+		ErrSessionKeyAuthorizerRequired,
 	) {
 		t.Fatal(err)
 	}

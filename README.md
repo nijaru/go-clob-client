@@ -193,6 +193,11 @@ user executions.
   check its submissions before retrying. See the
   [wallet example](examples/clob/wallet_operations/main.go).
 
+Session-key authorization and revocation require the Deposit Wallet owner plus
+a relayer API key or builder authenticator. For a relayer key, use
+`WithRelayerAuth` and set `RelayerAPIKey.Address` to the owner's **signing EOA**,
+not the Deposit Wallet address. CLOB API credentials alone are insufficient.
+
 Builder and relayer credentials are separate from CLOB credentials. See the
 [relayer example](examples/clob/gasless/main.go) and
 [wallet discovery example](examples/clob/wallet_discovery/main.go) before deploying

@@ -112,7 +112,7 @@ func TestRelayerAuthSelection(t *testing.T) {
 func TestRelayerAPIKeyGaslessAndRevocation(t *testing.T) {
 	t.Parallel()
 	var client *AuthenticatedClient
-	var submissions atomic.Int32
+	var submissions, authorizationHits atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/user/session-signers" {
 			if r.Header.Get("POLY_API_KEY") != "k" || r.Header.Get("RELAYER_API_KEY") != "" {
@@ -121,7 +121,16 @@ func TestRelayerAPIKeyGaslessAndRevocation(t *testing.T) {
 			fmt.Fprintf(w, `{"wallet":%q,"signers":[]}`, client.funderAddress)
 			return
 		}
-		assertRelayerKeyHeaders(t, r)
+		// Normal relayer transactions may use a delegated key owner. Session-key
+		// mutations must use the Deposit Wallet owner's EOA as key identity.
+		if r.Header.Get("RELAYER_API_KEY_ADDRESS") == client.signer.Address().Hex() {
+			if r.Header.Get("RELAYER_API_KEY") != "relayer-key" ||
+				r.Header.Get("POLY_BUILDER_API_KEY") != "" {
+				t.Error("invalid owner-relayer identity")
+			}
+		} else {
+			assertRelayerKeyHeaders(t, r)
+		}
 		switch r.URL.Path {
 		case "/v1/account/transactions/params":
 			if r.URL.Query().Get("address") != client.Address() ||
@@ -137,6 +146,9 @@ func TestRelayerAPIKeyGaslessAndRevocation(t *testing.T) {
 				w,
 				`{"state":"STATE_CONFIRMED","transaction_id":"gasless-key","transaction_hash":"0x0000000000000000000000000000000000000000000000000000000000000001"}`,
 			)
+		case "/v1/session-signers/authorizations":
+			authorizationHits.Add(1)
+			http.Error(w, "authorization not enabled in fixture", http.StatusNotFound)
 		case "/v1/session-signers/revocations":
 			var payload sessionKeyMutationPayload
 			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -170,11 +182,22 @@ func TestRelayerAPIKeyGaslessAndRevocation(t *testing.T) {
 	}
 	if _, err := client.AuthorizeSessionKey(ctx, AuthorizeSessionKeyRequest{Address: common.HexToAddress("0x9")}); !errors.Is(
 		err,
-		ErrSessionKeyBuilderRequired,
+		ErrInvalidRelayerAuth,
 	) {
-		t.Fatalf("API key must not authorize: %v", err)
+		t.Fatalf("relayer API key with non-owner identity accepted: %v", err)
 	}
-	if err := client.RevokeSessionKey(ctx, RevokeSessionKeyRequest{Address: common.HexToAddress("0x9"), IdempotencyKey: "revocation-key"}); err != nil {
+	ownerCtx, err := WithRelayerAuth(t.Context(), RelayerAuthConfig{
+		APIKey: &RelayerAPIKey{Key: "relayer-key", Address: client.signer.Address()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.AuthorizeSessionKey(
+		ownerCtx, AuthorizeSessionKeyRequest{Address: common.HexToAddress("0x9")},
+	); err == nil || authorizationHits.Load() != 1 {
+		t.Fatalf("owner relayer key did not reach authorization endpoint: err=%v calls=%d", err, authorizationHits.Load())
+	}
+	if err := client.RevokeSessionKey(ownerCtx, RevokeSessionKeyRequest{Address: common.HexToAddress("0x9"), IdempotencyKey: "revocation-key"}); err != nil {
 		t.Fatal(err)
 	}
 	client.funderAddress = common.HexToAddress("0x123").Hex()

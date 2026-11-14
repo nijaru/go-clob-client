@@ -29,8 +29,8 @@ const (
 
 var (
 	ErrSessionKeyOwnerRequired   = errors.New("session keys require a Deposit Wallet owner")
-	ErrSessionKeyBuilderRequired = errors.New(
-		"session-key authorization requires builder API-key authentication",
+	ErrSessionKeyAuthorizerRequired = errors.New(
+		"session-key mutation requires builder authentication or a relayer API key",
 	)
 	ErrInvalidSessionKey  = errors.New("invalid session key")
 	ErrSessionKeyResponse = errors.New("invalid session-key response")
@@ -56,6 +56,20 @@ type RevokeSessionKeyRequest struct {
 type AuthorizeSessionKeyResult struct {
 	SessionKey  SessionKey
 	Transaction TransactionOutcome
+}
+
+// requireSessionKeyRelayerAuth rejects account-only authorization and avoids
+// signing a mutation for a relayer key owned by another EOA. The owner signs
+// these operations regardless of the Deposit Wallet holding the positions.
+func (c *AuthenticatedClient) requireSessionKeyRelayerAuth(ctx context.Context) error {
+	auth := c.relayerAuth(ctx)
+	if auth.APIKey == nil && auth.BuilderAuth == nil {
+		return ErrSessionKeyAuthorizerRequired
+	}
+	if auth.APIKey != nil && auth.APIKey.Address != c.signer.Address() {
+		return fmt.Errorf("%w: relayer key address must match the Deposit Wallet owner EOA", ErrInvalidRelayerAuth)
+	}
+	return nil
 }
 
 func (c *AuthenticatedClient) requireSessionKeyOwner() error {
@@ -141,8 +155,8 @@ func (c *AuthenticatedClient) AuthorizeSessionKey(
 	if err := c.requireSessionKeyOwner(); err != nil {
 		return nil, err
 	}
-	if c.relayerAuth(ctx).BuilderAuth == nil {
-		return nil, ErrSessionKeyBuilderRequired
+	if err := c.requireSessionKeyRelayerAuth(ctx); err != nil {
+		return nil, err
 	}
 	if req.Address == (common.Address{}) {
 		return nil, ErrInvalidSessionKey
@@ -197,6 +211,9 @@ func (c *AuthenticatedClient) RevokeSessionKey(
 	req RevokeSessionKeyRequest,
 ) error {
 	if err := c.requireSessionKeyOwner(); err != nil {
+		return err
+	}
+	if err := c.requireSessionKeyRelayerAuth(ctx); err != nil {
 		return err
 	}
 	if req.Address == (common.Address{}) {
