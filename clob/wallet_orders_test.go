@@ -86,7 +86,7 @@ func TestWalletOrdersOwnerCancellationAndPartialFailures(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		defer mu.Unlock()
-		if r.URL.Path != cancelWalletOrdersEndpoint {
+		if r.URL.Path != cancelWalletOrdersEndpoint && r.URL.Path != walletOpenOrdersEndpoint {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		raw, err := io.ReadAll(r.Body)

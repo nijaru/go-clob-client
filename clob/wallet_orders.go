@@ -18,7 +18,9 @@ import (
 
 var (
 	ErrWalletOrdersDepositWalletRequired = errors.New("wallet-wide orders require a Deposit Wallet")
-	ErrWalletOrdersOwnerRequired         = errors.New("wallet-wide cancellation requires the Deposit Wallet owner")
+	ErrWalletOrdersOwnerRequired         = errors.New(
+		"wallet-wide cancellation requires the Deposit Wallet owner",
+	)
 )
 
 // WalletOpenOrder represents an open order placed by the Deposit Wallet owner
