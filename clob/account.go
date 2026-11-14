@@ -133,7 +133,13 @@ func (c *AuthenticatedClient) CancelMarketOrders(
 	request CancelMarketOrdersRequest,
 ) (*CancelOrdersResponse, error) {
 	var out CancelOrdersResponse
-	err := c.cancelTradingJSON(ctx, cancelMarketOrdersEndpoint, request, polyhttp.AuthL2Builder, &out)
+	err := c.cancelTradingJSON(
+		ctx,
+		cancelMarketOrdersEndpoint,
+		request,
+		polyhttp.AuthL2Builder,
+		&out,
+	)
 	return &out, err
 }
 

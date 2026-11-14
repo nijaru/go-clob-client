@@ -42,7 +42,34 @@ func extractEventType(data []byte) (EventType, bool) {
 			// Event types are fixed identifiers, not escaped strings.
 			return "", false
 		case '"':
-			return EventType(data[start:i]), true
+			// The temporary byte-to-string conversion used only for a
+			// switch comparison does not allocate in Go. Return canonical
+			// constants on the common path; retain unknown event names
+			// for forward compatibility.
+			switch string(data[start:i]) {
+			case "book":
+				return EventTypeBook, true
+			case "price_change":
+				return EventTypePriceChange, true
+			case "tick_size_change":
+				return EventTypeTickSizeChange, true
+			case "midpoint":
+				return EventTypeMidpoint, true
+			case "last_trade_price":
+				return EventTypeLastTradePrice, true
+			case "order":
+				return EventTypeOrder, true
+			case "trade":
+				return EventTypeTrade, true
+			case "best_bid_ask":
+				return EventTypeBestBidAsk, true
+			case "new_market":
+				return EventTypeNewMarket, true
+			case "market_resolved":
+				return EventTypeMarketResolved, true
+			default:
+				return EventType(data[start:i]), true
+			}
 		default:
 			i++
 		}

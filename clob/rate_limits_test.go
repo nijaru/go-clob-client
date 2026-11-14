@@ -78,10 +78,10 @@ func TestAccountControlLanesIgnoreOtherRateBudget(t *testing.T) {
 	defer server.Close()
 
 	client, err := NewAuthenticatedClient(Config{
-		Host: server.URL,
-		PrivateKey: orderResolutionPrivateKey,
+		Host:        server.URL,
+		PrivateKey:  orderResolutionPrivateKey,
 		Credentials: &Credentials{Key: "key", Secret: "c2VjcmV0", Passphrase: "pass"},
-		Rates: RateLimits{Other: RateBudget{PerSecond: 1, Burst: 1}},
+		Rates:       RateLimits{Other: RateBudget{PerSecond: 1, Burst: 1}},
 	})
 	if err != nil {
 		t.Fatal(err)

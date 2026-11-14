@@ -17,16 +17,16 @@ type RateBudget struct {
 // RateLimits keeps cancellations independent of regular order submissions
 // and market-data reads so they cannot exhaust the same local budget.
 type RateLimits struct {
-	Reads   RateBudget
-	Orders  RateBudget
+	Reads      RateBudget
+	Orders     RateBudget
 	Cancels    RateBudget
 	Heartbeats RateBudget
 	Other      RateBudget
 }
 
 type requestLimiters struct {
-	reads   *rate.Limiter
-	orders  *rate.Limiter
+	reads      *rate.Limiter
+	orders     *rate.Limiter
 	cancels    *rate.Limiter
 	heartbeats *rate.Limiter
 	other      *rate.Limiter
@@ -47,8 +47,8 @@ func (r RateLimits) validate() error {
 
 func (r RateLimits) limiters() requestLimiters {
 	return requestLimiters{
-		reads:   r.Reads.newLimiter(),
-		orders:  r.Orders.newLimiter(),
+		reads:      r.Reads.newLimiter(),
+		orders:     r.Orders.newLimiter(),
 		cancels:    r.Cancels.newLimiter(),
 		heartbeats: r.Heartbeats.newLimiter(),
 		other:      r.Other.newLimiter(),
