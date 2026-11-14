@@ -49,3 +49,9 @@ jobs:
 
       - name: Test
         run: make test
+
+      - name: CLOB race detection
+        run: go test -race -count=1 ./clob/...
+
+      - name: WebSocket decode benchmarks
+        run: go test ./clob/ws -run '^ -bench 'Benchmark(ExtractEventType|HandleMessageBookEvent) -benchmem -count=3
