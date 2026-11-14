@@ -3,7 +3,7 @@ package ws
 import (
 	"bytes"
 	"context"
-	stdjson "encoding/json"
+	"github.com/go-json-experiment/json/jsontext"
 	"fmt"
 
 	json "github.com/go-json-experiment/json"
@@ -85,15 +85,22 @@ func (c *Client) handleMessage(ctx context.Context, data []byte) bool {
 		return true
 	}
 	if trimmed[0] == '[' {
-		var messages []stdjson.RawMessage
-		if err := stdjson.Unmarshal(trimmed, &messages); err != nil {
+		// Parsing directly over the input buffer avoids allocating and copying
+		// one json.RawMessage per event in a multi-asset frame.
+		decoder := jsontext.NewDecoder(bytes.NewBuffer(trimmed))
+		if _, err := decoder.ReadToken(); err != nil {
 			return true
 		}
-		for _, message := range messages {
+		for decoder.PeekKind() != ']' {
+			message, err := decoder.ReadValue()
+			if err != nil {
+				return true
+			}
 			if !c.handleEventMessage(ctx, message, false) {
 				return false
 			}
 		}
+		_, _ = decoder.ReadToken()
 		return true
 	}
 	return c.handleEventMessage(ctx, trimmed, true)
