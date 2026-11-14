@@ -175,18 +175,12 @@ func (e *PriceChange) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// PriceChangeEvent is an incremental order book update. The official market
-// channel sends a batch in price_changes; the deprecated singular fields keep
-// compatibility with older payloads and callers while the server migrates.
+// PriceChangeEvent contains the price changes in a market update.
 type PriceChangeEvent struct {
 	BaseEvent
 	Market       string        `json:"market,omitzero"`
 	PriceChanges []PriceChange `json:"price_changes,omitzero"`
 	Timestamp    string        `json:"timestamp,omitzero"`
-	AssetID      string        `json:"asset_id,omitzero"`
-	Price        string        `json:"price,omitzero"`
-	Size         string        `json:"size,omitzero"`
-	Side         clob.Side     `json:"side,omitzero"`
 }
 
 // TickSizeChangeEvent is emitted when a market's tick size changes.
