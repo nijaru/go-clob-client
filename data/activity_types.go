@@ -109,19 +109,21 @@ func (a *Activity) UnmarshalJSON(raw []byte) error {
 			(value.ConditionID == nil || value.AssetID == nil || value.Side == nil || value.Shares == nil || value.Amount == nil || value.Price == nil) {
 			return fmt.Errorf("data: incomplete trade activity")
 		}
-		if value.Type == ActivityTypeDirectionalSplit || value.Type == ActivityTypeDirectionalMerge {
-			// Non-market identifiers in directional rows are placeholders,
-			// not a condition or a side.
-			value.ConditionID = nil
-			value.AssetID = nil
-			value.Side = nil
-			value.Outcome = nil
-			value.OutcomeIndex = nil
+		if value.Type == ActivityTypeDirectionalSplit ||
+			value.Type == ActivityTypeDirectionalMerge {
+			// Existing event-level rows may contain empty market placeholders.
+			// Preserve any non-empty unfamiliar fields instead of erasing data.
+			if value.ConditionID != nil && *value.ConditionID == "" {
+				value.ConditionID = nil
+			}
 		}
-		if value.Type == ActivityTypeThresholdCompose || value.Type == ActivityTypeThresholdDecompose {
-			// Zero USDC in server rows is not a moved amount. The line
-			// position quantity is represented by Shares instead.
-			value.Amount = nil
+		if value.Type == ActivityTypeThresholdCompose ||
+			value.Type == ActivityTypeThresholdDecompose {
+			// No collateral moves in these conversions. Do not lose a
+			// nonzero amount if a future server response introduces one.
+			if value.Amount != nil && *value.Amount == "0" {
+				value.Amount = nil
+			}
 		}
 		if value.Type == ActivityTypeTrade && value.IsCombo {
 			id, err := normalizeComboConditionID(*value.ConditionID)
