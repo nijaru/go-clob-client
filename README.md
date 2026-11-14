@@ -145,6 +145,23 @@ responses with transaction hashes (best effort, up to 30 seconds of polling).
 `WaitForOrderFillSettlement` checks terminal settlement for the fills identified
 by the acknowledgment. Never automatically retry ambiguous trading commands.
 
+### Deposit Wallet order management
+
+`GetWalletOpenOrdersPage` and `IterWalletOpenOrders` list open CLOB orders
+across a Deposit Wallet's owner and non-revoked session signers. They support
+market/asset and signer filters; the server controls page size. An empty page
+can still have a continuation cursor, and a withheld API-key owner is represented
+as `nil`. Order amounts remain exact decimal strings.
+
+`CancelWalletOrders(ctx, orderIDs)` cancels 1–1000 specific order hashes across
+the wallet, while `CancelAllWalletOrders(ctx)` cancels all its open orders.
+Both require the Deposit Wallet **owner**; session signers can read but cannot
+cancel other signers' orders. Standard `CancelOrder`, `CancelOrders`, and
+`CancelAll` remain API-key-scoped. Partial cancellation failures are preserved
+in `NotCanceled`; never automatically retry uncertain cancellations. New
+wallet-wide endpoints may return 404 where the rollout is not enabled; no
+narrower-scope fallback is attempted.
+
 ### Request budgets and streaming gaps
 
 The CLOB client has no implicit requests-per-second throttle. Configure

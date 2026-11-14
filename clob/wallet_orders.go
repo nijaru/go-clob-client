@@ -18,7 +18,7 @@ import (
 
 var (
 	ErrWalletOrdersDepositWalletRequired = errors.New("wallet-wide orders require a Deposit Wallet")
-	ErrWalletOrdersOwnerRequired = errors.New("wallet-wide cancellation requires the Deposit Wallet owner")
+	ErrWalletOrdersOwnerRequired         = errors.New("wallet-wide cancellation requires the Deposit Wallet owner")
 )
 
 // WalletOpenOrder represents an open order placed by the Deposit Wallet owner
@@ -260,7 +260,9 @@ func (c *AuthenticatedClient) CancelAllWalletOrders(
 	var out CancelOrdersResponse
 	err := c.cancelTradingJSON(
 		ctx, cancelWalletOrdersEndpoint,
-		struct { All bool `json:"all"` }{All: true},
+		struct {
+			All bool `json:"all"`
+		}{All: true},
 		polyhttp.AuthL2Builder, &out,
 	)
 	return &out, err

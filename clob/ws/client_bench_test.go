@@ -62,8 +62,14 @@ func BenchmarkHandleMessageBookBatch(b *testing.B) {
 		books[i] = BookEvent{
 			BaseEvent: BaseEvent{EventType: EventTypeBook},
 			AssetID:   strconv.Itoa(i),
-			Bids:      []clob.OrderSummary{{Price: "0.45", Size: "10"}, {Price: "0.44", Size: "20"}},
-			Asks:      []clob.OrderSummary{{Price: "0.55", Size: "12"}, {Price: "0.56", Size: "30"}},
+			Bids: []clob.OrderSummary{
+				{Price: "0.45", Size: "10"},
+				{Price: "0.44", Size: "20"},
+			},
+			Asks: []clob.OrderSummary{
+				{Price: "0.55", Size: "12"},
+				{Price: "0.56", Size: "30"},
+			},
 			Timestamp: "1710000000",
 		}
 	}

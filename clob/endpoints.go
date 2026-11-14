@@ -46,6 +46,8 @@ const (
 	orderEndpoint                  = "/data/order/"
 	cancelAllEndpoint              = "/cancel-all"
 	cancelMarketOrdersEndpoint     = "/cancel-market-orders"
+	cancelWalletOrdersEndpoint     = "/cancel-wallet-orders"
+	walletOpenOrdersEndpoint       = "/data/wallet-open-orders"
 	openOrdersEndpoint             = "/data/orders"
 	tradesEndpoint                 = "/data/trades"
 	builderTradesEndpoint          = "/builder/trades"
