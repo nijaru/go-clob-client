@@ -28,19 +28,29 @@ func parseNegRiskEvent(value string) ([29]byte, uint16, error) {
 	if !strings.HasPrefix(value, "0x") ||
 		(len(value) != 64 && len(value) != 66) ||
 		(len(value) == 66 && !strings.HasSuffix(strings.ToLower(value), "00")) {
-		return event, 0, fmt.Errorf("%w: invalid V2 neg-risk condition form", ErrInvalidPositionOperation)
+		return event, 0, fmt.Errorf(
+			"%w: invalid V2 neg-risk condition form",
+			ErrInvalidPositionOperation,
+		)
 	}
 	condition, err := ParseV2ConditionID(value)
 	if err != nil {
 		return event, 0, err
 	}
 	if condition[0] != 2 {
-		return event, 0, fmt.Errorf("%w: condition must use neg-risk module 2", ErrInvalidPositionOperation)
+		return event, 0, fmt.Errorf(
+			"%w: condition must use neg-risk module 2",
+			ErrInvalidPositionOperation,
+		)
 	}
 	arity := binary.BigEndian.Uint16(condition[17:19])
 	index := binary.BigEndian.Uint16(condition[29:31])
-	if arity < 2 || index > arity || !bytes.Equal(condition[19:27], make([]byte, 8)) {
-		return event, 0, fmt.Errorf("%w: invalid neg-risk arity, reserved bits or condition index", ErrInvalidPositionOperation)
+	var reserved [8]byte
+	if arity < 2 || index > arity || !bytes.Equal(condition[19:27], reserved[:]) {
+		return event, 0, fmt.Errorf(
+			"%w: invalid neg-risk arity, reserved bits or condition index",
+			ErrInvalidPositionOperation,
+		)
 	}
 	copy(event[:], condition[:29])
 	return event, index, nil
@@ -75,7 +85,11 @@ func (w *WalletOperations) prepareNegRisk(
 	case "horizontalSplit", "horizontalMerge":
 		encoded, err = walletABI.Pack(method, event, amount)
 	default:
-		return nil, fmt.Errorf("%w: unknown neg-risk operation %q", ErrInvalidPositionOperation, method)
+		return nil, fmt.Errorf(
+			"%w: unknown neg-risk operation %q",
+			ErrInvalidPositionOperation,
+			method,
+		)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("encode %s: %w", method, err)

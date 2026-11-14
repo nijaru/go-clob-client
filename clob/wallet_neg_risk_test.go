@@ -20,7 +20,7 @@ func TestNegRiskRouterOperationVectors(t *testing.T) {
 	req := WalletNegRiskRequest{ConditionID: eventID + "0003", Amount: amount}
 	for _, tc := range []struct {
 		method string
-		build func(WalletNegRiskRequest) ([]TransactionCall, error)
+		build  func(WalletNegRiskRequest) ([]TransactionCall, error)
 	}{
 		{"convert", w.PrepareNegRiskConvert},
 		{"horizontalSplit", w.PrepareNegRiskHorizontalSplit},
