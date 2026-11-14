@@ -3,8 +3,9 @@ package ws
 import (
 	"bytes"
 	"context"
-	"github.com/go-json-experiment/json/jsontext"
 	"fmt"
+
+	"github.com/go-json-experiment/json/jsontext"
 
 	json "github.com/go-json-experiment/json"
 	"github.com/nijaru/go-clob-client/clob"
