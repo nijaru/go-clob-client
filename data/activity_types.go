@@ -87,7 +87,10 @@ func (a *Activity) UnmarshalJSON(raw []byte) error {
 		case ActivityTypeThresholdCompose, ActivityTypeThresholdDecompose:
 			// Threshold events exchange line-position shares, not USDC.
 			if value.ConditionID == nil || *value.ConditionID == "" || value.Shares == nil {
-				return fmt.Errorf("data: incomplete %s activity: condition_id and size required", value.Type)
+				return fmt.Errorf(
+					"data: incomplete %s activity: condition_id and size required",
+					value.Type,
+				)
 			}
 		case ActivityTypeDirectionalSplit, ActivityTypeDirectionalMerge:
 			// Directional events belong to the range event, not a line market.

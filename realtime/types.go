@@ -33,7 +33,7 @@ const (
 	Chainlink Provider = "chainlink"
 	Pyth      Provider = "pyth"
 	// Binance USDT spot is served under canonical USD crypto symbols.
-	Binance   Provider = "binance"
+	Binance Provider = "binance"
 )
 
 // Source is actual event provenance, not a requested provider. Unknown values

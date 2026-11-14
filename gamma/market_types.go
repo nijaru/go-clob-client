@@ -89,9 +89,7 @@ type Market struct {
 	VolumeNum                    Decimal                 `json:"volumeNum,omitzero"`
 	LiquidityNum                 Decimal                 `json:"liquidityNum,omitzero"`
 	SecondsDelay                 *int                    `json:"secondsDelay,omitzero"`
-	// TakerDelayMs is the taker delay in milliseconds. It is distinct from
-	// legacy SecondsDelay; nil means absent, while a pointer to zero is known.
-	TakerDelayMs                 *int                    `json:"takerDelayMs,omitzero"`
+	TakerDelayMs                 *int                    `json:"takerDelayMs,omitzero"` // milliseconds; nil means absent
 	TeamAID                      *string                 `json:"teamAID,omitzero"`
 	TeamBID                      *string                 `json:"teamBID,omitzero"`
 	UmaBond                      ScalarText              `json:"umaBond,omitzero"`
