@@ -13,9 +13,11 @@ import (
 	"time"
 )
 
-const walletOrderMaker = "0x1111111111111111111111111111111111111111"
-const walletOrderSigner = "0x2222222222222222222222222222222222222222"
-const walletOrderHash = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+const (
+	walletOrderMaker  = "0x1111111111111111111111111111111111111111"
+	walletOrderSigner = "0x2222222222222222222222222222222222222222"
+	walletOrderHash   = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+)
 
 func TestWalletOpenOrdersPreserveWireAndFollowEmptyPages(t *testing.T) {
 	t.Parallel()
@@ -132,10 +134,16 @@ func TestWalletOrdersOwnerCancellationAndPartialFailures(t *testing.T) {
 	// Owner and a session signer share a Deposit Wallet. Only the owner
 	// may execute a wallet-wide cancellation.
 	client.funderAddress = walletOrderMaker
-	if _, err := client.CancelAllWalletOrders(t.Context()); !errors.Is(err, ErrWalletOrdersOwnerRequired) {
+	if _, err := client.CancelAllWalletOrders(t.Context()); !errors.Is(
+		err,
+		ErrWalletOrdersOwnerRequired,
+	) {
 		t.Fatalf("session cancellation error = %v", err)
 	}
-	page, err := client.GetWalletOpenOrdersPage(t.Context(), WalletOpenOrdersParams{SignerAddresses: []string{walletOrderSigner}})
+	page, err := client.GetWalletOpenOrdersPage(
+		t.Context(),
+		WalletOpenOrdersParams{SignerAddresses: []string{walletOrderSigner}},
+	)
 	if err == nil || page != nil {
 		// This fixture has no listing handler; the point is that a session
 		// signer passes the local permission check and reaches the server.
@@ -191,7 +199,10 @@ func TestWalletOrderValidationAndCursorCycle(t *testing.T) {
 	}
 
 	client.signatureType = SignatureTypeEOA
-	if _, err := client.GetWalletOpenOrdersPage(t.Context(), WalletOpenOrdersParams{}); !errors.Is(err, ErrWalletOrdersDepositWalletRequired) {
+	if _, err := client.GetWalletOpenOrdersPage(t.Context(), WalletOpenOrdersParams{}); !errors.Is(
+		err,
+		ErrWalletOrdersDepositWalletRequired,
+	) {
 		t.Fatalf("non-deposit wallet was accepted: %v", err)
 	}
 }
