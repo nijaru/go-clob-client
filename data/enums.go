@@ -17,6 +17,10 @@ const (
 	ActivityTypeTakerRebate    ActivityType = "TAKER_REBATE"
 	ActivityTypeReferralReward ActivityType = "REFERRAL_REWARD"
 	ActivityTypeTip            ActivityType = "TIP"
+	ActivityTypeDirectionalSplit ActivityType = "DIRECTIONAL_SPLIT"
+	ActivityTypeDirectionalMerge ActivityType = "DIRECTIONAL_MERGE"
+	ActivityTypeThresholdCompose ActivityType = "THRESHOLD_COMPOSE"
+	ActivityTypeThresholdDecompose ActivityType = "THRESHOLD_DECOMPOSE"
 )
 
 type ComboActivityType string

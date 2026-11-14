@@ -7,8 +7,11 @@ import (
 )
 
 // Activity is a wallet event. Type selects which optional fields are meaningful:
-// trades carry AssetID/Side/Shares/Price, market operations carry ConditionID,
-// and credits carry Amount. IsCombo distinguishes combo trades from market trades.
+// trades carry AssetID/Side/Shares/Price; directional operations carry an
+// event-level collateral Amount without a market; threshold operations carry
+// a line ConditionID and Shares without moving collateral.
+// Other market operations carry ConditionID and credits carry Amount.
+// IsCombo distinguishes combo trades from market trades.
 // Unknown types preserve their complete wire payload in Raw instead of vanishing.
 type Activity struct {
 	Type                  ActivityType    `json:"type"`
@@ -60,7 +63,9 @@ func (a *Activity) UnmarshalJSON(raw []byte) error {
 	case ActivityTypeTrade, ActivityTypeSplit, ActivityTypeMerge, ActivityTypeRedeem,
 		ActivityTypeReward, ActivityTypeConversion, ActivityTypeMigration,
 		ActivityTypeDeposit, ActivityTypeWithdrawal, ActivityTypeYield,
-		ActivityTypeMakerRebate, ActivityTypeTakerRebate, ActivityTypeReferralReward, ActivityTypeTip:
+		ActivityTypeMakerRebate, ActivityTypeTakerRebate, ActivityTypeReferralReward, ActivityTypeTip,
+		ActivityTypeDirectionalSplit, ActivityTypeDirectionalMerge,
+		ActivityTypeThresholdCompose, ActivityTypeThresholdDecompose:
 		known = true
 	}
 	if known {
@@ -78,18 +83,45 @@ func (a *Activity) UnmarshalJSON(raw []byte) error {
 		if required.Wallet == nil || required.Timestamp == nil || required.TransactionHash == nil {
 			return fmt.Errorf("data: incomplete %s activity", value.Type)
 		}
-		if value.Amount == nil {
-			return fmt.Errorf("data: %s activity is missing usdc_size", value.Type)
-		}
 		switch value.Type {
-		case ActivityTypeSplit, ActivityTypeMerge, ActivityTypeRedeem, ActivityTypeConversion:
-			if value.ConditionID == nil {
-				return fmt.Errorf("data: %s activity is missing condition_id", value.Type)
+		case ActivityTypeThresholdCompose, ActivityTypeThresholdDecompose:
+			// Threshold events exchange line-position shares, not USDC.
+			if value.ConditionID == nil || *value.ConditionID == "" || value.Shares == nil {
+				return fmt.Errorf("data: incomplete %s activity: condition_id and size required", value.Type)
+			}
+		case ActivityTypeDirectionalSplit, ActivityTypeDirectionalMerge:
+			// Directional events belong to the range event, not a line market.
+			if value.Amount == nil {
+				return fmt.Errorf("data: %s activity is missing usdc_size", value.Type)
+			}
+		default:
+			if value.Amount == nil {
+				return fmt.Errorf("data: %s activity is missing usdc_size", value.Type)
+			}
+			switch value.Type {
+			case ActivityTypeSplit, ActivityTypeMerge, ActivityTypeRedeem, ActivityTypeConversion:
+				if value.ConditionID == nil {
+					return fmt.Errorf("data: %s activity is missing condition_id", value.Type)
+				}
 			}
 		}
 		if value.Type == ActivityTypeTrade &&
 			(value.ConditionID == nil || value.AssetID == nil || value.Side == nil || value.Shares == nil || value.Amount == nil || value.Price == nil) {
 			return fmt.Errorf("data: incomplete trade activity")
+		}
+		if value.Type == ActivityTypeDirectionalSplit || value.Type == ActivityTypeDirectionalMerge {
+			// Non-market identifiers in directional rows are placeholders,
+			// not a condition or a side.
+			value.ConditionID = nil
+			value.AssetID = nil
+			value.Side = nil
+			value.Outcome = nil
+			value.OutcomeIndex = nil
+		}
+		if value.Type == ActivityTypeThresholdCompose || value.Type == ActivityTypeThresholdDecompose {
+			// Zero USDC in server rows is not a moved amount. The line
+			// position quantity is represented by Shares instead.
+			value.Amount = nil
 		}
 		if value.Type == ActivityTypeTrade && value.IsCombo {
 			id, err := normalizeComboConditionID(*value.ConditionID)

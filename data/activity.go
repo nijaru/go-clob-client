@@ -62,7 +62,7 @@ func (c *Client) GetActivity(ctx context.Context, p ActivityParams) (Page[Activi
 		}
 		types := make([]string, len(p.Types))
 		for i, kind := range p.Types {
-			if err := enum(q, "type", kind, "TRADE", "SPLIT", "MERGE", "REDEEM", "REWARD", "CONVERSION", "MIGRATION", "DEPOSIT", "WITHDRAWAL", "YIELD", "MAKER_REBATE", "TAKER_REBATE", "REFERRAL_REWARD", "TIP"); err != nil {
+			if err := enum(q, "type", kind, "TRADE", "SPLIT", "MERGE", "REDEEM", "REWARD", "CONVERSION", "MIGRATION", "DEPOSIT", "WITHDRAWAL", "YIELD", "MAKER_REBATE", "TAKER_REBATE", "REFERRAL_REWARD", "TIP", "DIRECTIONAL_SPLIT", "DIRECTIONAL_MERGE", "THRESHOLD_COMPOSE", "THRESHOLD_DECOMPOSE"); err != nil {
 				return Page[Activity]{}, err
 			}
 			if kind == "" {
