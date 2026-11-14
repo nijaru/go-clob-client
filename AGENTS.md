@@ -10,6 +10,14 @@ Go SDK for the Polymarket CLOB. **Reference SDKs (tiered oracle model):**
 > idiomatic Go client. Post-v2, Rust is unified and py/ts are mature peers — so we target the
 > **union**, weighted by tier (see Development Workflow below).
 
+**Pre-stable SDK policy:** No backwards compatibility requirement for prior Go
+APIs, packages, types, or behavior. When the upstream contract or Go-native design
+benefits, replace/remove old interfaces and migrate all examples, docs, and tests.
+Do not add deprecation shims or compatibility adapters for existing Go users.
+Still honor the supported *exchange wire* contract, exact financial semantics,
+and independently evidenced protocol variants. Stable capability parity does
+not mean a stable Go API or copied upstream implementation.
+
 ## Project Structure
 
 | Directory | Purpose |
