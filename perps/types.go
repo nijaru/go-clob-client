@@ -23,7 +23,7 @@ const (
 	PerpsCategoryCommodity PerpsCategory = "commodity"
 	PerpsCategoryIndex     PerpsCategory = "index"
 	PerpsCategoryCrypto    PerpsCategory = "crypto"
-	PerpsCategoryPreIPO   PerpsCategory = "pre_ipo"
+	PerpsCategoryPreIPO    PerpsCategory = "pre_ipo"
 )
 
 // PerpsSide is the position side of a perps trade or order.

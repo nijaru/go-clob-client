@@ -8,8 +8,8 @@ import (
 func TestBinanceProviderAndPriceSource(t *testing.T) {
 	t.Parallel()
 	keys, err := requestKeys(Request{
-		Channel: Crypto,
-		Symbols: []string{"btcusd"},
+		Channel:  Crypto,
+		Symbols:  []string{"btcusd"},
 		Provider: Binance,
 	})
 	if err != nil || len(keys) != 1 || keys[0].provider != Binance {
